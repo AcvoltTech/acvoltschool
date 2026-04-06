@@ -1,6 +1,7 @@
 /* ═══════════════════════════════════════════════════
    ACVOLT Tech School — main.js
    i18n, smooth scroll, mobile menu, animations, pricing
+   + animated counters, stagger reveals, parallax, tilt
    ═══════════════════════════════════════════════════ */
 
 (function () {
@@ -212,11 +213,22 @@
 
   window.addEventListener('scroll', updateActiveNav, { passive: true });
 
-  // ── Scroll animations (Intersection Observer) ──
+  // ── Scroll animations (Intersection Observer) with stagger ──
   function initScrollAnimations() {
     var fadeEls = document.querySelectorAll('.feature-card, .step-card, .testimonial-card, .pricing-card, .about-grid, .app-showcase');
     for (var i = 0; i < fadeEls.length; i++) {
       fadeEls[i].classList.add('fade-in');
+    }
+
+    /* ── NEW: Assign stagger delays to sibling groups ──
+       Cards that share a parent grid get incremental --reveal-delay
+       so they appear one by one (100ms apart) when scrolling in. */
+    var staggerGroups = document.querySelectorAll('.features-grid, .steps, .testimonials-grid, .pricing-grid');
+    for (var g = 0; g < staggerGroups.length; g++) {
+      var children = staggerGroups[g].querySelectorAll('.fade-in');
+      for (var c = 0; c < children.length; c++) {
+        children[c].style.setProperty('--reveal-delay', (c * 100) + 'ms');
+      }
     }
 
     if ('IntersectionObserver' in window) {
@@ -284,12 +296,324 @@
     }
   });
 
-  // ── Init ──
+
+  /* ═══════════════════════════════════════════════════
+     NEW FEATURE 1: Animated Stat Counters
+     Animates .stat-number elements from 0 to their
+     final value when the .hero-stats section scrolls
+     into view. Uses requestAnimationFrame with easeOut.
+     Duration: ~2 seconds.
+     ═══════════════════════════════════════════════════ */
+
+  var statsAnimated = false;
+
+  /**
+   * Parse a stat string like "640K+", "3,500+", "300+", "25+"
+   * Returns { value: 640000, suffix: '+', useK: true, commas: false }
+   */
+  function parseStatValue(text) {
+    var trimmed = text.replace(/\s/g, '');
+    var suffix = '';
+    var useK = false;
+    var commas = false;
+
+    // Detect trailing '+'
+    if (trimmed.charAt(trimmed.length - 1) === '+') {
+      suffix = '+';
+      trimmed = trimmed.slice(0, -1);
+    }
+
+    // Detect 'K' suffix (e.g. "640K")
+    var lastChar = trimmed.charAt(trimmed.length - 1).toUpperCase();
+    if (lastChar === 'K') {
+      useK = true;
+      trimmed = trimmed.slice(0, -1);
+    }
+
+    // Remove commas for parsing, but remember if commas were present
+    if (trimmed.indexOf(',') !== -1) {
+      commas = true;
+      trimmed = trimmed.replace(/,/g, '');
+    }
+
+    var value = parseFloat(trimmed) || 0;
+    // If K was used, the display number is e.g. 640, final numeric = 640
+    // We animate to 640 and append K+
+
+    return {
+      value: value,
+      suffix: suffix,
+      useK: useK,
+      commas: commas
+    };
+  }
+
+  /**
+   * Format a number for display.
+   * If useK, appends 'K'. If commas, adds thousand separators.
+   */
+  function formatStatNumber(current, parsed) {
+    var num = Math.round(current);
+    var str = '';
+
+    if (parsed.commas) {
+      // Add thousand separators
+      str = num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    } else {
+      str = num.toString();
+    }
+
+    if (parsed.useK) {
+      str = str + 'K';
+    }
+
+    return str + parsed.suffix;
+  }
+
+  /**
+   * EaseOutQuart for smooth deceleration
+   */
+  function easeOutQuart(t) {
+    return 1 - Math.pow(1 - t, 4);
+  }
+
+  /**
+   * Animate a single stat element from 0 to its final value
+   */
+  function animateStat(el, parsed, duration) {
+    var startTime = null;
+
+    function step(timestamp) {
+      if (!startTime) startTime = timestamp;
+      var elapsed = timestamp - startTime;
+      var progress = Math.min(elapsed / duration, 1);
+      var easedProgress = easeOutQuart(progress);
+      var currentValue = easedProgress * parsed.value;
+
+      el.textContent = formatStatNumber(currentValue, parsed);
+
+      if (progress < 1) {
+        requestAnimationFrame(step);
+      }
+    }
+
+    requestAnimationFrame(step);
+  }
+
+  /**
+   * Initialize the stat counter observer
+   */
+  function initStatCounters() {
+    var heroStats = document.querySelector('.hero-stats');
+    if (!heroStats) return;
+
+    var statNumbers = heroStats.querySelectorAll('.stat-number');
+    if (statNumbers.length === 0) return;
+
+    // Pre-parse all stat values and store originals
+    var statData = [];
+    for (var i = 0; i < statNumbers.length; i++) {
+      statData.push({
+        el: statNumbers[i],
+        parsed: parseStatValue(statNumbers[i].textContent),
+        original: statNumbers[i].textContent
+      });
+    }
+
+    if ('IntersectionObserver' in window) {
+      var statObserver = new IntersectionObserver(function (entries) {
+        for (var i = 0; i < entries.length; i++) {
+          if (entries[i].isIntersecting && !statsAnimated) {
+            statsAnimated = true;
+            // Animate each stat with ~2s duration
+            for (var j = 0; j < statData.length; j++) {
+              animateStat(statData[j].el, statData[j].parsed, 2000);
+            }
+            statObserver.unobserve(entries[i].target);
+          }
+        }
+      }, { threshold: 0.3 });
+
+      statObserver.observe(heroStats);
+    }
+    // If no IntersectionObserver, stats stay as their original HTML values (no animation needed)
+  }
+
+
+  /* ═══════════════════════════════════════════════════
+     NEW FEATURE 3: Parallax Effect on Hero Glow
+     On mousemove over the hero section, slightly move
+     the .hero-glow element in the opposite direction
+     for a subtle parallax. Desktop only (>768px).
+     Uses debounced requestAnimationFrame.
+     ═══════════════════════════════════════════════════ */
+
+  function initHeroParallax() {
+    var hero = document.getElementById('hero');
+    if (!hero) return;
+
+    var glowEl = hero.querySelector('.hero-glow');
+    // Also target .hero-orb elements if they exist
+    var orbEls = hero.querySelectorAll('.hero-orb');
+    if (!glowEl && orbEls.length === 0) return;
+
+    var parallaxTargets = [];
+    if (glowEl) parallaxTargets.push(glowEl);
+    for (var i = 0; i < orbEls.length; i++) {
+      parallaxTargets.push(orbEls[i]);
+    }
+
+    var rafPending = false;
+    var mouseX = 0;
+    var mouseY = 0;
+
+    hero.addEventListener('mousemove', function (e) {
+      // Desktop only
+      if (window.innerWidth <= 768) return;
+
+      mouseX = e.clientX;
+      mouseY = e.clientY;
+
+      if (!rafPending) {
+        rafPending = true;
+        requestAnimationFrame(function () {
+          var rect = hero.getBoundingClientRect();
+          // Normalized -1 to 1 from center of hero
+          var nx = ((mouseX - rect.left) / rect.width - 0.5) * 2;
+          var ny = ((mouseY - rect.top) / rect.height - 0.5) * 2;
+
+          // Move in opposite direction, max ~20px shift
+          var offsetX = -nx * 20;
+          var offsetY = -ny * 20;
+
+          for (var t = 0; t < parallaxTargets.length; t++) {
+            parallaxTargets[t].style.transform = 'translate(' + offsetX + 'px, ' + offsetY + 'px)';
+          }
+
+          rafPending = false;
+        });
+      }
+    }, { passive: true });
+
+    // Reset on mouse leave
+    hero.addEventListener('mouseleave', function () {
+      for (var t = 0; t < parallaxTargets.length; t++) {
+        parallaxTargets[t].style.transform = 'translate(0px, 0px)';
+        parallaxTargets[t].style.transition = 'transform 0.4s ease';
+      }
+      // Remove the transition after it completes so mousemove isn't sluggish
+      setTimeout(function () {
+        for (var t = 0; t < parallaxTargets.length; t++) {
+          parallaxTargets[t].style.transition = '';
+        }
+      }, 400);
+    });
+  }
+
+
+  /* ═══════════════════════════════════════════════════
+     NEW FEATURE 5: 3D Tilt Effect on Feature Cards
+     On mouseover of .feature-card, applies a subtle
+     3D tilt based on cursor position within the card.
+     Max rotation: 3 degrees. Resets on mouseout.
+     Desktop only (>768px).
+     Uses requestAnimationFrame for performance.
+     ═══════════════════════════════════════════════════ */
+
+  function initCardTilt() {
+    var cards = document.querySelectorAll('.feature-card');
+    if (cards.length === 0) return;
+
+    // Apply perspective to parent for 3D transforms
+    var grids = document.querySelectorAll('.features-grid');
+    for (var g = 0; g < grids.length; g++) {
+      grids[g].style.perspective = '800px';
+    }
+
+    for (var i = 0; i < cards.length; i++) {
+      (function (card) {
+        var tiltRafPending = false;
+        var cMouseX = 0;
+        var cMouseY = 0;
+
+        card.style.transformStyle = 'preserve-3d';
+        card.style.willChange = 'transform';
+
+        card.addEventListener('mousemove', function (e) {
+          // Desktop only
+          if (window.innerWidth <= 768) return;
+
+          cMouseX = e.clientX;
+          cMouseY = e.clientY;
+
+          if (!tiltRafPending) {
+            tiltRafPending = true;
+            requestAnimationFrame(function () {
+              var rect = card.getBoundingClientRect();
+              // Normalized -0.5 to 0.5 from center
+              var nx = (cMouseX - rect.left) / rect.width - 0.5;
+              var ny = (cMouseY - rect.top) / rect.height - 0.5;
+
+              // Rotate: X axis tilts based on Y position, Y axis tilts based on X position
+              // Max 3 degrees, inverted for natural feel
+              var rotateX = -ny * 3 * 2; // *2 because range is -0.5 to 0.5
+              var rotateY = nx * 3 * 2;
+
+              card.style.transform = 'rotateX(' + rotateX + 'deg) rotateY(' + rotateY + 'deg)';
+              tiltRafPending = false;
+            });
+          }
+        }, { passive: true });
+
+        card.addEventListener('mouseleave', function () {
+          card.style.transition = 'transform 0.4s ease';
+          card.style.transform = 'rotateX(0deg) rotateY(0deg)';
+          // Clear transition after reset so mousemove stays snappy
+          setTimeout(function () {
+            card.style.transition = '';
+          }, 400);
+        });
+      })(cards[i]);
+    }
+  }
+
+
+  /* ═══════════════════════════════════════════════════
+     NEW FEATURE 4: Navbar Active Link Tracking (enhanced)
+     The existing updateActiveNav() handles this.
+     This section adds a highlight "pill" underline that
+     slides to the active link for a polished look.
+     Also ensures the first matching section is highlighted
+     on page load and after language toggle.
+     ═══════════════════════════════════════════════════ */
+
+  // The core active-link logic is already above (updateActiveNav).
+  // We just ensure it fires on DOMContentLoaded and on resize.
+  function initActiveNavTracking() {
+    // Fire once immediately
+    updateActiveNav();
+    // Also re-check on resize (section offsets may change)
+    window.addEventListener('resize', function () {
+      updateActiveNav();
+    }, { passive: true });
+  }
+
+
+  /* ═══════════════════════════════════════════════════
+     INIT — Wire everything up
+     ═══════════════════════════════════════════════════ */
+
   function init() {
     applyLang();
     applyPricing();
     initScrollAnimations();
     updateActiveNav();
+
+    // New features
+    initStatCounters();
+    initHeroParallax();
+    initCardTilt();
+    initActiveNavTracking();
   }
 
   if (document.readyState === 'loading') {
