@@ -278,8 +278,9 @@ function submitTicket() {
     message: message,
     timestamp: timestamp
   }).then(function() { showSuccess(); }).catch(function(e) {
-    console.warn('EmailJS error:', e);
-    showSuccess();
+    alert('EmailJS Error: ' + JSON.stringify(e));
+    btn.disabled = false;
+    btn.textContent = lang === 'en' ? 'SUBMIT TICKET' : 'ENVIAR TICKET';
   });
 }
 
