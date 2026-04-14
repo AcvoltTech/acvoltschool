@@ -278,9 +278,9 @@ function submitTicket() {
     message: message,
     timestamp: timestamp
   }).then(function() { showSuccess(); }).catch(function(e) {
-    alert('EmailJS Error: ' + JSON.stringify(e));
+    console.warn('EmailJS error:', e);
     btn.disabled = false;
-    btn.textContent = lang === 'en' ? 'SUBMIT TICKET' : 'ENVIAR TICKET';
+    btn.textContent = lang === 'en' ? 'RETRY' : 'REINTENTAR';
   });
 }
 
