@@ -264,14 +264,10 @@ function submitTicket() {
     '━━━━━━━━━━━━━━━━\n' +
     message;
 
-  var done = 0;
-  var total = 2;
-  function onDone() { done++; if (done >= total) showSuccess(); }
-
-  // 1. Send email via EmailJS
+  // Send email via EmailJS
   emailjs.init({ publicKey: 'YOUR_EMAILJS_PUBLIC_KEY' });
   emailjs.send('service_maestro', 'template_support', {
-    to_email: 'maestrohvacr@gmail.com',
+    to_email: 'techschoolacvolt@gmail.com',
     from_name: name,
     from_email: email,
     category: category,
@@ -279,18 +275,10 @@ function submitTicket() {
     device: device,
     message: message,
     timestamp: timestamp
-  }).then(onDone).catch(function(e) { console.warn('EmailJS error:', e); onDone(); });
-
-  // 2. Push notification via ntfy.sh (instant phone notification)
-  fetch('https://ntfy.sh/maestrohvacr_support', {
-    method: 'POST',
-    headers: {
-      'Title': '🎫 ' + category + ' — ' + priority,
-      'Priority': selectedPriority === 'high' ? '5' : selectedPriority === 'medium' ? '3' : '2',
-      'Tags': 'ticket,' + selectedCat
-    },
-    body: body
-  }).then(onDone).catch(function(e) { console.warn('ntfy error:', e); onDone(); });
+  }).then(function() { showSuccess(); }).catch(function(e) {
+    console.warn('EmailJS error:', e);
+    showSuccess();
+  });
 }
 
 function showSuccess() {
