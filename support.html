@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Soporte Técnico — Maestro HVACR | ACVOLT Tech School</title>
+  <meta name="description" content="Technical Support for Maestro HVACR app. Get help, report bugs, request features.">
+  <link rel="icon" type="image/png" sizes="32x32" href="assets/icon-32.png">
+  <link rel="apple-touch-icon" sizes="192x192" href="assets/icon-192.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box;}
+    :root{
+      --bg:#0a0e17;--bg-card:#111827;--border:rgba(255,255,255,0.07);
+      --text:#e5e7eb;--text-muted:#6b7280;--accent:#FF6B35;
+      --blue:#3b82f6;--green:#22c55e;--red:#ef4444;
+    }
+    html{scroll-behavior:smooth;}
+    body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;-webkit-font-smoothing:antialiased;}
+
+    /* Header */
+    .support-header{background:rgba(17,24,39,0.85);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border-bottom:1px solid var(--border);padding:16px 20px;display:flex;align-items:center;gap:14px;position:sticky;top:0;z-index:100;}
+    .support-header img{width:44px;height:44px;border-radius:50%;filter:drop-shadow(0 0 12px rgba(14,86,216,0.4));}
+    .support-header h1{font-size:18px;font-weight:800;letter-spacing:0.5px;}
+    .support-header .sub{font-size:11px;color:var(--accent);font-weight:600;letter-spacing:1.5px;}
+
+    /* Lang toggle */
+    .lang-toggle{margin-left:auto;display:flex;gap:4px;background:rgba(255,255,255,0.05);border-radius:20px;padding:3px;}
+    .lang-btn{padding:5px 12px;border-radius:16px;font-size:11px;font-weight:700;cursor:pointer;border:none;font-family:inherit;transition:all 0.2s;}
+    .lang-btn.active{background:var(--accent);color:#fff;}
+    .lang-btn:not(.active){background:none;color:var(--text-muted);}
+
+    /* Container */
+    .container{max-width:520px;margin:0 auto;padding:24px 16px 60px;}
+
+    /* Category cards */
+    .cat-grid{display:flex;flex-direction:column;gap:10px;margin-bottom:28px;}
+    .cat-card{background:var(--bg-card);border:1.5px solid var(--border);border-radius:14px;padding:16px 18px;cursor:pointer;display:flex;align-items:center;gap:14px;transition:all 0.25s;}
+    .cat-card:hover,.cat-card.selected{border-color:var(--accent);background:rgba(255,107,53,0.06);box-shadow:0 0 20px rgba(255,107,53,0.08);}
+    .cat-card .icon{width:44px;height:44px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;}
+    .cat-card .label{font-size:14px;font-weight:700;color:#fff;}
+    .cat-card .desc{font-size:11px;color:var(--text-muted);margin-top:2px;line-height:1.4;}
+    .cat-card .check{width:20px;height:20px;border-radius:50%;border:2px solid rgba(255,255,255,0.1);margin-left:auto;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;transition:all 0.2s;}
+    .cat-card.selected .check{background:var(--accent);border-color:var(--accent);color:#fff;}
+
+    /* Form */
+    .form-section{display:none;}
+    .form-section.visible{display:block;animation:fadeUp 0.3s ease;}
+    @keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+    .section-title{font-size:10px;font-weight:700;color:var(--accent);letter-spacing:2px;text-transform:uppercase;margin-bottom:12px;}
+    .field{margin-bottom:14px;}
+    .field label{display:block;font-size:12px;color:var(--text-muted);margin-bottom:5px;font-weight:600;}
+    .field input,.field textarea,.field select{width:100%;background:rgba(0,0,0,0.3);border:1px solid var(--border);border-radius:10px;padding:12px 14px;color:var(--text);font-family:inherit;font-size:14px;outline:none;transition:border-color 0.2s;-webkit-appearance:none;}
+    .field input:focus,.field textarea:focus,.field select:focus{border-color:var(--accent);}
+    .field textarea{resize:none;height:120px;line-height:1.6;}
+    .field select{cursor:pointer;}
+    .field select option{background:var(--bg-card);}
+
+    /* Priority selector */
+    .priority-row{display:flex;gap:8px;margin-bottom:14px;}
+    .priority-btn{flex:1;padding:10px 8px;border-radius:10px;border:1.5px solid var(--border);background:none;color:var(--text-muted);font-size:12px;font-weight:700;cursor:pointer;text-align:center;font-family:inherit;transition:all 0.2s;}
+    .priority-btn.selected{color:#fff;}
+    .priority-btn[data-p="low"].selected{border-color:var(--green);background:rgba(34,197,94,0.12);color:var(--green);}
+    .priority-btn[data-p="medium"].selected{border-color:var(--accent);background:rgba(255,107,53,0.12);color:var(--accent);}
+    .priority-btn[data-p="high"].selected{border-color:var(--red);background:rgba(239,68,68,0.12);color:var(--red);}
+
+    /* Submit */
+    .submit-btn{width:100%;padding:16px;border:none;border-radius:14px;background:linear-gradient(135deg,var(--accent),#E85D26);color:#fff;font-size:16px;font-weight:800;cursor:pointer;font-family:inherit;box-shadow:0 8px 28px rgba(255,107,53,0.35);letter-spacing:0.5px;transition:transform 0.15s,opacity 0.15s;margin-top:8px;}
+    .submit-btn:disabled{opacity:0.4;cursor:not-allowed;transform:none;}
+    .submit-btn:not(:disabled):active{transform:scale(0.98);}
+
+    /* Success */
+    .success-msg{display:none;text-align:center;padding:48px 20px;animation:fadeUp 0.4s ease;}
+    .success-msg .icon{font-size:56px;margin-bottom:16px;}
+    .success-msg h2{font-size:22px;font-weight:800;margin-bottom:8px;}
+    .success-msg p{font-size:14px;color:var(--text-muted);line-height:1.6;margin-bottom:24px;}
+    .success-msg a{display:inline-block;padding:12px 28px;border-radius:12px;background:rgba(255,255,255,0.06);border:1px solid var(--border);color:var(--text);font-weight:700;font-size:14px;text-decoration:none;transition:all 0.2s;}
+    .success-msg a:hover{border-color:var(--accent);background:rgba(255,107,53,0.08);}
+
+    /* Footer */
+    .support-footer{text-align:center;padding:32px 16px;font-size:11px;color:var(--text-muted);}
+  </style>
+</head>
+<body>
+
+<!-- HEADER -->
+<div class="support-header">
+  <img src="assets/acvolt-logo.png" alt="ACVOLT">
+  <div>
+    <h1 id="h-title">Soporte Técnico</h1>
+    <div class="sub">MAESTRO HVACR</div>
+  </div>
+  <div class="lang-toggle">
+    <button class="lang-btn active" onclick="setLang('es')">ES</button>
+    <button class="lang-btn" onclick="setLang('en')">EN</button>
+  </div>
+</div>
+
+<!-- FORM -->
+<div class="container" id="formContainer">
+
+  <!-- Step 1: Category -->
+  <div style="margin-bottom:8px;">
+    <div class="section-title" id="s1-title">¿EN QUÉ TE PODEMOS AYUDAR?</div>
+  </div>
+  <div class="cat-grid" id="catGrid">
+    <div class="cat-card" data-cat="bug" onclick="selectCat(this)">
+      <div class="icon" style="background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.25);">🐛</div>
+      <div><div class="label" data-es="Reportar un Bug" data-en="Report a Bug">Reportar un Bug</div><div class="desc" data-es="Algo no funciona bien en la app" data-en="Something isn't working right">Algo no funciona bien en la app</div></div>
+      <div class="check"></div>
+    </div>
+    <div class="cat-card" data-cat="account" onclick="selectCat(this)">
+      <div class="icon" style="background:rgba(59,130,246,0.12);border:1px solid rgba(59,130,246,0.25);">🔑</div>
+      <div><div class="label" data-es="Problema con mi Cuenta" data-en="Account Issue">Problema con mi Cuenta</div><div class="desc" data-es="Login, contraseña, membresía, pagos" data-en="Login, password, membership, payments">Login, contraseña, membresía, pagos</div></div>
+      <div class="check"></div>
+    </div>
+    <div class="cat-card" data-cat="feature" onclick="selectCat(this)">
+      <div class="icon" style="background:rgba(139,92,246,0.12);border:1px solid rgba(139,92,246,0.25);">💡</div>
+      <div><div class="label" data-es="Sugerencia o Idea" data-en="Suggestion or Idea">Sugerencia o Idea</div><div class="desc" data-es="Funcionalidad nueva, mejora, feedback" data-en="New feature, improvement, feedback">Funcionalidad nueva, mejora, feedback</div></div>
+      <div class="check"></div>
+    </div>
+    <div class="cat-card" data-cat="bluetooth" onclick="selectCat(this)">
+      <div class="icon" style="background:rgba(34,197,94,0.12);border:1px solid rgba(34,197,94,0.25);">📡</div>
+      <div><div class="label" data-es="Bluetooth / Herramientas" data-en="Bluetooth / Tools">Bluetooth / Herramientas</div><div class="desc" data-es="Fieldpiece, manifold, multímetro" data-en="Fieldpiece, manifold, multimeter">Fieldpiece, manifold, multímetro</div></div>
+      <div class="check"></div>
+    </div>
+    <div class="cat-card" data-cat="other" onclick="selectCat(this)">
+      <div class="icon" style="background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.25);">💬</div>
+      <div><div class="label" data-es="Otro" data-en="Other">Otro</div><div class="desc" data-es="Cualquier otra pregunta o comentario" data-en="Any other question or comment">Cualquier otra pregunta o comentario</div></div>
+      <div class="check"></div>
+    </div>
+  </div>
+
+  <!-- Step 2: Details -->
+  <div class="form-section" id="detailsSection">
+    <div class="section-title" id="s2-title">DETALLES</div>
+
+    <div class="field">
+      <label data-es="Tu nombre *" data-en="Your name *">Tu nombre *</label>
+      <input type="text" id="f-name" data-ph-es="Nombre completo" data-ph-en="Full name" placeholder="Nombre completo">
+    </div>
+
+    <div class="field">
+      <label data-es="Tu email *" data-en="Your email *">Tu email *</label>
+      <input type="email" id="f-email" data-ph-es="tu@email.com" data-ph-en="you@email.com" placeholder="tu@email.com">
+    </div>
+
+    <div class="field">
+      <label data-es="Dispositivo" data-en="Device">Dispositivo</label>
+      <select id="f-device">
+        <option value="" data-es="— Selecciona —" data-en="— Select —">— Selecciona —</option>
+        <option value="iPhone">iPhone</option>
+        <option value="iPad">iPad</option>
+        <option value="Android">Android</option>
+        <option value="Web/Desktop" data-es="Web / Computadora" data-en="Web / Desktop">Web / Computadora</option>
+      </select>
+    </div>
+
+    <div class="field">
+      <label data-es="Prioridad" data-en="Priority">Prioridad</label>
+      <div class="priority-row">
+        <button class="priority-btn" data-p="low" onclick="selectPriority(this)" data-es="🟢 Baja" data-en="🟢 Low">🟢 Baja</button>
+        <button class="priority-btn selected" data-p="medium" onclick="selectPriority(this)" data-es="🟠 Media" data-en="🟠 Medium">🟠 Media</button>
+        <button class="priority-btn" data-p="high" onclick="selectPriority(this)" data-es="🔴 Urgente" data-en="🔴 Urgent">🔴 Urgente</button>
+      </div>
+    </div>
+
+    <div class="field">
+      <label data-es="Describe tu problema o comentario *" data-en="Describe your issue or comment *">Describe tu problema o comentario *</label>
+      <textarea id="f-message" data-ph-es="Cuéntanos qué pasó, qué esperabas, y qué viste en la pantalla..." data-ph-en="Tell us what happened, what you expected, and what you saw on screen..." placeholder="Cuéntanos qué pasó, qué esperabas, y qué viste en la pantalla..."></textarea>
+    </div>
+
+    <button class="submit-btn" id="submitBtn" onclick="submitTicket()" disabled data-es="ENVIAR TICKET" data-en="SUBMIT TICKET">ENVIAR TICKET</button>
+    <div style="text-align:center;margin-top:10px;font-size:11px;color:var(--text-muted);" id="submit-note" data-es="Te responderemos lo antes posible" data-en="We'll respond as soon as possible">Te responderemos lo antes posible</div>
+  </div>
+</div>
+
+<!-- SUCCESS -->
+<div class="success-msg" id="successMsg">
+  <div class="icon">✅</div>
+  <h2 data-es="¡Ticket Enviado!" data-en="Ticket Sent!">¡Ticket Enviado!</h2>
+  <p data-es="Recibimos tu mensaje y te responderemos lo antes posible a tu email." data-en="We received your message and will respond as soon as possible to your email.">Recibimos tu mensaje y te responderemos lo antes posible a tu email.</p>
+  <a href="https://maestrohvacr.com" data-es="← Volver a la App" data-en="← Back to App">← Volver a la App</a>
+</div>
+
+<div class="support-footer">
+  &copy; 2026 ACVOLT Tech LLC — Maestro HVACR
+</div>
+
+<!-- ═══════════════════════════════════════ -->
+<!-- SCRIPTS -->
+<!-- ═══════════════════════════════════════ -->
+<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
+<script>
+// ── Language ──
+var lang = 'es';
+function setLang(l) {
+  lang = l;
+  document.querySelectorAll('.lang-btn').forEach(function(b) { b.classList.toggle('active', b.textContent.trim() === l.toUpperCase()); });
+  document.getElementById('h-title').textContent = l === 'en' ? 'Technical Support' : 'Soporte Técnico';
+  document.getElementById('s1-title').textContent = l === 'en' ? 'HOW CAN WE HELP?' : '¿EN QUÉ TE PODEMOS AYUDAR?';
+  document.getElementById('s2-title').textContent = l === 'en' ? 'DETAILS' : 'DETALLES';
+  document.querySelectorAll('[data-'+l+']').forEach(function(el) { el.textContent = el.getAttribute('data-'+l); });
+  document.querySelectorAll('[data-ph-'+l+']').forEach(function(el) { el.placeholder = el.getAttribute('data-ph-'+l); });
+}
+
+// ── Category selection ──
+var selectedCat = '';
+function selectCat(el) {
+  document.querySelectorAll('.cat-card').forEach(function(c) { c.classList.remove('selected'); c.querySelector('.check').textContent = ''; });
+  el.classList.add('selected');
+  el.querySelector('.check').textContent = '✓';
+  selectedCat = el.dataset.cat;
+  document.getElementById('detailsSection').classList.add('visible');
+  checkForm();
+}
+
+// ── Priority ──
+var selectedPriority = 'medium';
+function selectPriority(btn) {
+  document.querySelectorAll('.priority-btn').forEach(function(b) { b.classList.remove('selected'); });
+  btn.classList.add('selected');
+  selectedPriority = btn.dataset.p;
+}
+
+// ── Form validation ──
+function checkForm() {
+  var name = document.getElementById('f-name').value.trim();
+  var email = document.getElementById('f-email').value.trim();
+  var msg = document.getElementById('f-message').value.trim();
+  document.getElementById('submitBtn').disabled = !(name && email && msg && selectedCat);
+}
+document.querySelectorAll('#f-name,#f-email,#f-message').forEach(function(el) {
+  el.addEventListener('input', checkForm);
+});
+
+// ── Submit ──
+function submitTicket() {
+  var btn = document.getElementById('submitBtn');
+  btn.disabled = true;
+  btn.textContent = lang === 'en' ? 'SENDING...' : 'ENVIANDO...';
+
+  var name = document.getElementById('f-name').value.trim();
+  var email = document.getElementById('f-email').value.trim();
+  var device = document.getElementById('f-device').value || 'Not specified';
+  var message = document.getElementById('f-message').value.trim();
+  var catLabels = { bug:'Bug Report', account:'Account Issue', feature:'Suggestion', bluetooth:'Bluetooth/Tools', other:'Other' };
+  var prioLabels = { low:'🟢 Low', medium:'🟠 Medium', high:'🔴 Urgent' };
+  var category = catLabels[selectedCat] || selectedCat;
+  var priority = prioLabels[selectedPriority] || selectedPriority;
+  var timestamp = new Date().toLocaleString('en-US', { timeZone:'America/Chicago' });
+
+  // Build notification body
+  var body = '🎫 SUPPORT TICKET\n' +
+    '━━━━━━━━━━━━━━━━\n' +
+    'Category: ' + category + '\n' +
+    'Priority: ' + priority + '\n' +
+    'Name: ' + name + '\n' +
+    'Email: ' + email + '\n' +
+    'Device: ' + device + '\n' +
+    'Time: ' + timestamp + '\n' +
+    '━━━━━━━━━━━━━━━━\n' +
+    message;
+
+  var done = 0;
+  var total = 2;
+  function onDone() { done++; if (done >= total) showSuccess(); }
+
+  // 1. Send email via EmailJS
+  emailjs.init({ publicKey: 'YOUR_EMAILJS_PUBLIC_KEY' });
+  emailjs.send('service_maestro', 'template_support', {
+    to_email: 'maestrohvacr@gmail.com',
+    from_name: name,
+    from_email: email,
+    category: category,
+    priority: priority,
+    device: device,
+    message: message,
+    timestamp: timestamp
+  }).then(onDone).catch(function(e) { console.warn('EmailJS error:', e); onDone(); });
+
+  // 2. Push notification via ntfy.sh (instant phone notification)
+  fetch('https://ntfy.sh/maestrohvacr_support', {
+    method: 'POST',
+    headers: {
+      'Title': '🎫 ' + category + ' — ' + priority,
+      'Priority': selectedPriority === 'high' ? '5' : selectedPriority === 'medium' ? '3' : '2',
+      'Tags': 'ticket,' + selectedCat
+    },
+    body: body
+  }).then(onDone).catch(function(e) { console.warn('ntfy error:', e); onDone(); });
+}
+
+function showSuccess() {
+  document.getElementById('formContainer').style.display = 'none';
+  document.getElementById('successMsg').style.display = 'block';
+}
+</script>
+</body>
+</html>
