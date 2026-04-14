@@ -194,6 +194,9 @@
 <!-- ═══════════════════════════════════════ -->
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
 <script>
+// ── Init EmailJS ──
+emailjs.init({ publicKey: 'I5hyVaQuSxinDTE1c' });
+
 // ── Language ──
 var lang = 'es';
 function setLang(l) {
@@ -265,7 +268,6 @@ function submitTicket() {
     message;
 
   // Send email via EmailJS
-  emailjs.init({ publicKey: 'I5hyVaQuSxinDTE1c' });
   emailjs.send('service_z7b09zb', 'template_qrutzjg', {
     to_email: 'techschoolacvolt@gmail.com',
     from_name: name,
