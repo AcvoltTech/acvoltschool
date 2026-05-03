@@ -1,0 +1,541 @@
+/* ============================================
+   ACVOLT CRM — Trade Master Clean Design
+   ALL rules scoped to #adminDashboardScreen
+   Loaded AFTER styles.css to override admin CRM
+   ============================================ */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;600;700&display=swap');
+
+/* === Override CRM variables to match Trade Master === */
+#adminDashboardScreen {
+    --primary: #0f3640;
+    --primary-dark: #0a252d;
+    --primary-light: #17505e;
+    --accent: #16803c;
+    --accent-dark: #15803d;
+    --accent-light: #22c55e;
+    --accent-hover: #14532d;
+    --bg-body: #f7f7f5;
+    --bg-card: #ffffff;
+    --bg-input: #f8f9fb;
+    --bg-surface: #ffffff;
+    --border: #e3e7ee;
+    --border-hover: #c8cfd8;
+    --text-1: #1a1d21;
+    --text-2: #4b5563;
+    --text-3: #8993a4;
+    --text-white: #1a1d21;
+    --text-light: #4b5563;
+    --text-muted: #8993a4;
+    --danger: #dc2626;
+    --warning: #d97706;
+    --blue: #2563eb;
+    --success: #059669;
+    --shadow-sm: 0 1px 2px rgba(0,0,0,0.04);
+    --shadow-md: 0 2px 8px rgba(0,0,0,0.06);
+    --shadow-lg: 0 4px 12px rgba(0,0,0,0.08);
+    --radius: 8px;
+    --radius-lg: 12px;
+    --sidebar-w: 220px;
+    --topbar-h: 56px;
+    --orange: #ea580c;
+
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: var(--bg-body);
+    display: grid;
+    grid-template-columns: var(--sidebar-w) 1fr;
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+}
+
+/* =====================================================
+   SIDEBAR — exact Trade Master style
+   ALL selectors scoped to #adminDashboardScreen
+   ===================================================== */
+#adminDashboardScreen .crm-sidebar {
+    background: var(--primary);
+    width: var(--sidebar-w);
+    height: 100vh;
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: 100;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    border-right: 1px solid rgba(255,255,255,0.05);
+}
+#adminDashboardScreen .crm-sidebar::-webkit-scrollbar { width: 4px; }
+#adminDashboardScreen .crm-sidebar::-webkit-scrollbar-track { background: transparent; }
+#adminDashboardScreen .crm-sidebar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 4px; }
+
+/* Brand / Logo */
+#adminDashboardScreen .sidebar-brand {
+    padding: 18px 16px 12px;
+}
+#adminDashboardScreen .sidebar-brand-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+#adminDashboardScreen .sidebar-brand-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    background: var(--accent);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    flex-shrink: 0;
+}
+#adminDashboardScreen .sidebar-brand h2 {
+    font-size: 15px;
+    font-weight: 800;
+    color: #ffffff;
+    margin: 0;
+    letter-spacing: -0.3px;
+    line-height: 1.2;
+}
+#adminDashboardScreen .sidebar-brand p {
+    font-size: 11px;
+    color: rgba(255,255,255,0.45);
+    margin: 2px 0 0;
+    font-weight: 500;
+}
+
+/* Portal Tabs */
+#adminDashboardScreen .portal-tabs {
+    display: flex;
+    gap: 4px;
+    padding: 0 12px;
+    margin-bottom: 12px;
+}
+#adminDashboardScreen .portal-tab {
+    flex: 1;
+    padding: 7px 0;
+    text-align: center;
+    font-size: 11px;
+    font-weight: 600;
+    color: rgba(255,255,255,0.5);
+    background: transparent;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-family: inherit;
+    letter-spacing: 0.3px;
+}
+#adminDashboardScreen .portal-tab:hover {
+    background: rgba(255,255,255,0.06);
+    color: rgba(255,255,255,0.8);
+}
+#adminDashboardScreen .portal-tab.active {
+    background: rgba(255,255,255,0.1);
+    color: #ffffff;
+    font-weight: 700;
+}
+
+/* Navigation */
+#adminDashboardScreen .sidebar-nav {
+    flex: 1;
+    padding: 0 8px;
+    overflow-y: auto;
+}
+#adminDashboardScreen .nav-group {
+    margin-bottom: 6px;
+}
+#adminDashboardScreen .nav-group-label {
+    font-size: 10px;
+    font-weight: 700;
+    color: rgba(255,255,255,0.3);
+    text-transform: uppercase;
+    letter-spacing: 1.2px;
+    padding: 10px 10px 6px;
+    display: block;
+}
+
+/* Nav Items */
+#adminDashboardScreen .crm-nav-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px;
+    border-radius: 6px;
+    color: rgba(255,255,255,0.6);
+    cursor: pointer;
+    transition: all 0.15s;
+    font-size: 13px;
+    font-weight: 500;
+    border: none;
+    background: none;
+    width: 100%;
+    text-align: left;
+    font-family: inherit;
+}
+#adminDashboardScreen .crm-nav-item:hover {
+    background: rgba(255,255,255,0.06);
+    color: rgba(255,255,255,0.9);
+}
+#adminDashboardScreen .crm-nav-item.active-nav {
+    background: rgba(255,255,255,0.1);
+    color: #ffffff;
+    font-weight: 600;
+}
+#adminDashboardScreen .crm-nav-item .nav-icon {
+    font-size: 15px;
+    width: 20px;
+    text-align: center;
+    flex-shrink: 0;
+    opacity: 0.6;
+    filter: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: none !important;
+    -webkit-background-clip: unset !important;
+    -webkit-text-fill-color: unset !important;
+}
+#adminDashboardScreen .crm-nav-item.active-nav .nav-icon { opacity: 1; }
+#adminDashboardScreen .crm-nav-item:hover .nav-icon { opacity: 0.8; }
+
+/* User section */
+#adminDashboardScreen .sidebar-user {
+    padding: 12px;
+    border-top: 1px solid rgba(255,255,255,0.06);
+    margin-top: auto;
+}
+#adminDashboardScreen .sidebar-user-avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    background: var(--accent);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 12px;
+    flex-shrink: 0;
+}
+#adminDashboardScreen .sidebar-user-name {
+    font-size: 13px;
+    font-weight: 600;
+    color: #ffffff;
+    line-height: 1.2;
+}
+#adminDashboardScreen .sidebar-user-role {
+    font-size: 11px;
+    color: rgba(255,255,255,0.4);
+    font-weight: 500;
+}
+#adminDashboardScreen .sidebar-logout-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 8px 10px;
+    margin-top: 8px;
+    background: rgba(220,38,38,0.08);
+    border: 1px solid rgba(220,38,38,0.15);
+    border-radius: 6px;
+    color: #f87171;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s;
+    font-family: inherit;
+}
+#adminDashboardScreen .sidebar-logout-btn:hover {
+    background: rgba(220,38,38,0.15);
+    border-color: rgba(220,38,38,0.3);
+}
+
+/* =====================================================
+   MAIN CONTENT AREA
+   ===================================================== */
+#adminDashboardScreen .crm-content {
+    margin-left: var(--sidebar-w);
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+    background: var(--bg-body);
+}
+
+/* Top Bar */
+#adminDashboardScreen .content-topbar {
+    height: var(--topbar-h);
+    background: var(--bg-card);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 24px;
+    position: sticky;
+    top: 0;
+    z-index: 50;
+}
+#adminDashboardScreen .content-topbar h1 {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--text-1);
+    margin: 0;
+    letter-spacing: -0.3px;
+}
+
+/* Content Body */
+#adminDashboardScreen .content-body {
+    flex: 1;
+    padding: 20px 24px;
+    overflow-y: auto;
+    max-height: calc(100vh - var(--topbar-h));
+}
+#adminDashboardScreen .content-body::-webkit-scrollbar { width: 6px; }
+#adminDashboardScreen .content-body::-webkit-scrollbar-track { background: transparent; }
+#adminDashboardScreen .content-body::-webkit-scrollbar-thumb { background: #e5e7eb; border-radius: 3px; }
+#adminDashboardScreen .content-body::-webkit-scrollbar-thumb:hover { background: #d1d5db; }
+
+/* =====================================================
+   HIDE OLD ADMIN CHROME (scoped to admin only)
+   ===================================================== */
+#adminDashboardScreen .admin-header { display: none !important; }
+#adminDashboardScreen .admin-landscape-msg { display: none !important; }
+
+/* =====================================================
+   STATS GRID / KPI CARDS
+   ===================================================== */
+#adminDashboardScreen .admin-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 14px;
+    margin-bottom: 20px;
+}
+#adminDashboardScreen .admin-stat-card {
+    background: var(--bg-card) !important;
+    border: 1px solid var(--border) !important;
+    border-radius: var(--radius-lg) !important;
+    padding: 18px 16px !important;
+    position: relative;
+    box-shadow: var(--shadow-sm) !important;
+    transition: box-shadow 0.2s, border-color 0.2s;
+}
+#adminDashboardScreen .admin-stat-card::before { display: none; }
+#adminDashboardScreen .admin-stat-card:hover {
+    box-shadow: var(--shadow-md) !important;
+    border-color: var(--border-hover) !important;
+}
+#adminDashboardScreen .admin-stat-label {
+    font-size: 11px !important;
+    font-weight: 600 !important;
+    color: var(--text-3) !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.5px !important;
+    margin-bottom: 6px !important;
+}
+#adminDashboardScreen .admin-stat-value {
+    font-size: 26px !important;
+    font-weight: 800 !important;
+    color: var(--text-1) !important;
+    font-family: 'JetBrains Mono', monospace !important;
+    line-height: 1.1 !important;
+    background: none !important;
+    -webkit-background-clip: unset !important;
+    -webkit-text-fill-color: var(--text-1) !important;
+}
+
+/* =====================================================
+   SECTIONS / CARDS
+   ===================================================== */
+#adminDashboardScreen .admin-section {
+    background: var(--bg-card) !important;
+    border: 1px solid var(--border) !important;
+    border-radius: var(--radius-lg) !important;
+    padding: 18px !important;
+    margin-bottom: 16px !important;
+    box-shadow: var(--shadow-sm) !important;
+    transition: box-shadow 0.2s !important;
+}
+#adminDashboardScreen .admin-section:hover {
+    box-shadow: var(--shadow-md) !important;
+}
+#adminDashboardScreen .admin-section-header {
+    display: flex !important;
+    justify-content: space-between !important;
+    align-items: center !important;
+    margin-bottom: 14px !important;
+    padding-bottom: 12px !important;
+    border-bottom: 1px solid var(--border) !important;
+}
+#adminDashboardScreen .admin-section-title {
+    font-size: 14px !important;
+    font-weight: 700 !important;
+    color: var(--text-1) !important;
+    letter-spacing: -0.2px !important;
+    background: none !important;
+    -webkit-background-clip: unset !important;
+    -webkit-text-fill-color: var(--text-1) !important;
+}
+
+/* Nav / Action Buttons */
+#adminDashboardScreen .admin-nav-btn {
+    padding: 8px 14px !important;
+    background: var(--bg-card) !important;
+    border: 1.5px solid var(--border) !important;
+    border-radius: var(--radius) !important;
+    color: var(--text-2) !important;
+    font-size: 12px !important;
+    font-weight: 600 !important;
+    cursor: pointer !important;
+    transition: all 0.15s !important;
+    font-family: inherit !important;
+}
+#adminDashboardScreen .admin-nav-btn:hover {
+    border-color: var(--accent) !important;
+    color: var(--accent) !important;
+    background: rgba(22,128,60,0.04) !important;
+}
+
+/* Back Button */
+#adminDashboardScreen .back-btn {
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 6px !important;
+    padding: 8px 14px !important;
+    background: var(--bg-card) !important;
+    border: 1.5px solid var(--border) !important;
+    border-radius: var(--radius) !important;
+    color: var(--text-2) !important;
+    font-size: 13px !important;
+    font-weight: 600 !important;
+    cursor: pointer !important;
+    transition: all 0.15s !important;
+    font-family: inherit !important;
+}
+#adminDashboardScreen .back-btn:hover {
+    border-color: var(--text-3) !important;
+    color: var(--text-1) !important;
+}
+
+/* Portal Views */
+#adminDashboardScreen .portal-view { display: none; }
+#adminDashboardScreen .portal-view.active { display: block; }
+
+/* Layout Overrides */
+#adminDashboardScreen .admin-container { width: 100%; }
+#adminDashboardScreen .admin-main-content { width: 100%; }
+#adminDashboardScreen .admin-grid-full { grid-column: 1 / -1; }
+
+/* Second admin-section rule for deep overrides */
+#adminDashboardScreen .admin-section {
+    border-image: none !important;
+    background-image: none !important;
+}
+
+/* =====================================================
+   TABLE STYLES
+   ===================================================== */
+#adminDashboardScreen table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+}
+#adminDashboardScreen thead th {
+    background: var(--bg-input);
+    color: var(--text-3);
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 10px 12px;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+}
+#adminDashboardScreen tbody td {
+    padding: 10px 12px;
+    color: var(--text-1);
+    border-bottom: 1px solid var(--border);
+    vertical-align: middle;
+}
+#adminDashboardScreen tbody tr:hover {
+    background: rgba(0,0,0,0.015);
+}
+#adminDashboardScreen tbody tr:last-child td {
+    border-bottom: none;
+}
+
+/* =====================================================
+   FORM INPUTS
+   ===================================================== */
+#adminDashboardScreen input[type="text"],
+#adminDashboardScreen input[type="email"],
+#adminDashboardScreen input[type="password"],
+#adminDashboardScreen input[type="number"],
+#adminDashboardScreen input[type="date"],
+#adminDashboardScreen input[type="search"],
+#adminDashboardScreen select,
+#adminDashboardScreen textarea {
+    background: var(--bg-input) !important;
+    border: 1.5px solid var(--border) !important;
+    border-radius: var(--radius) !important;
+    color: var(--text-1) !important;
+    font-family: inherit !important;
+    font-size: 13px !important;
+    padding: 9px 12px !important;
+    transition: border-color 0.15s !important;
+}
+#adminDashboardScreen input:focus,
+#adminDashboardScreen select:focus,
+#adminDashboardScreen textarea:focus {
+    border-color: var(--accent) !important;
+    outline: none !important;
+    box-shadow: 0 0 0 3px rgba(22,128,60,0.08) !important;
+}
+
+/* =====================================================
+   INLINE STYLE OVERRIDES (dark backgrounds → clean)
+   ===================================================== */
+#adminDashboardScreen [style*="background:var(--bg-surface)"],
+#adminDashboardScreen [style*="background: var(--bg-surface)"] {
+    background: var(--bg-card) !important;
+}
+#adminDashboardScreen [style*="background:var(--bg-card)"],
+#adminDashboardScreen [style*="background: var(--bg-card)"] {
+    background: var(--bg-card) !important;
+}
+#adminDashboardScreen [style*="border:2px solid #00d4ff"],
+#adminDashboardScreen [style*="border: 2px solid #00d4ff"] {
+    border-color: var(--border) !important;
+}
+#adminDashboardScreen [style*="color:#00d4ff"],
+#adminDashboardScreen [style*="color: #00d4ff"] {
+    color: var(--accent) !important;
+}
+
+/* =====================================================
+   RESPONSIVE — Mobile/Tablet
+   ===================================================== */
+@media (max-width: 900px) {
+    #adminDashboardScreen {
+        grid-template-columns: 1fr;
+    }
+    #adminDashboardScreen .crm-sidebar {
+        display: none;
+    }
+    #adminDashboardScreen .crm-content {
+        margin-left: 0;
+    }
+    #adminDashboardScreen .content-body {
+        padding: 14px;
+        max-height: none;
+    }
+    #adminDashboardScreen .admin-stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 10px;
+    }
+    #adminDashboardScreen .admin-stat-card {
+        padding: 14px 12px !important;
+    }
+    #adminDashboardScreen .admin-stat-value {
+        font-size: 20px !important;
+    }
+}

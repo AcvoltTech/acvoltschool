@@ -1,0 +1,1 @@
+ALTER TABLE zm_exams ADD COLUMN IF NOT EXISTS area TEXT DEFAULT 'General';

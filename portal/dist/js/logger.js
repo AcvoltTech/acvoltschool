@@ -1,1 +1,0 @@
-(function(){"use strict";var o=/localhost|127\.0\.0\.1|\.local/.test(window.location.hostname),n=console.log.bind(console),r=console.warn.bind(console),c=console.error.bind(console);window.MaestroLog={log:o?n:function(){},warn:o?r:function(){},error:c,debug:o?n:function(){},isDev:o},o||(console.log=function(){},console.warn=function(){})})();

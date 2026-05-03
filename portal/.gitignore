@@ -1,0 +1,14 @@
+node_modules/
+.claude/
+dist/
+test-results/
+
+# Secrets / env files (defense-in-depth)
+.env
+.env.*
+secrets.json
+credentials.json
+
+# Local Netlify folder
+.netlify
+.png-backups/
