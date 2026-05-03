@@ -1,0 +1,15 @@
+[
+  {
+    "relation": [
+      "delegate_permission/common.handle_all_urls",
+      "delegate_permission/common.get_login_creds"
+    ],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.maestromario.twa",
+      "sha256_cert_fingerprints": [
+        "25:CB:58:03:6A:0F:35:D6:93:DA:D6:71:B4:5A:FC:68:15:0A:B6:42:B2:2A:C8:1E:07:EF:80:44:AE:11:2D:1F"
+      ]
+    }
+  }
+]

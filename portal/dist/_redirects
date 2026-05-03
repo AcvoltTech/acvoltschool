@@ -1,0 +1,5 @@
+# Cloudflare Pages redirects for maestrohvacr.com
+# Note: /v2/* proxy removed (CF Pages doesn't support proxy rewrites to external domains)
+
+# All /verify/* paths should load the verify.html page
+/verify/*    /verify.html    200

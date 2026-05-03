@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Maestro HVACR</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #fff;
+    }
+    .container {
+      max-width: 600px; width: 90%;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 20px;
+      padding: 40px;
+      text-align: center;
+      backdrop-filter: blur(10px);
+    }
+    .logo { font-size: 48px; margin-bottom: 16px; }
+    h1 { font-size: 24px; margin-bottom: 8px; color: #a29bfe; }
+    .subtitle { color: #94a3b8; margin-bottom: 30px; font-size: 14px; }
+    .loading { display: none; margin: 20px 0; }
+    .loading.active { display: block; }
+    .spinner {
+      width: 40px; height: 40px; margin: 0 auto 16px;
+      border: 3px solid rgba(255,255,255,0.1);
+      border-top: 3px solid #a29bfe;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .result { display: none; margin-top: 20px; }
+    .result.active { display: block; }
+    .cert-valid {
+      background: rgba(0,184,148,0.1);
+      border: 1px solid rgba(0,184,148,0.3);
+      border-radius: 16px; padding: 24px;
+    }
+    .cert-valid .badge { font-size: 60px; margin-bottom: 12px; }
+    .cert-valid h2 { color: #00b894; font-size: 20px; margin-bottom: 16px; }
+    .cert-info { text-align: left; margin-top: 16px; }
+    .cert-info .row {
+      display: flex; justify-content: space-between;
+      padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.05);
+    }
+    .cert-info .label { color: #94a3b8; font-size: 13px; }
+    .cert-info .value { color: #fff; font-size: 13px; font-weight: 600; }
+    .cert-invalid {
+      background: rgba(255,71,87,0.1);
+      border: 1px solid rgba(255,71,87,0.3);
+      border-radius: 16px; padding: 24px;
+    }
+    .cert-invalid .badge { font-size: 60px; margin-bottom: 12px; }
+    .cert-invalid h2 { color: #ff4757; }
+    .cert-invalid p { color: #94a3b8; margin-top: 8px; font-size: 14px; }
+    .cert-pending {
+      background: rgba(253,203,110,0.1);
+      border: 1px solid rgba(253,203,110,0.3);
+      border-radius: 16px; padding: 24px;
+    }
+    .cert-pending .badge { font-size: 60px; margin-bottom: 12px; }
+    .cert-pending h2 { color: #fdcb6e; }
+    .no-cert { color: #94a3b8; margin-top: 20px; }
+    .no-cert input {
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.2);
+      border-radius: 10px; padding: 12px 16px;
+      color: #fff; width: 100%; max-width: 300px;
+      margin: 12px auto; display: block;
+      font-size: 14px; text-align: center;
+    }
+    .no-cert button {
+      background: #6c5ce7; color: #fff; border: none;
+      border-radius: 10px; padding: 12px 24px;
+      cursor: pointer; font-size: 14px; margin-top: 8px;
+    }
+    .no-cert button:hover { background: #5a4bd1; }
+    .powered-by { margin-top: 30px; font-size: 12px; color: #64748b; }
+    .powered-by a { color: #a29bfe; text-decoration: none; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="logo">\u{1F393}</div>
+    <h1 data-i18n="v_title">Verificar Certificado</h1>
+    <p class="subtitle">ACVOLT Tech School | <span data-i18n="v_level">Nivel</span> 33</p>
+    <div class="loading" id="loading">
+      <div class="spinner"></div>
+      <p data-i18n="v_verifying">Verificando certificado...</p>
+    </div>
+    <div class="result" id="result"></div>
+    <div class="no-cert" id="searchSection" style="display:none;">
+      <p data-i18n="v_enter_id">Ingresa el ID del certificado para verificar:</p>
+      <input type="text" id="certInput" placeholder="CERT-XXXXXXXX" />
+      <button onclick="verifyCert()" data-i18n="v_verify_btn">Verificar</button>
+    </div>
+    <div class="powered-by">
+      Powered by <a href="https://maestrohvacr.com" target="_blank">Maestro HVACR</a>
+    </div>
+  </div>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script>
+    var _vLang = (navigator.language || 'es').substring(0, 2) === 'en' ? 'en' : 'es';
+    try { var _ml = localStorage.getItem('maestro_lang'); if (_ml) _vLang = _ml; } catch(e) {}
+    var _vT = {
+      v_title: { es: 'Verificar Certificado', en: 'Verify Certificate' },
+      v_level: { es: 'Nivel', en: 'Level' },
+      v_verifying: { es: 'Verificando certificado...', en: 'Verifying certificate...' },
+      v_enter_id: { es: 'Ingresa el ID del certificado para verificar:', en: 'Enter the certificate ID to verify:' },
+      v_verify_btn: { es: 'Verificar', en: 'Verify' },
+      v_not_found: { es: 'Certificado No Encontrado', en: 'Certificate Not Found' },
+      v_not_found_msg: { es: 'El ID proporcionado no corresponde a ningun certificado en nuestro sistema.', en: 'The provided ID does not match any certificate in our system.' },
+      v_pending: { es: 'Certificado Pendiente', en: 'Certificate Pending' },
+      v_student: { es: 'Estudiante', en: 'Student' },
+      v_level_label: { es: 'Nivel', en: 'Level' },
+      v_status: { es: 'Estado', en: 'Status' },
+      v_pending_approval: { es: 'Pendiente de aprobacion', en: 'Pending approval' },
+      v_denied: { es: 'Certificado Denegado', en: 'Certificate Denied' },
+      v_denied_msg: { es: 'Este certificado fue revisado y no fue aprobado.', en: 'This certificate was reviewed and was not approved.' },
+      v_valid: { es: 'Certificado Valido', en: 'Valid Certificate' },
+      v_date: { es: 'Fecha', en: 'Date' },
+      v_score: { es: 'Puntaje', en: 'Score' },
+      v_error: { es: 'Error', en: 'Error' },
+      v_error_msg: { es: 'Error al verificar. Intenta de nuevo.', en: 'Verification error. Please try again.' },
+      v_page_title: { es: 'Verificar Certificado | Maestro HVACR', en: 'Verify Certificate | Maestro HVACR' }
+    };
+    function _vt(k, fb) { var e = _vT[k]; return e ? (e[_vLang] || e.es || fb) : fb; }
+    document.querySelectorAll('[data-i18n]').forEach(function(el) {
+      var k = el.getAttribute('data-i18n'); var t = _vT[k];
+      if (t && t[_vLang]) el.textContent = t[_vLang];
+    });
+    document.title = _vt('v_page_title', 'Verificar Certificado | Maestro HVACR');
+    var SUPABASE_URL = 'https://htklsowiyjwsjnacnvnr.supabase.co';
+    var SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh0a2xzb3dpeWp3c2puYWNudm5yIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzY4OTM2NzIsImV4cCI6MjA1MjQ2OTY3Mn0.KIBgtFqS8jSXOkE9A4cBMryJXa5t4Lk2N6BkW5Y1GBQ';
+    var supabaseInstance = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    
+    async function init() {
+      var path = window.location.pathname;
+      var match = path.match(/\/verify\/(.+)/);
+      if (match && match[1]) {
+        await lookupCertificate(decodeURIComponent(match[1]));
+      } else {
+        document.getElementById('searchSection').style.display = 'block';
+      }
+    }
+    
+    function verifyCert() {
+      var certId = document.getElementById('certInput').value.trim();
+      if (certId) lookupCertificate(certId);
+    }
+    
+    async function lookupCertificate(certId) {
+      var loading = document.getElementById('loading');
+      var result = document.getElementById('result');
+      var search = document.getElementById('searchSection');
+      
+      loading.classList.add('active');
+      result.classList.remove('active');
+      search.style.display = 'none';
+      
+      try {
+        var resp1 = await supabaseInstance.from('certificates').select('*').eq('certificate_id', certId).single();
+        var cert = resp1.data;
+        
+        if (!cert) {
+          var resp2 = await supabaseInstance.from('certificates').select('*').eq('id', certId).single();
+          cert = resp2.data;
+        }
+        
+        loading.classList.remove('active');
+        result.classList.add('active');
+        
+        if (!cert) {
+          result.innerHTML = '<div class="cert-invalid"><div class="badge">\u274C</div><h2>' + _vt('v_not_found') + '</h2><p>' + _vt('v_not_found_msg') + '</p></div>';
+          search.style.display = 'block';
+          return;
+        }
+        
+        if (cert.status === 'pending') {
+          result.innerHTML = '<div class="cert-pending"><div class="badge">\u23F3</div><h2>' + _vt('v_pending') + '</h2><div class="cert-info"><div class="row"><span class="label">' + _vt('v_student') + '</span><span class="value">' + (cert.student_name || cert.nombre || 'N/A') + '</span></div><div class="row"><span class="label">' + _vt('v_level_label') + '</span><span class="value">' + (cert.level || cert.nivel || 'N/A') + '</span></div><div class="row"><span class="label">' + _vt('v_status') + '</span><span class="value">' + _vt('v_pending_approval') + '</span></div></div></div>';
+          return;
+        }
+        
+        if (cert.status === 'rejected' || cert.status === 'denied') {
+          result.innerHTML = '<div class="cert-invalid"><div class="badge">\u274C</div><h2>' + _vt('v_denied') + '</h2><p>' + _vt('v_denied_msg') + '</p></div>';
+          return;
+        }
+        
+        var fecha = cert.fecha_obtenido || cert.created_at || '';
+        if (fecha) fecha = new Date(fecha).toLocaleDateString(_vLang === 'en' ? 'en-US' : 'es-MX', { year: 'numeric', month: 'long', day: 'numeric' });
+
+        result.innerHTML = '<div class="cert-valid"><div class="badge">\u2705</div><h2>' + _vt('v_valid') + '</h2><div class="cert-info"><div class="row"><span class="label">' + _vt('v_student') + '</span><span class="value">' + (cert.student_name || cert.nombre || 'N/A') + '</span></div><div class="row"><span class="label">' + _vt('v_level_label') + '</span><span class="value">' + (cert.level || cert.nivel || 'N/A') + '</span></div><div class="row"><span class="label">' + _vt('v_date') + '</span><span class="value">' + (fecha || 'N/A') + '</span></div><div class="row"><span class="label">' + _vt('v_score') + '</span><span class="value">' + (cert.score || cert.puntaje || 'N/A') + '%</span></div><div class="row"><span class="label">ID</span><span class="value">' + (cert.certificate_id || cert.id) + '</span></div></div></div>';
+        
+      } catch (err) {
+        loading.classList.remove('active');
+        result.classList.add('active');
+        result.innerHTML = '<div class="cert-invalid"><div class="badge">\u26A0\uFE0F</div><h2>' + _vt('v_error') + '</h2><p>' + _vt('v_error_msg') + '</p></div>';
+        search.style.display = 'block';
+      }
+    }
+    
+    init();
+  </script>
+</body>
+</html>

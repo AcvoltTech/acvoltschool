@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Maestro HVACR Dashboard — Premium v3</title>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --blue: #1a3a6b;
+    --blue-light: #2563eb;
+    --red: #c42032;
+    --orange: #e8772e;
+    --dark: #0a0e1a;
+    --text: #1e293b;
+    --text-light: #64748b;
+    --br: 18px;
+  }
+
+  * { margin:0; padding:0; box-sizing:border-box; }
+  
+  body {
+    font-family: -apple-system, 'SF Pro Text', 'SF Pro Display', BlinkMacSystemFont, 'Inter', 'Plus Jakarta Sans', system-ui, sans-serif;
+    background: var(--dark);
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    padding: 6px;
+    overflow-x: hidden;
+  }
+
+  /* ====== THICK ANIMATED OUTER FRAME ====== */
+  .app-frame {
+    position: relative;
+    width: 100%;
+    max-width: 480px;
+    min-height: 100vh;
+    border-radius: 30px;
+    overflow: hidden;
+  }
+
+  .app-frame::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: 30px;
+    padding: 5px;
+    background: conic-gradient(from var(--angle, 0deg), var(--blue) 0%, #3b82f6 15%, var(--blue) 25%, var(--red) 35%, #ff4757 45%, var(--orange) 55%, #ffa502 65%, var(--red) 75%, #3b82f6 85%, var(--blue) 100%);
+    animation: borderSpin 3s linear infinite;
+    z-index: 0;
+  }
+
+  .app-frame::after {
+    content: '';
+    position: absolute;
+    inset: -4px;
+    border-radius: 34px;
+    background: conic-gradient(from var(--angle, 0deg), var(--blue) 0%, transparent 15%, var(--red) 35%, transparent 50%, var(--orange) 65%, transparent 80%, var(--blue) 100%);
+    filter: blur(12px);
+    opacity: 0.6;
+    animation: borderSpin 3s linear infinite;
+    z-index: -1;
+  }
+
+  @property --angle {
+    syntax: '<angle>';
+    initial-value: 0deg;
+    inherits: false;
+  }
+
+  @keyframes borderSpin { to { --angle: 360deg; } }
+
+  @supports not (background: conic-gradient(from 0deg, red, blue)) {
+    .app-frame::before {
+      background: linear-gradient(135deg, var(--blue), var(--red), var(--orange), var(--blue));
+      background-size: 400% 400%;
+      animation: frameFB 3s ease infinite;
+    }
+    @keyframes frameFB { 0%{background-position:0% 50%} 50%{background-position:100% 50%} 100%{background-position:0% 50%} }
+  }
+
+  .app-inner {
+    position: relative;
+    background: #f8fafc;
+    border-radius: 25px;
+    min-height: calc(100vh - 12px);
+    margin: 5px;
+    overflow: hidden;
+    z-index: 1;
+  }
+
+  /* PSIG Logo watermark centered in background */
+  .app-inner::after {
+    content: '';
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 300px;
+    height: 300px;
+    background: url('logo-psig-black.png') center/contain no-repeat;
+    opacity: 0.08;
+    z-index: 0;
+    pointer-events: none;
+    mix-blend-mode: multiply;
+  }
+
+  /* ====== HEADER ====== */
+  .header { text-align: center; padding: 28px 20px 16px; background: linear-gradient(180deg, #fff 0%, #f8fafc 100%); }
+  .header-logo { width: 78px; height: 78px; border-radius: 20px; object-fit: contain; margin-bottom: 10px; filter: drop-shadow(0 2px 8px rgba(0,0,0,0.1)); }
+  .header h1 { font-size: 22px; font-weight: 800; color: var(--text); letter-spacing: -0.5px; margin-bottom: 2px; }
+  .header .greeting { font-size: 14px; color: var(--text-light); font-weight: 500; }
+
+  /* ====== SOCIAL ====== */
+  .social-row { display: flex; justify-content: center; gap: 10px; padding: 0 20px 16px; }
+  .social-icon { width: 34px; height: 34px; border-radius: 50%; display: flex; align-items: center; justify-content: center; text-decoration: none; transition: transform 0.2s; }
+  .social-icon:active { transform: scale(0.88); }
+  .social-icon svg { width: 17px; height: 17px; fill: white; }
+  .si-yt { background: #FF0000; } .si-fb { background: #1877F2; }
+  .si-ig { background: linear-gradient(135deg, #f09433, #e6683c, #dc2743, #cc2366, #bc1888); }
+  .si-tk { background: #010101; } .si-gl { background: #4285F4; } .si-sc { background: #FF6B00; }
+
+  /* ====== GRID ====== */
+  .cards-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 0 14px 14px; }
+
+  /* ====== CARDS — WHITE BG, COLORED ANIMATED BORDER ====== */
+  .card {
+    position: relative;
+    border-radius: var(--br);
+    background: #ffffff;
+    cursor: pointer;
+    transition: transform 0.15s;
+    -webkit-tap-highlight-color: transparent;
+    border: 1.5px solid #d1d8e0;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+  }
+  .card:active { transform: scale(0.96); }
+
+  .card-inner {
+    background: #ffffff;
+    border-radius: var(--br);
+    padding: 20px 14px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 112px;
+    text-align: center;
+    gap: 10px;
+  }
+
+  /* Icon containers — tinted bg matching card color */
+  .card-ic {
+    width: 46px; height: 46px;
+    border-radius: 13px;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .card-ic svg { width: 24px; height: 24px; stroke-width: 1.8; fill: none; }
+
+  .ic-radio    { background: #fef2f2; } .ic-radio svg    { stroke: #dc2626; }
+  .ic-podcast  { background: #f0fdf4; } .ic-podcast svg  { stroke: #16a34a; }
+  .ic-train    { background: #fff7ed; } .ic-train svg    { stroke: #ea580c; }
+  .ic-classes  { background: #eff6ff; } .ic-classes svg  { stroke: #2563eb; }
+  .ic-skills   { background: #faf5ff; } .ic-skills svg   { stroke: #7c3aed; }
+  .ic-recorded { background: #fefce8; } .ic-recorded svg { stroke: #ca8a04; }
+  .ic-certs    { background: #fff1f2; } .ic-certs svg    { stroke: #be123c; }
+  .ic-live     { background: #ecfeff; } .ic-live svg     { stroke: #0891b2; }
+  .ic-money    { background: #f0fdf4; } .ic-money svg    { stroke: #059669; }
+  .ic-game     { background: #eef2ff; } .ic-game svg     { stroke: #4f46e5; }
+  .ic-crm      { background: #f1f5f9; } .ic-crm svg      { stroke: #1e3a5f; }
+  .ic-store    { background: #fff7ed; } .ic-store svg    { stroke: #ea580c; }
+
+  .card-title { font-size: 13px; font-weight: 700; color: var(--text); line-height: 1.3; }
+  .card-subtitle { font-size: 11px; color: var(--text-light); font-weight: 500; margin-top: -4px; }
+
+  .live-dot {
+    display: inline-block; width: 7px; height: 7px;
+    background: #ef4444; border-radius: 50%;
+    animation: livePulse 1.5s ease-in-out infinite;
+    margin-right: 3px; vertical-align: middle;
+  }
+  @keyframes livePulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:0.3;transform:scale(0.7)} }
+
+  /* Full-width card */
+  .card-full { grid-column: 1 / -1; }
+  .card-full .card-inner { flex-direction: row; min-height: 68px; padding: 16px 20px; gap: 14px; justify-content: flex-start; }
+  .card-full .card-text { text-align: left; }
+  .card-full .card-title { font-size: 14px; }
+
+  /* ====== SECTION LABEL ====== */
+  .section-label { padding: 14px 20px 8px; font-size: 11px; font-weight: 700; color: var(--text-light); text-transform: uppercase; letter-spacing: 1.2px; }
+
+  /* ====== TIENDA — CLEAN WHITE ====== */
+  .tienda-section {
+    margin: 6px 14px 20px;
+    border-radius: 22px;
+    border: 1.5px solid #d1d8e0;
+    background: #ffffff;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+  }
+  .tienda-inner {
+    background: #ffffff;
+    border-radius: 22px;
+    padding: 30px 20px;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+  }
+  .tienda-badge {
+    display: inline-block;
+    background: linear-gradient(135deg, var(--orange), #f59e0b);
+    color: #fff;
+    font-size: 10px;
+    font-weight: 800;
+    padding: 4px 12px;
+    border-radius: 20px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+  .tienda-inner h3 { font-size: 20px; font-weight: 800; color: var(--text); }
+  .tienda-inner p { font-size: 13px; color: var(--text-light); }
+  .tienda-items {
+    display: flex;
+    gap: 16px;
+    justify-content: center;
+    margin-top: 4px;
+  }
+  .tienda-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+  }
+  .tienda-item-ic {
+    width: 44px; height: 44px;
+    border-radius: 12px;
+    background: #fff7ed;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .tienda-item-ic svg { width: 22px; height: 22px; stroke: var(--orange); stroke-width: 1.8; fill: none; }
+  .tienda-item span { font-size: 10px; color: var(--text-light); font-weight: 600; }
+
+  /* ====== FOOTER ====== */
+  .footer-links { text-align: center; padding: 10px 20px 28px; display: flex; flex-direction: column; gap: 4px; align-items: center; }
+  .footer-link { font-size: 13px; color: var(--blue); font-weight: 600; text-decoration: none; padding: 10px 20px; cursor: pointer; display: flex; align-items: center; gap: 6px; }
+  .footer-link svg { width: 16px; height: 16px; stroke: var(--blue); stroke-width: 2; fill: none; }
+  .footer-link.danger { color: var(--red); }
+  .footer-link.danger svg { stroke: var(--red); }
+
+  /* ====== TOP NAV ====== */
+  .top-avatar { position: absolute; top: 14px; right: 14px; width: 40px; height: 40px; border-radius: 50%; border: 2px solid rgba(0,0,0,0.06); object-fit: cover; cursor: pointer; z-index: 10; }
+  .top-bell { position: absolute; top: 16px; left: 16px; cursor: pointer; z-index: 10; }
+  .top-bell svg { width: 22px; height: 22px; stroke: var(--text-light); stroke-width: 2; fill: none; }
+
+  /* ====== ENTRY ANIMATIONS ====== */
+  .card { opacity: 0; animation: cardIn 0.4s ease forwards; }
+  .card:nth-child(1)  { animation-delay: 0.05s; }
+  .card:nth-child(2)  { animation-delay: 0.10s; }
+  .card:nth-child(3)  { animation-delay: 0.15s; }
+  .card:nth-child(4)  { animation-delay: 0.20s; }
+  .card:nth-child(5)  { animation-delay: 0.25s; }
+  .card:nth-child(6)  { animation-delay: 0.30s; }
+  .card:nth-child(7)  { animation-delay: 0.35s; }
+  .card:nth-child(8)  { animation-delay: 0.40s; }
+  .card:nth-child(9)  { animation-delay: 0.45s; }
+  .card:nth-child(10) { animation-delay: 0.50s; }
+  .card:nth-child(11) { animation-delay: 0.55s; }
+  @keyframes cardIn { from{opacity:0;transform:translateY(14px) scale(0.97)} to{opacity:1;transform:translateY(0) scale(1)} }
+
+  @media (max-width: 360px) {
+    .card-inner { padding: 16px 10px; min-height: 96px; }
+    .card-title { font-size: 12px; }
+    .card-ic { width: 40px; height: 40px; }
+    .card-ic svg { width: 20px; height: 20px; }
+  }
+</style>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+
+<div class="app-frame">
+  <div class="app-inner">
+    
+    <div class="top-bell" onclick="goTo('index.html','welcomeScreen')" data-i18n-title="app_notifications" title="Notificaciones"><svg viewBox="0 0 24 24"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg></div>
+    <img src="mario-black.jpg" alt="" class="top-avatar" onclick="goTo('index.html','miPerfilScreen')" data-i18n-title="app_my_profile" title="Mi Perfil" onerror="this.style.background='linear-gradient(135deg,var(--blue),var(--red))';this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 40 40%22>
+
+    <circle cx=%2220%22 cy=%2220%22 r=%2220%22 fill=%22%231a3a6b%22/><text x=%2220%22 y=%2226%22 text-anchor=%22middle%22 fill=%22white%22 font-size=%2216%22>M</text></svg>'">
+
+    <div class="header">
+      <img src="logo-psig-black.png" alt="ACVOLT" class="header-logo" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 80 80%22><rect width=%2280%22 height=%2280%22 rx=%2216%22 fill=%22%231a3a6b%22/><text x=%2240%22 y=%2248%22 text-anchor=%22middle%22 fill=%22white%22 font-size=%2213%22 font-weight=%22bold%22>ACVOLT</text></svg>'">
+      <h1>MAESTRO HVACR</h1>
+      <p class="greeting" id="greetingText" data-i18n="app_greeting_default">Bienvenido, Técnico</p>
+    </div>
+
+    <div class="social-row">
+      <a class="social-icon si-yt" href="https://www.youtube.com/@MaestroMarioAc" target="_blank"><svg viewBox="0 0 24 24"><path d="M23 7s-.3-2-1.2-2.8C20.7 3.2 19.5 3 19.5 3H4.5S3.3 3.2 2.2 4.2C1.3 5 1 7 1 7S.7 9.3.7 11.5v2C.7 15.7 1 18 1 18s.3 1.6 1.2 2.3c1.1 1.2 2.5 1.1 3.1 1.2C7.5 21.7 12 22 12 22s4.5 0 7.5-1c0 0 1.2-.2 2.3-1.3.9-.8 1.2-2.4 1.2-2.4s.3-2.3.3-4.5v-2.1c0-2.2-.3-4.5-.3-4.5zM9.5 16V8.5l6.5 3.8L9.5 16z"/></svg></a>
+      <a class="social-icon si-fb" href="https://www.facebook.com/mastermarioacvolt" target="_blank"><svg viewBox="0 0 24 24"><path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3V2z"/></svg></a>
+      <a class="social-icon si-ig" href="https://www.instagram.com/masteracvolt" target="_blank"><svg viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="20" rx="5" ry="5" fill="none" stroke="white" stroke-width="2"/><circle cx="12" cy="12" r="4" fill="none" stroke="white" stroke-width="2"/><circle cx="17.5" cy="6.5" r="1.5" fill="white"/></svg></a>
+      <a class="social-icon si-tk" href="https://www.tiktok.com/@maestromariooficial" target="_blank"><svg viewBox="0 0 24 24"><path d="M9 12a4 4 0 1 0 4 4V4a5 5 0 0 0 5 5" fill="none" stroke="white" stroke-width="2" stroke-linecap="round"/></svg></a>
+      <a class="social-icon si-gl" href="https://www.google.com/search?q=acvolt+tech+school" target="_blank"><svg viewBox="0 0 24 24"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c5 0 9.2-3.5 9.8-8.2H12v-3.5h10c.1.6.2 1.3.2 2 0 5.5-4.5 10-10.2 10C6.5 22.3 2 17.5 2 12S6.5 2 12 2z"/></svg></a>
+    </div>
+
+    <div class="cards-grid">
+      <!-- Row 1 -->
+      <div class="card card-radio" onclick="goTo('index.html','radioPodcastScreen')"><div class="card-inner"><div class="card-ic ic-radio"><svg viewBox="0 0 24 24" fill="none"><path d="M4.9 19.1C1 15.2 1 8.8 4.9 4.9"/><path d="M7.8 16.2a6 6 0 0 1 0-8.4"/><path d="M16.2 7.8a6 6 0 0 1 0 8.4"/><path d="M19.1 4.9C23 8.8 23 15.2 19.1 19.1"/><circle cx="12" cy="12" r="1"/></svg></div><div class="card-title"><span class="live-dot"></span><span data-i18n="app_radio_podcast">Radio y Podcast</span></div><div class="card-subtitle" data-i18n="app_radio_sub">Live365 · Nivel 33</div></div></div>
+      <div class="card card-podcast" onclick="goTo('index.html','studentExamsScreen')"><div class="card-inner"><div class="card-ic ic-podcast" style="background:linear-gradient(135deg,#8b5cf6,#6d28d9);"><svg viewBox="0 0 24 24" fill="none"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="M9 14l2 2 4-4"/></svg></div><div class="card-title" data-i18n="app_exams_title">Exámenes y Desempeño</div><div class="card-subtitle" data-i18n="app_exams_sub">Evaluaciones · Resultados</div><div class="card-sublink" onclick="event.stopPropagation();goTo('index.html','levelsScreen')"><svg viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg><span data-i18n="app_start_training">Comenzar Entrenamiento</span></div></div></div>
+      <!-- Row 2 -->
+      <div class="card card-classes" onclick="goTo('index.html','studySectionsScreen')"><div class="card-inner"><div class="card-ic ic-classes"><svg viewBox="0 0 24 24" fill="none"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg></div><div class="card-title" data-i18n="app_my_classes">Mis Clases</div><div class="card-subtitle" data-i18n="app_library_tasks">Biblioteca y Tareas</div><div class="card-sublink" onclick="event.stopPropagation();goTo('index.html','studentProgressScreen')"><svg viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg><span data-i18n="app_my_progress">Mi Progreso</span></div></div></div>
+      <div class="card card-skills" onclick="goTo('index.html','studySectionsScreen')"><div class="card-inner"><div class="card-ic ic-skills"><svg viewBox="0 0 24 24" fill="none"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg></div><div class="card-title" data-i18n="app_skill_dev">Desarrollo de Habilidades</div><div class="card-subtitle" data-i18n="app_questions_count">3,500+ Preguntas</div><div class="card-sublink" onclick="event.stopPropagation();goTo('index.html','certOficialesScreen')"><svg viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg><span data-i18n="app_official_certs">Certificados Oficiales</span></div></div></div>
+      <!-- Row 3 -->
+      <div class="card card-clases" onclick="goTo('index.html','videoLessonsScreen')"><div class="card-inner"><div class="card-ic ic-clases"><svg viewBox="0 0 24 24" fill="none"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg></div><div class="card-title" data-i18n="app_classes">Clases</div><div class="card-subtitle" data-i18n="app_recorded_live">Pregrabadas · En Vivo</div><div class="card-sublink" onclick="event.stopPropagation();goTo('index.html','studentCalendarScreen')"><svg viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg><span data-i18n="app_live_classes">Clases en Vivo</span></div></div></div>
+      <div class="card card-game" onclick="window.location.href='game-mode.html'"><div class="card-inner"><div class="card-ic ic-game"><svg viewBox="0 0 24 24" fill="none"><path d="M6 12h4m-2-2v4"/><path d="M15 11h.01M18 13h.01"/><path d="M17.32 5H6.68a4 4 0 0 0-3.978 3.59c-.006.052-.01.101-.017.152C2.604 9.416 2 14.456 2 16a3 3 0 0 0 3 3c1 0 1.5-.5 2-1l1.414-1.414A2 2 0 0 1 9.828 16h4.344a2 2 0 0 1 1.414.586L17 18c.5.5 1 1 2 1a3 3 0 0 0 3-3c0-1.545-.604-6.584-.685-7.258-.007-.05-.011-.1-.017-.151A4 4 0 0 0 17.32 5z"/></svg></div><div class="card-title" data-i18n="app_challenge_mode">Modo Desafío</div><div class="card-subtitle">Quiz Game Mode</div></div></div>
+      <!-- Row 4 -->
+      <div class="card card-tutorials" onclick="goTo('index.html','videoTutorialesScreen')"><div class="card-inner"><div class="card-ic ic-tutorials"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8"/></svg></div><div class="card-title">Online HVAC Certification</div><div class="card-subtitle" data-i18n="app_cert_sub">Videos + Quizzes + Certificados</div></div></div>
+      <div class="card card-suggest" onclick="goTo('index.html','sugerenciasScreen')"><div class="card-inner"><div class="card-ic ic-suggest"><svg viewBox="0 0 24 24" fill="none"><path d="M12 2a7 7 0 0 1 7 7c0 2.38-1.19 4.47-3 5.74V17a1 1 0 0 1-1 1H9a1 1 0 0 1-1-1v-2.26C6.19 13.47 5 11.38 5 9a7 7 0 0 1 7-7z"/><line x1="9" y1="21" x2="15" y2="21"/><line x1="10" y1="24" x2="14" y2="24"/></svg></div><div class="card-title" data-i18n="app_suggestions">Sugerencias de Mejoras</div><div class="card-subtitle" data-i18n="app_send_ideas">Envía tus ideas</div></div></div>
+      <!-- Row 5 -->
+      <div class="card card-chat" onclick="goTo('index.html','techChatScreen')"><div class="card-inner"><div class="card-ic ic-chat"><svg viewBox="0 0 24 24" fill="none"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></div><div class="card-title" data-i18n="app_join_chat">Únete al Chat</div><div class="card-subtitle" data-i18n="app_tech_chat">Chat de Técnicos</div></div></div>
+      <div class="card card-crm" onclick="window.open('https://acvolttech.github.io/trademaster-crm/','_blank')"><div class="card-inner"><div class="card-ic ic-crm"><svg viewBox="0 0 24 24" fill="none"><rect x="2" y="2" width="20" height="20" rx="2"/><path d="M7 2v20"/><path d="M2 7h5"/><path d="M2 12h5"/><path d="M2 17h5"/><path d="M11 14l2 2 4-4"/></svg></div><div class="card-title">Trade Master CRM</div><div class="card-subtitle" data-i18n="app_crm_sub">Clientes · GPS · Cobros</div></div></div>
+    </div>
+
+    <div class="section-label" data-i18n="app_coming_soon">Próximamente</div>
+    <div class="tienda-section">
+      <div class="tienda-inner">
+        <div class="tienda-badge" data-i18n="app_coming_soon">Próximamente</div>
+        <div class="card-ic ic-store" style="width:52px;height:52px;border-radius:14px;position:relative;z-index:1;"><svg viewBox="0 0 24 24" fill="none" style="width:28px;height:28px;"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg></div>
+        <h3 data-i18n="app_virtual_store">Tienda Virtual</h3>
+        <p data-i18n="app_store_desc">Herramientas, equipos y materiales HVAC</p>
+        <div class="tienda-items">
+          <div class="tienda-item">
+            <div class="tienda-item-ic"><svg viewBox="0 0 24 24"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg></div>
+            <span data-i18n="app_tools">Herramientas</span>
+          </div>
+          <div class="tienda-item">
+            <div class="tienda-item-ic"><svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></div>
+            <span data-i18n="app_equipment">Equipos</span>
+          </div>
+          <div class="tienda-item">
+            <div class="tienda-item-ic"><svg viewBox="0 0 24 24"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg></div>
+            <span data-i18n="app_materials">Materiales</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer-links">
+      <a class="footer-link admin-only-link" href="#" onclick="goTo('index.html','adminLoginScreen');return false;" style="display:none;"><svg viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg><span data-i18n="app_admin_access">Acceso Administrador</span></a>
+      <a class="footer-link danger" href="#" onclick="cerrarSesion();return false;"><svg viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg><span data-i18n="app_logout">Cerrar Sesión</span></a>
+    </div>
+
+  </div>
+</div>
+
+
+<script>
+// === MAESTROAC APP.HTML — FUNCTIONAL DASHBOARD ===
+var _appLang = localStorage.getItem('maestro_lang') || 'es';
+var _appT = {
+  app_notifications: { es: 'Notificaciones', en: 'Notifications' },
+  app_my_profile: { es: 'Mi Perfil', en: 'My Profile' },
+  app_radio_podcast: { es: 'Radio y Podcast', en: 'Radio & Podcast' },
+  app_radio_sub: { es: 'Live365 · Nivel 33', en: 'Live365 · Level 33' },
+  app_exams_title: { es: 'Exámenes y Desempeño', en: 'Exams & Performance' },
+  app_exams_sub: { es: 'Evaluaciones · Resultados', en: 'Evaluations · Results' },
+  app_start_training: { es: 'Comenzar Entrenamiento', en: 'Start Training' },
+  app_my_classes: { es: 'Mis Clases', en: 'My Classes' },
+  app_library_tasks: { es: 'Biblioteca y Tareas', en: 'Library & Assignments' },
+  app_my_progress: { es: 'Mi Progreso', en: 'My Progress' },
+  app_skill_dev: { es: 'Desarrollo de Habilidades', en: 'Skill Development' },
+  app_questions_count: { es: '3,500+ Preguntas', en: '3,500+ Questions' },
+  app_official_certs: { es: 'Certificados Oficiales', en: 'Official Certificates' },
+  app_classes: { es: 'Clases', en: 'Classes' },
+  app_recorded_live: { es: 'Pregrabadas · En Vivo', en: 'Recorded · Live' },
+  app_live_classes: { es: 'Clases en Vivo', en: 'Live Classes' },
+  app_challenge_mode: { es: 'Modo Desafío', en: 'Challenge Mode' },
+  app_earn_money: { es: '¡Gana Dinero!', en: 'Earn Money!' },
+  app_cert_sub: { es: 'Videos + Quizzes + Certificados', en: 'Videos + Quizzes + Certificates' },
+  app_suggestions: { es: 'Sugerencias de Mejoras', en: 'Improvement Suggestions' },
+  app_send_ideas: { es: 'Envía tus ideas', en: 'Send your ideas' },
+  app_join_chat: { es: 'Únete al Chat', en: 'Join the Chat' },
+  app_tech_chat: { es: 'Chat de Técnicos', en: 'Technicians Chat' },
+  app_crm_sub: { es: 'Clientes · GPS · Cobros', en: 'Clients · GPS · Billing' },
+  app_coming_soon: { es: 'Próximamente', en: 'Coming Soon' },
+  app_virtual_store: { es: 'Tienda Virtual', en: 'Virtual Store' },
+  app_store_desc: { es: 'Herramientas, equipos y materiales HVAC', en: 'HVAC tools, equipment and materials' },
+  app_tools: { es: 'Herramientas', en: 'Tools' },
+  app_equipment: { es: 'Equipos', en: 'Equipment' },
+  app_materials: { es: 'Materiales', en: 'Materials' },
+  app_admin_access: { es: 'Acceso Administrador', en: 'Admin Access' },
+  app_logout: { es: 'Cerrar Sesión', en: 'Log Out' },
+  app_confirm_logout: { es: '¿Seguro que quieres cerrar sesión?', en: 'Are you sure you want to log out?' },
+  app_good_morning: { es: 'Buenos dias', en: 'Good morning' },
+  app_good_afternoon: { es: 'Buenas tardes', en: 'Good afternoon' },
+  app_good_evening: { es: 'Buenas noches', en: 'Good evening' },
+  app_greeting_default: { es: 'Bienvenido, Técnico', en: 'Welcome, Technician' }
+};
+function _at(key, fb) { var e = _appT[key]; return e ? (e[_appLang] || e.es || fb) : fb; }
+function _translateAppDOM() {
+  document.querySelectorAll('[data-i18n]').forEach(function(el) {
+    var k = el.getAttribute('data-i18n'); var t = _appT[k];
+    if (t && t[_appLang]) el.textContent = t[_appLang];
+  });
+  document.querySelectorAll('[data-i18n-title]').forEach(function(el) {
+    var k = el.getAttribute('data-i18n-title'); var t = _appT[k];
+    if (t && t[_appLang]) el.title = t[_appLang];
+  });
+}
+const SUPABASE_URL = 'https://htklsowiyjwsjnacnvnr.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh0a2xzb3dpeWp3c2puYWNudm5yIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA0NjIwMjQsImV4cCI6MjA4NjAzODAyNH0.6A3F7MI4YJEMo98b4Zfzao9p_hMh2T0ha0dRJ4SUhv0';
+let supabaseClient = null;
+function initSupabase(){if(window.supabase){supabaseClient=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});return true}return false}
+function checkAuth(){if(!localStorage.getItem('tecnico_user')&&localStorage.getItem('tecnico_authenticated')!=='true'){window.location.href='index.html';return false}return true}
+function setGreeting(){try{var u=JSON.parse(localStorage.getItem('tecnico_user')||'{}');var n=(u.nombre||u.name||'Tecnico').split(' ')[0];var h=new Date().getHours();var s=h<12?_at('app_good_morning','Buenos dias'):h<18?_at('app_good_afternoon','Buenas tardes'):_at('app_good_evening','Buenas noches');var el=document.getElementById('greetingText');if(el)el.textContent=s+', '+n}catch(e){}}
+function goTo(file,screenId){if(screenId){localStorage.setItem('maestroac_goto_screen',screenId);window.location.href=file}else{window.location.href=file}}
+async function cerrarSesion(){if(confirm(_at('app_confirm_logout','\u00bfSeguro que quieres cerrar sesi\u00f3n?'))){try{if(supabaseClient)await supabaseClient.auth.signOut()}catch(e){}localStorage.removeItem('tecnico_user');localStorage.removeItem('tecnico_user_backup');localStorage.removeItem('tecnico_authenticated');localStorage.removeItem('tecnico_email');localStorage.removeItem('maestroac_goto_screen');localStorage.removeItem('maestroac_last_screen');sessionStorage.clear();window.location.href='index.html'}}
+// Offline detection
+window.addEventListener('offline',function(){var b=document.getElementById('offlineBanner');if(b)b.style.display='block'});
+window.addEventListener('online',function(){var b=document.getElementById('offlineBanner');if(b)b.style.display='none'});
+// Init
+(function(){if(!checkAuth())return;if(!initSupabase())setTimeout(initSupabase,3000);setGreeting();_translateAppDOM();console.log('[App] Dashboard loaded')})();
+</script>
+
+<!-- Maestro Mario AI Button -->
+<div id="aiFloatBtn" onclick="goTo('index.html','welcomeScreen')" title="Maestro Mario AI" style="position:fixed;top:70px;right:20px;z-index:900;cursor:pointer;width:42px;height:42px;border-radius:50%;background:linear-gradient(135deg,#f39c12,#e67e22);display:flex;align-items:center;justify-content:center;box-shadow:0 3px 12px rgba(243,156,18,0.5);border:2px solid rgba(255,255,255,0.4);">
+  <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="white" stroke-width="2" stroke-linecap="round"><path d="M12 2a2 2 0 0 1 2 2c0 .74-.4 1.39-1 1.73V7h1a7 7 0 0 1 7 7h1a1 1 0 0 1 0 2h-1.27a7 7 0 0 1-13.46 0H5a1 1 0 0 1 0-2h1a7 7 0 0 1 7-7h1V5.73c-.6-.34-1-.99-1-1.73a2 2 0 0 1 2-2M9 17a3 3 0 0 0 6 0"/></svg>
+</div>
+</body>
+</html>

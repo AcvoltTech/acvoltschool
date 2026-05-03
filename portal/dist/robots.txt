@@ -1,0 +1,13 @@
+User-agent: *
+Allow: /
+Disallow: /js/admin/
+Disallow: /js/crm/
+Disallow: /supabase/
+Disallow: /.claude/
+Disallow: /.github/
+Disallow: /node_modules/
+
+# Crawl delay for polite bots
+Crawl-delay: 2
+
+Sitemap: https://maestrohvacr.com/sitemap.xml
