@@ -19,6 +19,21 @@
   'use strict';
 
   var FORCE_KEY = '_maestro_dbg_force';
+
+  // ─── HARD KILL on production hostnames ─────────────────────────────────
+  // Real students were seeing the overlay over the login button (legacy
+  // FORCE_KEY = '1' from older debug sessions). Even if forced, never run
+  // on prod. Auto-clear the flag so it doesn't keep haunting devices that
+  // had it set. Allow only on local + Cloudflare preview builds.
+  var PROD_HOSTS = [
+    'acvoltschool.com', 'www.acvoltschool.com',
+    'maestrohvacr.com', 'www.maestrohvacr.com',
+  ];
+  if (PROD_HOSTS.indexOf(window.location.hostname) >= 0) {
+    try { localStorage.removeItem(FORCE_KEY); } catch (_e) {}
+    return;
+  }
+
   var isWKWebView = !!(window.webkit && window.webkit.messageHandlers);
   var forced = false;
   try { forced = localStorage.getItem(FORCE_KEY) === '1'; } catch (_e) {}
