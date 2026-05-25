@@ -267,7 +267,7 @@
       if (!supabaseClient) { if(msgDiv) msgDiv.innerHTML = '<span style="color:#e74c3c;">' + _t('auth_connection_error', 'Error de conexión.') + '</span>'; return; }
       try {
         if(msgDiv) msgDiv.innerHTML = '<span style="color:#9b59b6;">' + _t('auth_sending_magic_link', 'Enviando link de acceso...') + '</span>';
-        var { error } = await supabaseClient.auth.signInWithOtp({ email: email, options: { emailRedirectTo: 'https://maestrohvacr.com' } });
+        var { error } = await supabaseClient.auth.signInWithOtp({ email: email, options: { emailRedirectTo: window.location.origin } });
         if (error) {
           if(msgDiv) msgDiv.innerHTML = '<span style="color:#e74c3c;">' + _escHtml(error.message) + '</span>';
         } else {
@@ -1279,7 +1279,7 @@
       }
       try {
         var { error } = await supabaseClient.auth.resetPasswordForEmail(email, {
-          redirectTo: 'https://maestrohvacr.com'
+          redirectTo: window.location.origin
         });
         msgDiv.style.display = 'block';
         if (error && (error.message.includes('rate') || error.message.includes('limit'))) {
@@ -1299,6 +1299,28 @@
     }
     window.sendPasswordReset = sendPasswordReset;
     window.sendMagicLink = sendMagicLink;
+
+    async function signInWithOAuthProvider(provider) {
+      var errEl = document.getElementById('loginError');
+      if (!supabaseClient) {
+        if (errEl) { errEl.style.display = 'block'; errEl.textContent = _t('auth_connection_try_again', 'Error de conexión. Intenta de nuevo.'); }
+        return;
+      }
+      try {
+        var { error } = await supabaseClient.auth.signInWithOAuth({
+          provider: provider,
+          options: { redirectTo: window.location.origin }
+        });
+        if (error && errEl) {
+          errEl.style.display = 'block';
+          errEl.textContent = (provider === 'google' ? 'Google' : 'Apple') + ': ' + error.message;
+        }
+      } catch (e) {
+        if (errEl) { errEl.style.display = 'block'; errEl.textContent = (provider === 'google' ? 'Google' : 'Apple') + ': ' + (e && e.message ? e.message : 'Error'); }
+      }
+    }
+    window.signInWithGoogle = function() { return signInWithOAuthProvider('google'); };
+    window.signInWithApple  = function() { return signInWithOAuthProvider('apple'); };
 
     // Password strength validation — shared by all password-setting flows
     function _validatePasswordStrength(password) {
@@ -1425,7 +1447,7 @@
       try {
         var { data, error } = await supabaseClient.auth.signInWithOtp({
           email: email,
-          options: { emailRedirectTo: 'https://maestrohvacr.com' }
+          options: { emailRedirectTo: window.location.origin }
         });
         if (error) {
           msgDiv.style.color = '#e74c3c';
