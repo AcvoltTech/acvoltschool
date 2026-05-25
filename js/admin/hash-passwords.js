@@ -76,4 +76,75 @@
       return null;
     }
 
+    // Form handler for admin login screen
+    async function handleAdminLogin(event) {
+      event.preventDefault();
+      var user = document.getElementById('adminLoginUser').value.trim();
+      var pass = document.getElementById('adminLoginPassword').value;
+      var errorDiv = document.getElementById('adminLoginError');
+      if (!user || !pass) { errorDiv.classList.add('show'); return false; }
+
+      var staff = null;
+      if (typeof supabaseClient !== 'undefined' && supabaseClient) {
+        try {
+          // Prefer secure login (PBKDF2 → SHA-256 legacy)
+          if (typeof handleAdminLoginSecure === 'function') {
+            staff = await handleAdminLoginSecure(user, pass);
+          }
+          // Fallback: legacy admin_login RPC by username
+          if (!staff && typeof hashPassword === 'function') {
+            var hashedPwd = await hashPassword(pass);
+            var { data: staffRows } = await supabaseClient.rpc('admin_login', {
+              p_username: user,
+              p_password_hash: hashedPwd
+            });
+            staff = staffRows && staffRows.length > 0 ? staffRows[0] : null;
+          }
+          if (staff) {
+            var staffEmail = staff.email || localStorage.getItem('tecnico_email') || '';
+            // Store admin session
+            sessionStorage.setItem('admin_authenticated', 'true');
+            sessionStorage.setItem('admin_role', staff.rol || 'master');
+            sessionStorage.setItem('admin_name', staff.nombre || user);
+            sessionStorage.setItem('admin_email', staffEmail);
+            sessionStorage.setItem('admin_login_ts', String(Date.now()));
+            window._adminSession = { email: staffEmail, role: staff.rol || 'master', name: staff.nombre || user, id: staff.id };
+            if (staffEmail) localStorage.setItem('tecnico_email', staffEmail);
+            // Update last login
+            try { await supabaseClient.rpc('update_admin_last_login', { p_staff_id: staff.id }); } catch(e) {}
+            errorDiv.classList.remove('show');
+            if (typeof showScreen === 'function') showScreen('adminDashboardScreen');
+            return false;
+          }
+        } catch(e) { console.log('[Admin] Login error:', e); }
+      }
+      errorDiv.classList.add('show');
+      return false;
+    }
+
+    // Restore admin session from sessionStorage on page load
+    (function _restoreAdminSession() {
+      if (sessionStorage.getItem('admin_authenticated') === 'true') {
+        window._adminSession = {
+          email: sessionStorage.getItem('admin_email') || '',
+          role: sessionStorage.getItem('admin_role') || 'master',
+          name: sessionStorage.getItem('admin_name') || 'Admin'
+        };
+      }
+    })();
+
+    // isAdminAuthenticated — checks window._adminSession or supabase auth session
+    if (typeof isAdminAuthenticated !== 'function') {
+      window.isAdminAuthenticated = function isAdminAuthenticated() {
+        if (window._adminSession && window._adminSession.email) return true;
+        if (sessionStorage.getItem('admin_authenticated') === 'true') return true;
+        try {
+          if (typeof supabaseClient !== 'undefined' && supabaseClient && supabaseClient.auth) {
+            var s = supabaseClient.auth._session;
+            if (s && s.user && s.user.email) return true;
+          }
+        } catch(e) {}
+        return false;
+      };
+    }
 
