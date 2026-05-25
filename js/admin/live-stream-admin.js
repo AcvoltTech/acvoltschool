@@ -2873,16 +2873,132 @@ window.lsaBroadcastLiveAlert = async function() {
     var pushRes = results[0];
     var emailRes = results[1];
     var smsRes = results[2];
-    var lines = [];
-    lines.push('📱 Push: ' + (pushRes.ok ? (pushRes.data.sent || 0) + ' enviados / ' + (pushRes.data.failed || 0) + ' fallidos' : 'ERROR — ' + (pushRes.data.error || 'unknown')));
-    lines.push('📧 Email: ' + (emailRes.ok ? (emailRes.data.sent || 0) + ' enviados / ' + (emailRes.data.failed || 0) + ' fallidos (total ' + (emailRes.data.total || 0) + ')' : 'ERROR — ' + (emailRes.data.error || 'unknown')));
-    lines.push('💬 SMS: ' + (smsRes.ok ? (smsRes.data.background ? 'Enviando ' + (smsRes.data.total || 0) + ' SMS en background...' : (smsRes.data.sent || 0) + ' enviados / ' + (smsRes.data.failed || 0) + ' fallidos') : 'ERROR — ' + (smsRes.data.error || 'unknown')));
-    alert('✅ Alerta disparada:\n\n' + lines.join('\n'));
+
+    // ── Persistent progress panel ──
+    _lsaEnsureProgressPanel();
+    var panel = document.getElementById('lsaAlertProgress');
+    panel.style.display = 'block';
+
+    // Store last params for retry
+    window._lsaLastAlertParams = { titleIn: titleIn, bodyIn: bodyIn, adminEmail: adminEmail };
+    window._lsaLastResults = { push: pushRes, email: emailRes, sms: smsRes };
+
+    // Update spans
+    _lsaUpdateProgressSpans(pushRes, emailRes, smsRes);
+
+    // Show retry button if any failures
+    var hasFails = (!pushRes.ok || (pushRes.data.failed || 0) > 0) ||
+                   (!emailRes.ok || (emailRes.data.failed || 0) > 0) ||
+                   (!smsRes.ok || (smsRes.data.failed || 0) > 0);
+    var retryBtn = document.getElementById('lsaAlertRetryBtn');
+    if (retryBtn) retryBtn.style.display = hasFails ? 'inline-block' : 'none';
+
   } catch (e) {
     console.error('[LSA] broadcast error:', e);
     alert('❌ Error enviando alerta: ' + (e && e.message || e));
   } finally {
     if (btn) { btn.disabled = false; btn.textContent = '📣 ALERTA A TODOS'; }
+  }
+};
+
+/* ── Progress Panel: DOM creation ──────────────────────────────── */
+function _lsaEnsureProgressPanel() {
+  if (document.getElementById('lsaAlertProgress')) return;
+  var div = document.createElement('div');
+  div.id = 'lsaAlertProgress';
+  div.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;background:linear-gradient(135deg,#1e293b,#0f172a);border-bottom:2px solid #f59e0b;padding:12px 20px;display:none;font-family:system-ui;color:#f1f5f9;font-size:14px;';
+  div.innerHTML = '<div style="max-width:800px;margin:0 auto;display:flex;align-items:center;gap:16px;flex-wrap:wrap;">' +
+    '<span style="font-weight:700;color:#f59e0b;">\u{1F4E3} ALERTA EN PROGRESO</span>' +
+    '<span id="lsaAlertPush">\u{1F4F1} Push: --</span>' +
+    '<span id="lsaAlertEmail">\u{1F4E7} Email: --</span>' +
+    '<span id="lsaAlertSms">\u{1F4AC} SMS: --</span>' +
+    '<button id="lsaAlertRetryBtn" onclick="window._lsaRetryFailed()" style="background:#f59e0b;color:#0f172a;border:none;border-radius:6px;padding:6px 14px;font-weight:700;cursor:pointer;display:none;">\u{1F504} REINTENTAR FALLIDOS</button>' +
+    '<button onclick="document.getElementById(\'lsaAlertProgress\').style.display=\'none\'" style="background:none;border:none;color:#94a3b8;font-size:18px;cursor:pointer;margin-left:auto;">\u2716</button>' +
+    '</div>';
+  document.body.appendChild(div);
+}
+
+/* ── Progress Panel: update display spans ─────────────────────── */
+function _lsaUpdateProgressSpans(pushRes, emailRes, smsRes) {
+  var pushSpan = document.getElementById('lsaAlertPush');
+  var emailSpan = document.getElementById('lsaAlertEmail');
+  var smsSpan = document.getElementById('lsaAlertSms');
+
+  if (pushSpan) {
+    pushSpan.textContent = pushRes.ok
+      ? '\u{1F4F1} Push: ' + (pushRes.data.sent || 0) + ' sent / ' + (pushRes.data.failed || 0) + ' failed'
+      : '\u{1F4F1} Push: ERROR';
+    pushSpan.style.color = (!pushRes.ok || (pushRes.data.failed || 0) > 0) ? '#f87171' : '#4ade80';
+  }
+  if (emailSpan) {
+    emailSpan.textContent = emailRes.ok
+      ? '\u{1F4E7} Email: ' + (emailRes.data.sent || 0) + ' / ' + (emailRes.data.total || 0)
+      : '\u{1F4E7} Email: ERROR';
+    emailSpan.style.color = (!emailRes.ok || (emailRes.data.failed || 0) > 0) ? '#f87171' : '#4ade80';
+    if (emailRes.ok && emailRes.data.background) emailSpan.textContent += ' \u{23F3}';
+  }
+  if (smsSpan) {
+    if (smsRes.ok && smsRes.data.background) {
+      smsSpan.textContent = '\u{1F4AC} SMS: ' + (smsRes.data.total || 0) + ' en background \u{23F3}';
+      smsSpan.style.color = '#facc15';
+    } else {
+      smsSpan.textContent = smsRes.ok
+        ? '\u{1F4AC} SMS: ' + (smsRes.data.sent || 0) + ' / ' + (smsRes.data.total || (smsRes.data.sent || 0) + (smsRes.data.failed || 0))
+        : '\u{1F4AC} SMS: ERROR';
+      smsSpan.style.color = (!smsRes.ok || (smsRes.data.failed || 0) > 0) ? '#f87171' : '#4ade80';
+    }
+  }
+}
+
+/* ── Retry failed channels ────────────────────────────────────── */
+window._lsaRetryFailed = async function() {
+  var retryBtn = document.getElementById('lsaAlertRetryBtn');
+  if (retryBtn) { retryBtn.disabled = true; retryBtn.textContent = '\u23F3 Reintentando...'; }
+
+  var params = window._lsaLastAlertParams;
+  var prev = window._lsaLastResults;
+  if (!params || !prev) { if (retryBtn) { retryBtn.disabled = false; retryBtn.textContent = '\u{1F504} REINTENTAR FALLIDOS'; } return; }
+
+  var sbUrl = typeof SUPABASE_URL !== 'undefined' ? SUPABASE_URL : 'https://htklsowiyjwsjnacnvnr.supabase.co';
+  var sbKey = typeof SUPABASE_KEY !== 'undefined' ? SUPABASE_KEY : '';
+  var authTok = await _lsaHmsAuthToken();
+
+  var pushFailed = !prev.push.ok || (prev.push.data.failed || 0) > 0;
+  var emailFailed = !prev.email.ok || (prev.email.data.failed || 0) > 0;
+  var smsFailed = !prev.sms.ok || (prev.sms.data.failed || 0) > 0;
+
+  try {
+    var retryPush = pushFailed ? fetch(sbUrl + '/functions/v1/send-push-notification', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + authTok, 'apikey': sbKey },
+      body: JSON.stringify({ recipient_emails: ['__all__'], title: params.titleIn, body: params.bodyIn, type: 'clase', url: './index.html#liveStreamingScreen', admin_email: params.adminEmail })
+    }).then(function(r) { return r.json().catch(function(){ return {}; }).then(function(d){ return { ok: r.ok, data: d }; }); }) : Promise.resolve(prev.push);
+
+    var retryEmail = emailFailed ? fetch(sbUrl + '/functions/v1/broadcast-live-alert', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + authTok, 'apikey': sbKey },
+      body: JSON.stringify({ title: params.titleIn, body: params.bodyIn, url: 'https://maestrohvacr.com/#liveStreamingScreen', admin_email: params.adminEmail })
+    }).then(function(r) { return r.json().catch(function(){ return {}; }).then(function(d){ return { ok: r.ok, data: d }; }); }) : Promise.resolve(prev.email);
+
+    var retrySms = smsFailed ? fetch(sbUrl + '/functions/v1/sms-live-alert', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + authTok, 'apikey': sbKey },
+      body: JSON.stringify({ title: params.titleIn, admin_email: params.adminEmail })
+    }).then(function(r) { return r.json().catch(function(){ return {}; }).then(function(d){ return { ok: r.ok, data: d }; }); }) : Promise.resolve(prev.sms);
+
+    var results = await Promise.all([retryPush, retryEmail, retrySms]);
+    window._lsaLastResults = { push: results[0], email: results[1], sms: results[2] };
+    _lsaUpdateProgressSpans(results[0], results[1], results[2]);
+
+    // Hide retry if all good now
+    var stillFails = (!results[0].ok || (results[0].data.failed || 0) > 0) ||
+                     (!results[1].ok || (results[1].data.failed || 0) > 0) ||
+                     (!results[2].ok || (results[2].data.failed || 0) > 0);
+    if (retryBtn) retryBtn.style.display = stillFails ? 'inline-block' : 'none';
+  } catch (e) {
+    console.error('[LSA] retry error:', e);
+  } finally {
+    if (retryBtn) { retryBtn.disabled = false; retryBtn.textContent = '\u{1F504} REINTENTAR FALLIDOS'; }
   }
 };
 
