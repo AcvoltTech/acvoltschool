@@ -110,7 +110,6 @@
       // CRM groups check
       try {
         var groups = JSON.parse(localStorage.getItem('maestroac_student_groups_' + email) || '[]');
-        if (groups.indexOf('acceso_completo') !== -1) return 3;
         if (groups.indexOf('bloqueado') !== -1) return 0;
       } catch(e) {}
 
@@ -126,6 +125,94 @@
       return 0;
     }
     window.getMembershipTierLevel = getMembershipTierLevel;
+
+    // ============================================
+    // WEB ACCESS GATE — Block non-paid users on web
+    // Native app users always pass. Grandfathered + paid pass.
+    // Everyone else sees "Download the app" blocker.
+    // ============================================
+    function _checkWebAccessGate(email, callback) {
+      // Native app → always pass
+      if (window.isIOSAppStore || window.isAndroidApp || window.isAndroidPlayStore) {
+        if (callback) callback();
+        return;
+      }
+      // PWA standalone → pass (installed app)
+      try {
+        if (window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true) {
+          if (callback) callback();
+          return;
+        }
+      } catch(e) {}
+      // iOS WKWebView → pass
+      if (window.webkit && window.webkit.messageHandlers) {
+        if (callback) callback();
+        return;
+      }
+      // Admin → pass
+      if (typeof isAdminStudent === 'function' && isAdminStudent()) {
+        if (callback) callback();
+        return;
+      }
+      // Check tier — grandfathered (3+), paid (2+), admin (4) all pass
+      var tier = getMembershipTierLevel();
+      if (tier >= 2) {
+        if (callback) callback();
+        return;
+      }
+      // Tier might not be loaded yet (async CRM fetch). Wait for it.
+      email = (email || '').toLowerCase().trim();
+      var _checkAsync = function() {
+        // Re-check fecha_registro from localStorage (set by preloadStudentCRMGroups)
+        var fechaReg = localStorage.getItem('maestroac_fecha_registro_' + email);
+        if (fechaReg && fechaReg < '2026-04-03') { if (callback) callback(); return; }
+        // Re-check acceso_completo
+        var acceso = localStorage.getItem('maestroac_acceso_completo_' + email);
+        if (acceso === 'true') { if (callback) callback(); return; }
+        // Re-check membership
+        var tier2 = getMembershipTierLevel();
+        if (tier2 >= 2) { if (callback) callback(); return; }
+        // BLOCKED — show download app screen
+        _showWebBlockedScreen();
+      };
+      // Give preloadStudentCRMGroups time to fetch
+      setTimeout(_checkAsync, 2500);
+    }
+    window._checkWebAccessGate = _checkWebAccessGate;
+
+    function _showWebBlockedScreen() {
+      // Remove any existing gate
+      var existing = document.getElementById('webAccessGate');
+      if (existing) existing.remove();
+
+      var overlay = document.createElement('div');
+      overlay.id = 'webAccessGate';
+      overlay.style.cssText = 'position:fixed;inset:0;z-index:2147483647;background:#0a1628;display:flex;align-items:center;justify-content:center;padding:24px;box-sizing:border-box;';
+      overlay.innerHTML =
+        '<div style="max-width:400px;width:100%;text-align:center;">' +
+          '<div style="font-size:64px;margin-bottom:16px;">📱</div>' +
+          '<div style="font-size:22px;font-weight:900;color:#fff;margin-bottom:8px;">Descarga la App</div>' +
+          '<div style="font-size:14px;color:rgba(255,255,255,0.7);line-height:1.6;margin-bottom:24px;">' +
+            'Para acceder a Maestro HVACR desde el navegador necesitas una membresía activa.<br><br>' +
+            'Descarga la app gratis o suscríbete para continuar.' +
+          '</div>' +
+          '<a href="https://play.google.com/store/apps/details?id=com.maestromario.twa" target="_blank" ' +
+            'style="display:block;background:#34A853;color:#fff;padding:14px 20px;border-radius:12px;text-decoration:none;font-weight:700;font-size:15px;margin-bottom:10px;">' +
+            '▶ Google Play (Android)' +
+          '</a>' +
+          '<a href="https://apps.apple.com/app/maestro-hvacr/id6744396653" target="_blank" ' +
+            'style="display:block;background:#007AFF;color:#fff;padding:14px 20px;border-radius:12px;text-decoration:none;font-weight:700;font-size:15px;margin-bottom:10px;">' +
+            ' App Store (iPhone)' +
+          '</a>' +
+          '<div style="margin-top:16px;border-top:1px solid rgba(255,255,255,0.1);padding-top:16px;">' +
+            '<div style="font-size:12px;color:rgba(255,255,255,0.5);margin-bottom:10px;">¿Ya eres miembro?</div>' +
+            '<a href="https://maestrohvacr.com/#membershipScreen" ' +
+              'style="color:#f59e0b;font-size:13px;font-weight:600;text-decoration:none;">Suscríbete aquí →</a>' +
+          '</div>' +
+        '</div>';
+      document.body.appendChild(overlay);
+    }
+    window._showWebBlockedScreen = _showWebBlockedScreen;
 
     var _tc = typeof _t === 'function' ? _t : function(k, fb) { return fb || k; };
 

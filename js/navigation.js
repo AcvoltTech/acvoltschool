@@ -9,7 +9,7 @@
       desafioQuizScreen: '#040d1a',
       adminDashboardScreen: '#FFFFFF',
       adminLoginScreen: '#FFFFFF',
-      techChatScreen: '#FFFFFF',
+      techChatScreen: '#0f172a',
       liveStreamingScreen: '#FFFFFF',
       acvoltCertScreen: '#FFFFFF',
       acvoltCourseScreen: '#FFFFFF',
@@ -20,7 +20,6 @@
       miPerfilScreen: '#FFFFFF',
       membresiasScreen: '#FFFFFF',
       radioPodcastScreen: '#FFFFFF',
-      soporteTecnicoScreen: '#FFFFFF',
       herramientasScreen: '#FFFFFF',
       bluetoothToolsScreen: '#FFFFFF',
       manifoldScreen: '#FFFFFF',
@@ -101,7 +100,6 @@
       maestroProScreen: ['js/maestro-pro.js','js/mp-calcs/math.js','js/mp-calcs/math2.js','js/mp-calcs/elec.js','js/mp-calcs/elec2.js','js/mp-calcs/hvac.js','js/mp-calcs/hvac2.js','js/mp-calcs/refrig.js','js/mp-calcs/refrig2.js','js/mp-calcs/nec.js','js/mp-calcs/nec2.js','js/mp-calcs/safe.js','js/mp-calcs/safe2.js','js/mp-calcs/energy-code.js','js/mp-calcs/mechanical.js'],
       contractorZoneScreen: ['js/contractor-zone/questions-law.js','js/contractor-zone/questions-c20.js','js/contractor-zone/questions-c38.js','js/contractor-zone/questions-c10.js','js/contractor-zone/bloque-1.js','js/contractor-zone/bloque-2.js','js/contractor-zone/bloque-3.js','js/contractor-zone/bloque-4.js','js/contractor-zone/bloque-5.js','js/contractor-zone/bloque-6.js','js/contractor-zone/bloque-7.js','js/contractor-zone/bloque-8.js','js/contractor-zone/bloque-9.js','js/contractor-zone/bloque-10.js','js/contractor-zone/bloque-11.js','js/contractor-zone/bloque-12.js','js/contractor-zone/bloque-13.js','js/contractor-zone/cslb-kit.js','js/contractor-zone/templates.js','js/contractor-zone/contractor-zone.js','js/jornal-pro.js'],
       jornalProScreen: ['js/jornal-pro.js'],
-      soporteTecnicoScreen: ['js/ai-maestro-mario.js', 'js/soporte-tecnico.js'],
       herramientasScreen: ['js/herramientas-pt-data.js', 'js/herramientas.js', 'js/ble-manager.js'],
       bluetoothToolsScreen: ['js/ble-manager.js'],
       manifoldScreen: ['js/herramientas-pt-data.js', 'js/herramientas.js', 'js/ble-manager.js'],
@@ -111,6 +109,26 @@
       anemometerHvacScreen: ['js/anemometer-hvac.js', 'js/ble-manager.js'],
       heatingScreen: ['js/herramientas-pt-data.js', 'js/herramientas-heating.js', 'js/ble-manager.js'],
       commercialHvacScreen: ['js/herramientas-pt-data.js', 'js/commercial-hvac.js', 'js/ble-manager.js'],
+      diagnosticosScreen: ['js/diag-hub.js'],
+      lavadoraDiagScreen: ['js/lavadora-diag.js', 'js/ble-manager.js'],
+      secadoraDiagScreen: ['js/secadora-diag.js', 'js/ble-manager.js'],
+      refriDomDiagScreen: ['js/refrigerador-domestico-diag.js', 'js/ble-manager.js'],
+      acWindowDiagScreen: ['js/ac-window-diag.js', 'js/ble-manager.js'],
+      acMobileDiagScreen: ['js/ac-mobile-diag.js', 'js/ble-manager.js'],
+      miniSplitDiagScreen: ['js/minisplit-diag.js', 'js/ble-manager.js'],
+      waterHeaterDiagScreen: ['js/water-heater-diag.js', 'js/ble-manager.js'],
+      mainPanelDiagScreen: ['js/main-panel-diag.js', 'js/ble-manager.js'],
+      subpanelDiagScreen: ['js/subpanel-diag.js', 'js/ble-manager.js'],
+      solarDiagScreen: ['js/solar-diag.js', 'js/ble-manager.js'],
+      generatorDiagScreen: ['js/generator-diag.js', 'js/ble-manager.js'],
+      reeferDiagScreen:    ['js/reefer-diag.js', 'js/ble-manager.js'],
+      rackingDiagScreen:   ['js/racking-diag.js', 'js/ble-manager.js'],
+      gelatoDiagScreen:    ['js/gelato-diag.js', 'js/ble-manager.js'],
+      meghometerScreen:    ['js/meghometer.js'],
+      walkinDiagScreen: ['js/herramientas-pt-data.js', 'js/walkin-diag.js', 'js/ble-manager.js'],
+      icemachineDiagScreen: ['js/herramientas-pt-data.js', 'js/icemachine-diag.js', 'js/ble-manager.js'],
+      coldtableDiagScreen: ['js/herramientas-pt-data.js', 'js/coldtable-diag.js', 'js/refrig-common-zone.js', 'js/ble-manager.js'],
+      reachinDiagScreen: ['js/herramientas-pt-data.js', 'js/reachin-diag.js', 'js/refrig-common-zone.js', 'js/ble-manager.js'],
       epa608StudyScreen: ['js/social-system.js', 'js/epa608-questions.js', 'js/epa608-study.js', 'js/study-together.js'],
       a2lStudyScreen: ['js/social-system.js', 'js/a2l-questions.js', 'js/a2l-study.js', 'js/study-together.js'],
       oshaStudyScreen: ['js/social-system.js', 'js/osha-questions.js', 'js/osha-study.js', 'js/study-together.js'],
@@ -156,6 +174,24 @@
       anemometerHvacScreen: _bleAllCats,
       heatingScreen: _bleAllCats,
       commercialHvacScreen: _bleAllCats,
+      walkinDiagScreen: _bleAllCats,
+      icemachineDiagScreen: _bleAllCats,
+      coldtableDiagScreen: _bleAllCats,
+      reachinDiagScreen: _bleAllCats,
+      lavadoraDiagScreen:    ['multimeter'],
+      secadoraDiagScreen:    ['multimeter'],
+      refriDomDiagScreen:    _bleAllCats,
+      acWindowDiagScreen:    _bleAllCats,
+      acMobileDiagScreen:    _bleAllCats,
+      miniSplitDiagScreen:   _bleAllCats,
+      waterHeaterDiagScreen: ['multimeter'],
+      mainPanelDiagScreen:   ['multimeter'],
+      subpanelDiagScreen:    ['multimeter'],
+      solarDiagScreen:       ['multimeter'],
+      generatorDiagScreen:   ['multimeter'],
+      reeferDiagScreen:      _bleAllCats,
+      rackingDiagScreen:     _bleAllCats,
+      gelatoDiagScreen:      _bleAllCats,
       // herramientas sub-tools — scoped to relevant categories
       ptchart: ['pressure', 'manifold'],
       manifold: ['pressure', 'manifold', 'pipeclamp', 'psychrometer'],
@@ -629,6 +665,45 @@
         }
       }
 
+      // ── MANOMETER HVAC — FP4258 static pressure auto-populate ──
+      // Per memoria feedback_ble_tools: todas las herramientas HVAC integran
+      // Fieldpiece BLE. Único hueco real verificado en el audit 2026-05-06.
+      // Cubre el tab 2 (Static Pressure) — los otros tabs (Gas Valve, LPS, CFM,
+      // Duct Area, Clock Meter, System Perf) no tienen probe Fieldpiece equivalente.
+      // Sliders mhSPSupSlider / mhSPRetSlider solo existen cuando el tab está
+      // activo, así getElementById regresa null fuera de ahí — degradación graceful.
+      if (toolId === 'manometerHvacScreen' || toolId === 'manometerhvac') {
+        if (staticDev) {
+          // Tab 2: Static Pressure — supply (+) y return (-) sliders
+          if (staticDev.supplyInWC !== undefined) {
+            var mhSpSup = document.getElementById('mhSPSupSlider');
+            if (mhSpSup && document.activeElement !== mhSpSup) {
+              var supVal = Math.max(0, Math.min(1.5, staticDev.supplyInWC));
+              mhSpSup.value = supVal;
+              mhSpSup.style.boxShadow = '0 0 6px rgba(74,222,128,0.5)';
+              mhSpSup.style.accentColor = '#4ade80';
+            }
+          }
+          if (staticDev.returnInWC !== undefined) {
+            var mhSpRet = document.getElementById('mhSPRetSlider');
+            if (mhSpRet && document.activeElement !== mhSpRet) {
+              // Return reportado como negativo por la probe; slider es absoluto 0-1.5
+              var retVal = Math.max(0, Math.min(1.5, Math.abs(staticDev.returnInWC)));
+              mhSpRet.value = retVal;
+              mhSpRet.style.boxShadow = '0 0 6px rgba(74,222,128,0.5)';
+              mhSpRet.style.accentColor = '#4ade80';
+            }
+          }
+          // Trigger el recalc de TESP, fricción, status badge — la función
+          // existe sólo si el tab Static Pressure está montado.
+          if (typeof window._mhUpdateSP === 'function') window._mhUpdateSP();
+        }
+        // Tab 0 (Gas Valve) y Tab 1 (LPS) usan inWC range bajo (0-14"WC).
+        // Fieldpiece JL3PR / SM480V reportan psig en decenas/cientos — la
+        // conversión psig→inWC pondría valores fuera del slider range. Skip
+        // intencional para evitar lecturas incorrectas.
+      }
+
       // ── HEATING SCREEN — Calefacción System Performance ──
       if (toolId === 'heatingScreen') {
         // SM480V / pressure probes → pressures + slider + LCD sync
@@ -944,12 +1019,12 @@
           } else if (scanning || allMatched.length > 0) {
             // ── Scanning / Devices found: blue ──
             el.style.borderColor = 'rgba(96,165,250,0.4)';
-            var statusTxt = scanning ? 'Buscando...' : (allMatched.length + ' dispositivo' + (allMatched.length > 1 ? 's' : '') + ' encontrado' + (allMatched.length > 1 ? 's' : ''));
+            var statusTxt = scanning ? 'Escaneando...' : (allMatched.length + ' dispositivo' + (allMatched.length > 1 ? 's' : '') + ' encontrado' + (allMatched.length > 1 ? 's' : ''));
             el.innerHTML =
               '<div style="width:8px;height:8px;border-radius:50%;background:#60a5fa;flex-shrink:0;' + (scanning ? 'box-shadow:0 0 6px #60a5fa;animation:blePulse 1.2s ease-in-out infinite;' : 'box-shadow:0 0 4px #60a5fa;') + '"></div>' +
               '<span style="color:#ffffff;font-size:14px;font-weight:700;flex:1;">' + statusTxt + '</span>' +
               (scanning ? '<button onclick="window._bleBarStopScan()" style="background:#ffffff;border:1px solid rgba(96,165,250,0.6);color:#111111;padding:5px 14px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;">Parar</button>'
-                        : '<button onclick="window._bleBarStartScan()" style="background:#ffffff;border:1px solid rgba(96,165,250,0.6);color:#111111;padding:5px 14px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;">Re-scan</button>');
+                        : '<button onclick="window._bleBarStartScan()" style="background:#ffffff;border:1px solid rgba(96,165,250,0.6);color:#111111;padding:5px 14px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;">Buscar</button>');
             el.style.borderRadius = '10px 10px 0 0';
             _renderDeviceList();
             if (_bleLiveScreens[contextKey]) {
@@ -969,7 +1044,7 @@
               '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#22d3ee" stroke-width="2" style="flex-shrink:0;"><path d="M6.5 6.5l11 11M6.5 17.5l11-11M12 2v20"/></svg>' +
               '<span style="color:#94a3b8;font-size:11px;font-weight:600;flex:1;">Bluetooth HVAC Tools</span>' +
               (_bleAvail
-                ? '<button onclick="window._bleBarStartScan()" style="background:linear-gradient(135deg,#22d3ee,#0891b2);color:#fff;border:none;padding:4px 14px;border-radius:6px;font-size:10px;font-weight:700;cursor:pointer;">Buscar Herramientas</button>'
+                ? '<button onclick="window._bleBarStartScan()" style="background:linear-gradient(135deg,#22d3ee,#0891b2);color:#fff;border:none;padding:4px 14px;border-radius:6px;font-size:10px;font-weight:700;cursor:pointer;">Buscar</button>'
                 : '<button onclick="window._bleShowHelp()" style="background:linear-gradient(135deg,#f59e0b,#d97706);color:#fff;border:none;padding:5px 12px;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;">\u00BFPor qu\u00E9 no funciona?</button>');
             el.style.borderRadius = '10px';
             var listEl2 = document.getElementById(listId);
@@ -1446,91 +1521,37 @@
       }
       
       if (isRecovery) {
-        console.log('[MaestroAC] Recovery flow detected');
-
-        // CRITICAL: kill any existing session BEFORE processing recovery.
-        // If the user is already logged in (e.g. master account on another tab,
-        // or a previous session that didn't sign out), the click-through from
-        // the recovery email lands directly on dashboard and skips the reset
-        // form. We need to force sign-out so the recovery flow is the ONLY
-        // active auth state.
-        try {
-          if (supabaseClient && supabaseClient.auth) {
-            await supabaseClient.auth.signOut();
-          }
-          // Also clear our local flags so init() doesn't see "authenticated"
-          localStorage.removeItem('tecnico_authenticated');
-          localStorage.removeItem('tecnico_email');
-          localStorage.removeItem('tecnico_user');
-        } catch(_e) { /* swallow — best-effort cleanup */ }
-
-        // For PKCE flow: must verify the token BEFORE showing the form.
-        // Previously we showed the form regardless of verifyOtp result, so an
-        // expired or already-used link still rendered the password fields and
-        // the submit failed with "Auth session missing!" — confusing UX.
-        var verifyOk = true;
-        var verifyMsg = '';
+        console.log('[MaestroAC] Showing password reset form');
+        
+        // If we have a token_hash (PKCE flow), verify it first
         if (tokenHash && supabaseClient) {
           try {
-            var verifyResult = await supabaseClient.auth.verifyOtp({
+            var { data, error } = await supabaseClient.auth.verifyOtp({
               token_hash: tokenHash,
               type: 'recovery'
             });
-            if (verifyResult.error) {
-              verifyOk = false;
-              verifyMsg = verifyResult.error.message || 'Token inválido';
-              console.error('[MaestroAC] Token verification error:', verifyMsg);
+            if (error) {
+              console.error('[MaestroAC] Token verification error:', error.message);
             } else {
               console.log('[MaestroAC] Token verified successfully');
             }
           } catch(e) {
-            verifyOk = false;
-            verifyMsg = e && e.message ? e.message : 'Excepción verificando token';
             console.error('[MaestroAC] Token verification exception:', e);
           }
         }
-
-        // For hash flow (implicit), Supabase auto-detects via detectSessionInUrl:true.
-        // Confirm a session exists before showing the form (covers both flows).
-        var sessionOk = false;
-        try {
-          var sessRes = await supabaseClient.auth.getSession();
-          sessionOk = !!(sessRes && sessRes.data && sessRes.data.session);
-        } catch(_) { sessionOk = false; }
-
-        // Clean URL either way (stops accidental refresh re-using consumed token)
-        if (window.history && window.history.replaceState) {
-          window.history.replaceState(null, '', window.location.pathname);
-        }
-
-        if (verifyOk && sessionOk) {
-          // Happy path — show reset form
+        
+        // Show reset password form
+        setTimeout(function() {
           showScreen('loginScreen');
           var loginCard = document.querySelector('#loginScreen .card');
           if (loginCard) loginCard.style.display = 'none';
           var resetBox = document.getElementById('resetPasswordBox');
           if (resetBox) resetBox.style.display = 'block';
-        } else {
-          // Token expired/invalid — show actionable error instead of broken form
-          showScreen('loginScreen');
-          var loginCard2 = document.querySelector('#loginScreen .card');
-          if (loginCard2) loginCard2.style.display = 'block';
-          var errMsg = verifyMsg && /expired|invalid|otp|token/i.test(verifyMsg)
-            ? 'Tu link de recuperación expiró o ya fue usado. Pide uno nuevo desde "¿Olvidaste tu contraseña?".'
-            : 'No pudimos validar tu link de recuperación. Pide uno nuevo desde "¿Olvidaste tu contraseña?".';
-          if (window.showToast) {
-            window.showToast(errMsg, 'error');
-          } else {
-            alert(errMsg);
+          // Clean URL
+          if (window.history && window.history.replaceState) {
+            window.history.replaceState(null, '', window.location.pathname);
           }
-        }
-
-        // CRITICAL: stop init() here. The "Supabase Auth callback" branch below
-        // and the rest of init() (renderLevels, dashboard nav, etc.) would
-        // detect the recovery session and route the user straight into the app
-        // — defeating the password-reset prompt. Block the rest of the flow.
-        window._isRecoveryFlow = true;
-        return;
+        }, 800);
       }
 
       // Check for Supabase Auth callback (email confirmation redirect)
@@ -1589,7 +1610,7 @@
         } else if (email && supabaseClient) {
           // No local data - try loading from Supabase users table (new device)
           try {
-            const _ud_userRows = await usersDataSelf('get_self', { email: email }); const userRows = _ud_userRows.data ? [_ud_userRows.data] : [];
+            const { data: userRows } = await supabaseClient.from('users').select('*').eq('email', email).limit(1);
             const userData = userRows && userRows.length > 0 ? userRows[0] : null;
             if (userData && userData.nombre) {
               var _eu3 = {}; try { _eu3 = JSON.parse(localStorage.getItem('tecnico_user') || '{}'); } catch(e) {}
@@ -1621,11 +1642,18 @@
             setTimeout(function() { if (typeof subscribeToLiveStreamStatus === 'function') subscribeToLiveStreamStatus(); }, 1000);
           });
         };
-        // Onboarding gate — force profile + location + notifications
-        if (typeof checkOnboardingGate === 'function') {
-          checkOnboardingGate(_postLoginInit);
+        // Web access gate + Onboarding gate
+        var _afterWebGate1 = function() {
+          if (typeof checkOnboardingGate === 'function') {
+            checkOnboardingGate(_postLoginInit);
+          } else {
+            _postLoginInit();
+          }
+        };
+        if (typeof _checkWebAccessGate === 'function') {
+          _checkWebAccessGate(localStorage.getItem('tecnico_email') || '', _afterWebGate1);
         } else {
-          _postLoginInit();
+          _afterWebGate1();
         }
       } else {
         // localStorage doesn't have auth — but maybe Supabase still has an active session
@@ -1651,10 +1679,17 @@
               setTimeout(function() { if (typeof subscribeToLiveStreamStatus === 'function') subscribeToLiveStreamStatus(); }, 1000);
             });
           };
-          if (typeof checkOnboardingGate === 'function') {
-            checkOnboardingGate(_postRecoverInit);
+          var _afterWebGate2 = function() {
+            if (typeof checkOnboardingGate === 'function') {
+              checkOnboardingGate(_postRecoverInit);
+            } else {
+              _postRecoverInit();
+            }
+          };
+          if (typeof _checkWebAccessGate === 'function') {
+            _checkWebAccessGate(email || '', _afterWebGate2);
           } else {
-            _postRecoverInit();
+            _afterWebGate2();
           }
         } else {
           showScreen('loginScreen');
@@ -1737,9 +1772,11 @@ function showScreen(screenId) {
       // Redirect old levels screen to Desafío
       if (screenId === 'levelsScreen') { screenId = 'desafioScreen'; }
 
-    // iOS App Store shell only — native app hides payment screens per IAP rules.
-    // Web (maestrohvacr.com) keeps them so students can pay via Stripe.
-    if (window.isIOSAppStore && (screenId === 'membresiasScreen' || screenId === 'referidosScreen' || screenId === 'misPagosScreen')) {
+    // Native store shells (iOS App Store + Google Play) hide external
+    // payment screens — both Apple 3.1.1 and Google Play Billing 4.1
+    // forbid linking to outside commerce. Web (maestrohvacr.com) keeps
+    // them so students can pay via Stripe.
+    if ((window.isIOSAppStore || window.isAndroidPlayStore) && (screenId === 'membresiasScreen' || screenId === 'referidosScreen' || screenId === 'misPagosScreen')) {
       showScreen('dashboardScreen');
       return;
     }
@@ -1856,12 +1893,41 @@ function showScreen(screenId) {
           if (screenId === 'jornalProScreen' && typeof window.initJornalPro === 'function') { window.initJornalPro(); }
           if (screenId === 'preDepartureScreen' && typeof window.initPreDepartureChecklist === 'function') { window.initPreDepartureChecklist(window._pdcInstallMode ? 'install' : window._pdcStockMode ? 'stock' : window._pdcOnsiteMode ? 'onsite' : window._pdcToolsOnly ? 'tools' : 'full'); }
           if (screenId === 'videoTutorialesScreen' && typeof initVideoTutoriales === 'function') { try { initVideoTutoriales(); } catch(e) { console.warn('[Navigation] initVideoTutoriales:', e.message || e); } }
+          // Diag hub + residential / electrical / commercial diag modules (Mario 2026-05-12)
+          if (screenId === 'diagnosticosScreen' && window.DiagHub) { try { window.DiagHub.render(); } catch(e) {} }
+          if (screenId === 'lavadoraDiagScreen'    && window.LavadoraDiag)    { try { window.LavadoraDiag.render(); } catch(e) {} }
+          if (screenId === 'secadoraDiagScreen'    && window.SecadoraDiag)    { try { window.SecadoraDiag.render(); } catch(e) {} }
+          if (screenId === 'refriDomDiagScreen'    && window.RefriDomDiag)    { try { window.RefriDomDiag.render(); } catch(e) {} }
+          if (screenId === 'acWindowDiagScreen'    && window.AcWindowDiag)    { try { window.AcWindowDiag.render(); } catch(e) {} }
+          if (screenId === 'acMobileDiagScreen'    && window.AcMobileDiag)    { try { window.AcMobileDiag.render(); } catch(e) {} }
+          if (screenId === 'miniSplitDiagScreen'   && window.MiniSplitDiag)   { try { window.MiniSplitDiag.render(); } catch(e) {} }
+          if (screenId === 'waterHeaterDiagScreen' && window.WaterHeaterDiag) { try { window.WaterHeaterDiag.render(); } catch(e) {} }
+          if (screenId === 'mainPanelDiagScreen'   && window.MainPanelDiag)   { try { window.MainPanelDiag.render(); } catch(e) {} }
+          if (screenId === 'subpanelDiagScreen'    && window.SubpanelDiag)    { try { window.SubpanelDiag.render(); } catch(e) {} }
+          if (screenId === 'solarDiagScreen'       && window.SolarDiag)       { try { window.SolarDiag.render(); } catch(e) {} }
+          if (screenId === 'generatorDiagScreen'   && window.GeneratorDiag)   { try { window.GeneratorDiag.render(); } catch(e) {} }
+          if (screenId === 'coldtableDiagScreen'   && window.ColdTableDiag)   { try { window.ColdTableDiag.render(); } catch(e) {} }
+          if (screenId === 'walkinDiagScreen'      && window.WalkinDiag)      { try { window.WalkinDiag.render(); } catch(e) {} }
+          if (screenId === 'icemachineDiagScreen'  && window.IceMachineDiag)  { try { window.IceMachineDiag.render(); } catch(e) {} }
+          if (screenId === 'reachinDiagScreen'     && window.ReachInDiag)     { try { window.ReachInDiag.render(); } catch(e) {} }
+          if (screenId === 'reeferDiagScreen'      && window.ReeferDiag)      { try { window.ReeferDiag.render(); } catch(e) {} }
+          if (screenId === 'rackingDiagScreen'     && window.RackingDiag)     { try { window.RackingDiag.render(); } catch(e) {} }
+          if (screenId === 'gelatoDiagScreen'      && window.GelatoDiag)      { try { window.GelatoDiag.render(); } catch(e) {} }
+          if (screenId === 'meghometerScreen'      && window.Meghometer)      { try { window.Meghometer.render('meghometerScreen'); } catch(e) {} }
           // Inject BLE bar after all scripts (including ble-manager.js) are loaded
           if (typeof _injectBLEBar === 'function') {
             if (screenId === 'manifoldScreen') _injectBLEBar('manifoldScreen');
             if (screenId === 'multimeterScreen') _injectBLEBar('multimeterScreen');
             if (screenId === 'manometerHvacScreen') _injectBLEBar('manometerHvacScreen');
             if (screenId === 'anemometerHvacScreen') _injectBLEBar('anemometerHvacScreen');
+            // Mario 2026-05-09: BLE toolbar también en los 6 modales nuevos
+            if (screenId === 'heatingScreen') _injectBLEBar('heatingScreen');
+            if (screenId === 'commercialHvacScreen') _injectBLEBar('commercialHvacScreen');
+            if (screenId === 'walkinDiagScreen') _injectBLEBar('walkinDiagScreen');
+            if (screenId === 'icemachineDiagScreen') _injectBLEBar('icemachineDiagScreen');
+            if (screenId === 'coldtableDiagScreen') _injectBLEBar('coldtableDiagScreen');
+            if (screenId === 'reachinDiagScreen') _injectBLEBar('reachinDiagScreen');
+            if (screenId === 'lavadoraDiagScreen') _injectBLEBar('lavadoraDiagScreen');
           }
         });
       }
@@ -1930,6 +1996,10 @@ function showScreen(screenId) {
       }
 
       document.querySelectorAll('.screen').forEach(s => { s.classList.remove('active'); s.style.removeProperty('display'); s.style.removeProperty('flex-direction'); });
+      // Mario v8.35: only show dashboard FABs (avatar, lv badge, HVACR TOOLS,
+      // HomeWarrior) when on dashboard. Off-dashboard hides them to keep
+      // sub-screens uncluttered.
+      try { document.body.classList.toggle('on-dashboard', screenId === 'dashboardScreen'); } catch(_) {}
       var targetScreen = document.getElementById(screenId);
       if (!targetScreen) { console.error('[MaestroAC] Screen not found: ' + screenId); if(screenId !== 'dashboardScreen') showScreen('dashboardScreen'); return; }
       // Scroll restore: when returning to a screen the user had scrolled,
@@ -2027,13 +2097,11 @@ function showScreen(screenId) {
           if (passInput) setTimeout(function(){ passInput.focus(); }, 100);
         }
       }
-      // Toggle between dashboard frame, hvac feed frame, and main app frame
+      // Toggle between dashboard frame and main app frame (HVAC feed removed Build 28)
       var mainFrame = document.getElementById('mainAppFrame');
-      var hvacFrame = document.getElementById('hvacFeedFrame');
       if (mainFrame) {
         if (screenId === 'dashboardScreen') {
           mainFrame.style.display = 'none';
-          if (hvacFrame) hvacFrame.style.display = 'none';
           // Safety: ensure watching-stream class is off so the global EN VIVO pill is visible on dashboard.
           document.body.classList.remove('ls-watching-stream');
           // Force re-check for live streams each time dashboard opens so the floating pill shows here, not only inside Clases en Vivo.
@@ -2063,13 +2131,8 @@ function showScreen(screenId) {
           // Show call button below radio
           var _rcall = document.getElementById('dashRadioCall');
           if (_rcall) _rcall.style.display = 'block';
-        } else if (screenId === 'hvacFeedScreen') {
-          mainFrame.style.display = 'none';
-          if (hvacFrame) hvacFrame.style.display = '';
-          if (typeof loadHvacFeedScreen === 'function') loadHvacFeedScreen();
         } else {
           mainFrame.style.display = '';
-          if (hvacFrame) hvacFrame.style.display = 'none';
         }
       }
       // Top 10 leaderboard screen — render full leaderboard on open
@@ -2245,12 +2308,67 @@ function showScreen(screenId) {
         else if (window.MaestroLoader) {
           MaestroLoader.load(['js/acvolt-certification.js']).then(function(){ try { initAcvoltCert(screenId); } catch(e) { console.warn('[Navigation]', e.message || e); } });
         }
+        // Track course engagement — Mario 2026-05-19 plan 100k
+        try { if (typeof trackConversion === 'function') trackConversion('course_started', { screen: screenId }); } catch(_) {}
       }
       if (screenId === 'videoTutorialesScreen') {
         if (typeof initVideoTutoriales === 'function') { initVideoTutoriales(); }
         else if (window.MaestroLoader) {
           MaestroLoader.load(['js/admin/tutorial-videos.js','js/video-tutoriales.js']).then(function(){ try { initVideoTutoriales(); } catch(e) { console.warn('[Navigation]', e.message || e); } });
         }
+      }
+      // Build 28 — Daily Video player on dashboard (auto-load + render every visit)
+      if (screenId === 'dashboardScreen') {
+        var _dvc = document.getElementById('dailyVideoContainer');
+        var _renderDV = function () {
+          if (!window.DailyVideos) { console.warn('[DailyVideos] module not loaded'); return; }
+          try { window.DailyVideos.renderDailyPlayer('dailyVideoContainer'); } catch (e) { console.warn('[DailyVideos] player error:', e.message || e); }
+          try { window.DailyVideos.renderCategoryBanners('dailyCategoriesContainer'); } catch (e) { console.warn('[DailyVideos] categories error:', e.message || e); }
+        };
+        if (_dvc) {
+          if (window.DailyVideos) _renderDV();
+          else if (window.MaestroLoader) { MaestroLoader.load(['js/daily-videos.js']).then(_renderDV).catch(function(e){ console.warn('[DailyVideos] load fail:', e); }); }
+        }
+        // Build 28 — Auto-open How To Use This App on first visit (chaka onboarding)
+        try {
+          var _howtoSeen = localStorage.getItem('maestro_howto_seen_v2');
+          console.log('[howto] dashboardScreen handler — seen flag:', _howtoSeen);
+          if (!_howtoSeen) {
+            setTimeout(function () {
+              if (!localStorage.getItem('maestro_howto_seen_v2')) {
+                console.log('[howto] auto-opening modal (first visit)');
+                localStorage.setItem('maestro_howto_seen_v2', '1');
+                if (typeof showScreen === 'function') showScreen('howToUseScreen');
+              }
+            }, 1500);
+          }
+        } catch (e) { console.warn('[howto] auto-open error:', e); }
+      }
+      // Build 28 — Videoteca Histórica
+      if (screenId === 'videotecaScreen') {
+        var _vlib = function () { try { window.DailyVideos.renderLibrary('videotecaContainer'); } catch (e) { console.warn('[Navigation]', e.message || e); } };
+        if (window.DailyVideos) _vlib();
+        else if (window.MaestroLoader) MaestroLoader.load(['js/daily-videos.js']).then(_vlib);
+      }
+      // Build 28 — How To Use This App tutorial gallery
+      if (screenId === 'howToUseScreen') {
+        var _hto = function () { try { window.HowToUse.render('howToListContainer'); } catch (e) { console.warn('[Navigation] howto', e.message || e); } };
+        if (window.HowToUse) _hto();
+        else if (window.MaestroLoader) MaestroLoader.load(['js/how-to-use.js']).then(_hto).catch(function(e){ console.warn('[howto] load fail', e); });
+      }
+      // Build 28 — Videos Feed (TikTok-style vertical scroll). Standard $59.99+ only.
+      if (screenId === 'videosFeedScreen') {
+        // Native-store paywall gate: requirePremium opens the paywall and returns
+        // false for non-paying iOS / Android users. Plain web passes through.
+        if (typeof window.requirePremium === 'function' && !window.requirePremium('videos-feed')) {
+          // Bounce back so the user doesn't get stuck on an empty screen
+          // behind the paywall.
+          setTimeout(function () { try { showScreen('dashboardScreen'); } catch (_) {} }, 50);
+          return;
+        }
+        var _vfRender = function () { try { window.VideosFeed.render(); } catch (e) { console.warn('[Navigation] videos-feed', e.message || e); } };
+        if (window.VideosFeed) _vfRender();
+        else if (window.MaestroLoader) MaestroLoader.load(['js/videos-feed.js']).then(_vfRender).catch(function(e){ console.warn('[videos-feed] load fail', e); });
       }
       if (screenId === 'herramientasScreen') {
         if (typeof initHerramientas === 'function') { initHerramientas(); }
@@ -2306,7 +2424,45 @@ function showScreen(screenId) {
           MaestroLoader.load(['js/ble-manager.js']).then(function(){ try { initBluetoothTools(); } catch(e) { console.warn('[Navigation] bluetoothTools init error:', e); } });
         }
       }
+      // VIP gate — Estudio y Certificaciones (EPA, OSHA, NATE, A2L, Refri, Calefacción modules
+      // are individually paywalled but the entry screen needs to be gated too)
+      if (screenId === 'studySectionsScreen') {
+        if (typeof requirePremium === 'function' && !requirePremium('study-sections')) {
+          showScreen('dashboardScreen');
+          return;
+        }
+      }
+      if (screenId === 'certOficialesScreen') {
+        if (typeof requirePremium === 'function' && !requirePremium('cert-oficiales')) {
+          showScreen('dashboardScreen');
+          return;
+        }
+      }
+      // School-restricted screens (videoLessons + zoomClasses + attendance):
+      // gated for app-store users; school students reach these via PWA only.
+      if (screenId === 'videoLessonsScreen') {
+        if (typeof requirePremium === 'function' && !requirePremium('video-lessons')) {
+          setTimeout(function () { try { showScreen('dashboardScreen'); } catch (_) {} }, 50);
+          return;
+        }
+      }
+      if (screenId === 'zoomClassesScreen') {
+        if (typeof requirePremium === 'function' && !requirePremium('zoom-classes')) {
+          setTimeout(function () { try { showScreen('dashboardScreen'); } catch (_) {} }, 50);
+          return;
+        }
+      }
+      if (screenId === 'attendanceScreen') {
+        if (typeof requirePremium === 'function' && !requirePremium('attendance')) {
+          setTimeout(function () { try { showScreen('dashboardScreen'); } catch (_) {} }, 50);
+          return;
+        }
+      }
       if (screenId === 'maestroInvoicesScreen') {
+        if (typeof requirePremium === 'function' && !requirePremium('maestro-invoices')) {
+          showScreen('dashboardScreen');
+          return;
+        }
         var _crmIframe = document.getElementById('tradeMasterCrmIframe');
         if (_crmIframe) {
           var _crmBase = _crmIframe.getAttribute('data-src') || 'https://crm.trademastersusa.org/';
@@ -2331,6 +2487,11 @@ function showScreen(screenId) {
             _crmIframe.src = _crmBase;
           }
         }
+      }
+      if (screenId === 'homeWarriorScreen') {
+        // Native screen — content rendered by js/homewarrior.js when user
+        // taps a section in the drawer (openHomeWarriorSection). No iframe.
+        // No requirePremium gate in v1 — free for all Maestro users.
       }
       if (screenId === 'partsFinderScreen') {
         if (typeof initPartsFinder === 'function') { initPartsFinder(); }
@@ -2455,7 +2616,7 @@ function showScreen(screenId) {
       // No valid profile found anywhere, try Supabase users table as last resort
       if (authEmail && supabaseClient) {
           try {
-              const _ud_userRows = await usersDataSelf('get_self', { email: authEmail }); const userRows = _ud_userRows.data ? [_ud_userRows.data] : [];
+              const { data: userRows } = await supabaseClient.from('users').select('*').eq('email', authEmail).limit(1);
               const techData = userRows && userRows.length > 0 ? userRows[0] : null;
               if (techData && techData.nombre) {
                   var _eu5 = {}; try { _eu5 = JSON.parse(localStorage.getItem('tecnico_user') || '{}'); } catch(e) {}
@@ -2565,17 +2726,26 @@ function showScreen(screenId) {
     }
 
     // ── Language Toggle ──
-    // Injects a language toggle button into the profile screen settings area
+    // Dual-pill (ES / EN) switcher. Active side highlighted in gold.
+    // Same look as #globalLangSwitcher in index.html for consistency.
     window._showLangToggle = function() {
       var currentLang = window._lang || 'es';
-      var flag = currentLang === 'es' ? '🇺🇸' : '🇲🇽';
-      var btnText = currentLang === 'es' ? 'English' : 'Español';
 
-      // Dashboard compact toggle
+      // Dashboard dual-pill toggle
       var dash = document.getElementById('dashLangToggle');
       if (dash) {
-        dash.innerHTML = '<button onclick="window._toggleLanguage()" style="background:rgba(59,130,246,0.12);border:1px solid rgba(59,130,246,0.25);color:#60a5fa;padding:5px 14px;border-radius:20px;font-size:12px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:5px;">' + flag + ' ' + btnText + '</button>';
+        var esOn = currentLang === 'es' ? 'background:linear-gradient(135deg,#E8C97A,#C9A961);color:#0a1830;box-shadow:0 2px 8px rgba(232,201,122,0.5);' : 'background:transparent;color:rgba(255,255,255,0.6);';
+        var enOn = currentLang === 'en' ? 'background:linear-gradient(135deg,#E8C97A,#C9A961);color:#0a1830;box-shadow:0 2px 8px rgba(232,201,122,0.5);' : 'background:transparent;color:rgba(255,255,255,0.6);';
+        dash.innerHTML =
+          '<div style="display:inline-flex;align-items:center;background:rgba(15,30,55,0.6);border:1.5px solid rgba(232,201,122,0.4);border-radius:999px;padding:3px;gap:0;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);">' +
+            '<button type="button" onclick="if(window._glsPick)window._glsPick(\'es\');else window._toggleLanguage()" style="' + esOn + 'border:none;cursor:pointer;padding:6px 13px;border-radius:999px;font-size:12px;font-weight:800;letter-spacing:0.4px;display:inline-flex;align-items:center;gap:4px;transition:all 180ms ease;">🇲🇽 ES</button>' +
+            '<button type="button" onclick="if(window._glsPick)window._glsPick(\'en\');else window._toggleLanguage()" style="' + enOn + 'border:none;cursor:pointer;padding:6px 13px;border-radius:999px;font-size:12px;font-weight:800;letter-spacing:0.4px;display:inline-flex;align-items:center;gap:4px;transition:all 180ms ease;">🇺🇸 EN</button>' +
+          '</div>';
       }
+
+      // Profile screen toggle (legacy text)
+      var flag = currentLang === 'es' ? '🇺🇸' : '🇲🇽';
+      var btnText = currentLang === 'es' ? 'English' : 'Español';
 
       // Profile toggle
       var container = document.getElementById('langToggleContainer');

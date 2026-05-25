@@ -1,31 +1,44 @@
 
-    // ─── Local users-data helper (for Batch 3 of Phase 2 RLS Sprint B) ───
-    // Defined inline because auth.js is tier 1 and runs BEFORE the lazy-loaded
-    // users-data-client.js. Same wire format, just scoped to this file.
-    async function _audUsersData(action, params) {
+    // ============ ATTRIBUTION CAPTURE (Mario 2026-05-22 task #49) ============
+    // Capture marketing source from URL params (?source=email_xxx, ?utm_*=...)
+    // and persist for 24h so it survives between landing → signup. Used at
+    // auth.signUp time so every new user is tagged with where they came from.
+    (function _captureAttribution() {
       try {
-        var sbUrl = window.SUPABASE_URL || 'https://htklsowiyjwsjnacnvnr.supabase.co';
-        var sbKey = (typeof SUPABASE_KEY !== 'undefined' ? SUPABASE_KEY : (window.SUPABASE_KEY || ''));
-        var body = Object.assign({ action: action }, params || {});
-        var resp = await fetch(sbUrl + '/functions/v1/users-data', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'apikey': sbKey, 'Authorization': 'Bearer ' + sbKey },
-          body: JSON.stringify(body),
+        var params = new URLSearchParams(window.location.search || '');
+        var KEYS = ['source','src','utm_source','utm_campaign','utm_medium','utm_content','utm_term','ref'];
+        var attrs = {};
+        KEYS.forEach(function (k) {
+          var v = params.get(k);
+          if (v) attrs[k] = v;
         });
-        var json = await resp.json().catch(function(){ return {}; });
-        if (!resp.ok && !json.error) json.error = 'HTTP ' + resp.status;
-        return json;
-      } catch (e) { return { error: (e && e.message) || 'fetch failed' }; }
-    }
-
-    // ============ ADMIN DIRECT ACCESS VIA URL HASH ============
-    // Allows admin access via maestrohvacr.com/#admin
-    (function _detectAdminHash() {
-      var h = (window.location.hash || '').replace('#', '').toLowerCase();
-      if (h === 'admin' || h === 'adminloginscreen') {
-        localStorage.setItem('maestroac_goto_screen', 'adminLoginScreen');
-      }
+        if (Object.keys(attrs).length === 0) return; // nothing to capture
+        attrs.captured_at = new Date().toISOString();
+        if (document.referrer) attrs.referrer = document.referrer;
+        if (window.location.pathname) attrs.landing_path = window.location.pathname;
+        localStorage.setItem('maestro_attribution', JSON.stringify({
+          data: attrs,
+          expires: Date.now() + 24 * 60 * 60 * 1000  // 24h TTL
+        }));
+        if (window.console && console.log) console.log('[Attribution] captured:', attrs.source || attrs.utm_source || attrs.src);
+      } catch (_) { /* swallow — non-critical */ }
     })();
+
+    // Read attribution blob (if still valid) for signUp metadata
+    function getAttributionData() {
+      try {
+        var stored = localStorage.getItem('maestro_attribution');
+        if (!stored) return null;
+        var parsed = JSON.parse(stored);
+        if (!parsed || !parsed.data) return null;
+        if (parsed.expires && Date.now() > parsed.expires) {
+          localStorage.removeItem('maestro_attribution');
+          return null;
+        }
+        return parsed.data;
+      } catch (_) { return null; }
+    }
+    if (typeof window !== 'undefined') window.getAttributionData = getAttributionData;
 
     // ============ LOGIN TOAST NOTIFICATIONS ============
 
@@ -202,7 +215,7 @@
           localStorage.setItem('tecnico_email', email);
           // Load profile from Supabase users table
           try {
-            const _ud_userRows = await _audUsersData('get_self', { email: email }); const userRows = _ud_userRows.data ? [_ud_userRows.data] : [];
+            const { data: userRows } = await supabaseClient.from('users').select('*').eq('email', email).limit(1);
             const techData = userRows && userRows.length > 0 ? userRows[0] : null;
             if (techData && techData.nombre) {
               // Merge with existing localStorage data to preserve gate fields (estado, ciudad)
@@ -217,6 +230,25 @@
                 experiencia: techData.experiencia || '',
                 registrationDate: techData.fecha_registro
               };
+              // Restore technician number from Supabase (was missing — caused tech number wipe on reinstall)
+              if (techData.technician_number) {
+                currentUser.technicianNumber = techData.technician_number;
+                currentUser.technicianNumberDate = techData.technician_number_date || '';
+                localStorage.setItem('tecnico_number', techData.technician_number);
+                localStorage.setItem('tecnico_number_' + email, techData.technician_number);
+                localStorage.setItem('tecnico_number_date_' + email, currentUser.technicianNumberDate);
+              }
+              // Restore student ID from Supabase
+              if (techData.student_id) {
+                currentUser.studentId = techData.student_id;
+                currentUser.studentIdDate = techData.student_id_date || '';
+              }
+              // Restore photo from Supabase (was missing — caused photo wipe on reinstall)
+              if (techData.photo_url) {
+                localStorage.setItem('maestroac_photo_' + email, techData.photo_url);
+                localStorage.setItem('maestroac_photo_default', techData.photo_url);
+                if (typeof _applyProfilePhoto === 'function') _applyProfilePhoto(techData.photo_url);
+              }
               const users = JSON.parse(localStorage.getItem('maestroac_users') || '{}');
               users[email] = { ...currentUser, verified: true };
               localStorage.setItem('maestroac_users', JSON.stringify(users));
@@ -229,6 +261,47 @@
               if (typeof preloadStudentCRMGroups === 'function') preloadStudentCRMGroups(email);
             }
           } catch(e) { console.log('[MaestroAC] Recover profile error:', e); }
+          // CLOUD PROGRESS SYNC FIX (Mario 2026-05-09):
+          // recoverSession antes NO llamaba supabaseRegisterUser → supabaseUserId quedaba en
+          // null y todo el progreso solo vivía en localStorage. Ahora lo registramos al
+          // restaurar sesión para que cualquier save siguiente (quiz, cert) sí suba a cloud.
+          // No-blocking: si falla, la app sigue corriendo igual.
+          try {
+            if (typeof supabaseRegisterUser === 'function') {
+              supabaseRegisterUser({ email: email, nombre: (currentUser && currentUser.nombre) || email.split('@')[0] }).then(function(uid) {
+                if (uid && typeof supabaseLoadUserData === 'function') {
+                  supabaseLoadUserData().then(function(cloudData) {
+                    if (!cloudData) return;
+                    if (cloudData.progress && typeof progress !== 'undefined') {
+                      cloudData.progress.forEach(function(p) {
+                        if (progress[p.nivel] && p.completed > (progress[p.nivel].completed || 0)) {
+                          progress[p.nivel].completed = p.completed;
+                          progress[p.nivel].score = p.score;
+                          if (p.total) progress[p.nivel].total = p.total;
+                        }
+                      });
+                      if (typeof saveProgress === 'function') saveProgress();
+                    }
+                    if (cloudData.certificates && cloudData.certificates.length > 0) {
+                      var localCerts = [];
+                      try { localCerts = JSON.parse(localStorage.getItem('tecnico_certificates') || '[]'); } catch(_) {}
+                      var certMap = {};
+                      localCerts.forEach(function(c) { certMap[c.nivel || c.level] = true; });
+                      cloudData.certificates.forEach(function(c) {
+                        if (!certMap[c.nivel]) {
+                          localCerts.push({ level: c.nivel, nivel: c.nivel, score: c.score, totalQuestions: c.total_questions, percentage: c.porcentaje, certificateNumber: c.certificate_number, date: c.fecha_obtenido });
+                        }
+                      });
+                      localStorage.setItem('tecnico_certificates', JSON.stringify(localCerts));
+                      localStorage.setItem('tecnico_certificates_backup', JSON.stringify(localCerts));
+                      if (typeof certificates !== 'undefined') certificates = localCerts;
+                    }
+                    if (typeof renderLevels === 'function') renderLevels();
+                  });
+                }
+              });
+            }
+          } catch(e) { console.warn('[Auth] recoverSession register failed:', e.message || e); }
           // Device guard — register on session recovery
           try {
             if (typeof DeviceGuard !== 'undefined') DeviceGuard.onLogin(email);
@@ -267,7 +340,7 @@
       if (!supabaseClient) { if(msgDiv) msgDiv.innerHTML = '<span style="color:#e74c3c;">' + _t('auth_connection_error', 'Error de conexión.') + '</span>'; return; }
       try {
         if(msgDiv) msgDiv.innerHTML = '<span style="color:#9b59b6;">' + _t('auth_sending_magic_link', 'Enviando link de acceso...') + '</span>';
-        var { error } = await supabaseClient.auth.signInWithOtp({ email: email, options: { emailRedirectTo: window.location.origin } });
+        var { error } = await supabaseClient.auth.signInWithOtp({ email: email, options: { emailRedirectTo: 'https://maestrohvacr.com' } });
         if (error) {
           if(msgDiv) msgDiv.innerHTML = '<span style="color:#e74c3c;">' + _escHtml(error.message) + '</span>';
         } else {
@@ -317,7 +390,7 @@
       }
 
       var _loginBtn = event && event.target ? event.target.querySelector('button[type="submit"]') : null;
-      if (window.BtnLoading) window.BtnLoading.start(_loginBtn, 'Entrando...');
+      if (window.BtnLoading) window.BtnLoading.start(_loginBtn, _t('auth_logging_in', 'Entrando...'));
       try {
         const { data, error } = await supabaseClient.auth.signInWithPassword({
           email: email,
@@ -388,7 +461,7 @@
             registrationDate: users[email].registrationDate
           };
           // Async fetch acceso_completo for freemium tier
-          _audUsersData('get_self', { email: email, fields: ['acceso_completo'] }).then(function(res) { res = { data: res.data ? [res.data] : [] };
+          supabaseClient.from('users').select('acceso_completo').eq('email', email).limit(1).then(function(res) {
             var rows = res.data || [];
             if (rows.length > 0) {
               localStorage.setItem('maestroac_acceso_completo_' + email, rows[0].acceso_completo === true ? 'true' : 'false');
@@ -397,7 +470,7 @@
         } else {
           // Try loading from Supabase users table
           try {
-            const _ud_userRows = await _audUsersData('get_self', { email: email }); const userRows = _ud_userRows.data ? [_ud_userRows.data] : [];
+            const { data: userRows } = await supabaseClient.from('users').select('*').eq('email', email).limit(1);
             const techData = userRows && userRows.length > 0 ? userRows[0] : null;
             if (techData) {
               var _eu4 = {}; try { _eu4 = JSON.parse(localStorage.getItem('tecnico_user') || '{}'); } catch(e) {}
@@ -436,6 +509,33 @@
               localStorage.setItem('maestroac_acceso_completo_' + email, techData.acceso_completo === true ? 'true' : 'false');
               // Preload CRM student groups for tier check
               if (typeof preloadStudentCRMGroups === 'function') preloadStudentCRMGroups(email);
+
+              // ─── Auto-heal: if server is missing fields the device still has,
+              // push them up so the next reinstall doesn't lose them. Catches
+              // legacy users (like Mario) whose techNumber lived in localStorage
+              // only because earlier saves silently failed.
+              try {
+                var heal = {};
+                if (!techData.technician_number) {
+                  var localTN = localStorage.getItem('tecnico_number_' + email) || localStorage.getItem('tecnico_number');
+                  if (localTN) heal.technician_number = localTN;
+                  var localTND = localStorage.getItem('tecnico_number_date_' + email) || localStorage.getItem('tecnico_number_date');
+                  if (localTND) heal.technician_number_date = localTND;
+                }
+                if (!techData.student_id) {
+                  var localSID = localStorage.getItem('maestroac_student_id_' + email) || localStorage.getItem('maestroac_student_id');
+                  if (localSID) heal.student_id = localSID;
+                }
+                if (!techData.photo_url) {
+                  var localPhoto = localStorage.getItem('maestroac_photo_' + email);
+                  if (localPhoto && localPhoto.length < 200000) heal.photo_url = localPhoto;
+                }
+                if (Object.keys(heal).length && window.ProfileSync) {
+                  window.ProfileSync.save(email, heal).then(function (r) {
+                    if (r) console.log('[Auth] Auto-healed missing server fields:', Object.keys(heal));
+                  });
+                }
+              } catch (e) { console.warn('[Auth] auto-heal error:', e.message || e); }
             }
           } catch(e) { console.warn('[Auth]', e.message || e); }
           if (!currentUser || !currentUser.nombre) {
@@ -467,10 +567,19 @@
             setTimeout(window.maybeShowWelcomeModal, 600);
           }
         };
-        if (typeof checkOnboardingGate === 'function') {
-          checkOnboardingGate(_authPostLogin);
+
+        // ── WEB-ONLY GATE: Only paid/grandfathered users can use the web ──
+        var _afterGates = function() {
+          if (typeof checkOnboardingGate === 'function') {
+            checkOnboardingGate(_authPostLogin);
+          } else {
+            _authPostLogin();
+          }
+        };
+        if (typeof _checkWebAccessGate === 'function') {
+          _checkWebAccessGate(email, _afterGates);
         } else {
-          _authPostLogin();
+          _afterGates();
         }
 
         // ── PUSH NOTIFICATION GATE — Force prompt on EVERY login ──
@@ -537,7 +646,7 @@
                 }
                 // Restore profile photo, tech number, student ID from cloud
                 try {
-                  var _ud__bgUserRows = await _audUsersData('get_self', { email: _bgEmail, fields: ["photo_url","technician_number","technician_number_date","student_id","student_id_date"] }); var _bgUserRows = _ud__bgUserRows.data ? [_ud__bgUserRows.data] : [];
+                  var { data: _bgUserRows } = await supabaseClient.from('users').select('photo_url, technician_number, technician_number_date, student_id, student_id_date').eq('email', _bgEmail).limit(1);
                   var _bgUserData = _bgUserRows && _bgUserRows.length > 0 ? _bgUserRows[0] : null;
                   if (_bgUserData) {
                     // Photo
@@ -590,7 +699,6 @@
         // Lazy-load admin scripts for admin users
         if (window.MaestroLoader && typeof isAdminStudent === 'function' && isAdminStudent(email)) {
           MaestroLoader.load([
-            'js/users-data-client.js',
             'js/admin/student-success.js',
             'js/admin/create-user.js',
             'js/admin/class-schedule.js',
@@ -692,13 +800,16 @@
       }
 
       var _regBtn = event && event.target ? event.target.querySelector('button[type="submit"]') : null;
-      if (window.BtnLoading) window.BtnLoading.start(_regBtn, 'Creando cuenta...');
+      if (window.BtnLoading) window.BtnLoading.start(_regBtn, _t('auth_creating_account', 'Creando cuenta...'));
       try {
-        // Register with Supabase Auth (email confirmation disabled)
-        const { data, error } = await supabaseClient.auth.signUp({
-          email: email,
-          password: pass
-        });
+        // Register with Supabase Auth (email confirmation disabled).
+        // Attribution (Mario 2026-05-22): if user landed via ?source=email_xxx
+        // or any UTM in the last 24h, attach it as raw_user_meta_data so we
+        // can later answer "where did this signup come from?" in the DB.
+        const _attrib = (typeof getAttributionData === 'function') ? getAttributionData() : null;
+        const _signUpOpts = { email: email, password: pass };
+        if (_attrib) _signUpOpts.options = { data: _attrib };
+        const { data, error } = await supabaseClient.auth.signUp(_signUpOpts);
 
         if (error) {
           if (error.message.includes('already registered') || error.message.includes('User already registered')) {
@@ -737,12 +848,16 @@
         localStorage.setItem('tecnico_user_backup', JSON.stringify(currentUser));
         localStorage.setItem('maestroac_new_user', 'true');
 
+        // Track new account creation — Meta CompleteRegistration + TikTok + CAPI
+        try { if (typeof trackConversion === 'function') trackConversion('signup_complete', { email: email, content_name: 'maestrohvacr_signup' }); } catch(_) {}
+
         // Save minimal data to users table
         try {
-          await _audUsersData('upsert_self', {
+          await supabaseClient.from('users').upsert({
             email: email,
-            data: { nombre: tempName, fecha_registro: new Date().toISOString() }
-          });
+            nombre: tempName,
+            fecha_registro: new Date().toISOString()
+          }, { onConflict: 'email' });
 
           // Save referral if exists
           var savedRefCode = localStorage.getItem('maestroac_referral_code');
@@ -975,7 +1090,6 @@
         localStorage.removeItem('tecnico_lastQuizState');
         localStorage.removeItem('maestroac_new_user');
         localStorage.removeItem('maestroac_admin_cache');
-        localStorage.removeItem('maestroac_is_admin');
         localStorage.removeItem('maestroac_users');
         localStorage.removeItem('maestroac_photo_default');
         localStorage.removeItem('maestroac_terms_accepted');
@@ -1009,50 +1123,102 @@
     // ── Admin Link Visibility — only show admin login to authorized users ──
     // Checks both admin_staff AND admin_students tables
     function revealAdminLinksIfStaff(email) {
-      if (!email) return;
+      if (!email || typeof supabaseClient === 'undefined' || !supabaseClient) return;
       var _email = email.toLowerCase().trim();
       var _found = false;
 
       function _showLinks() {
-        if (_found) return;
-        _found = true;
         var links = document.querySelectorAll('.admin-only-link');
         for (var i = 0; i < links.length; i++) {
           links[i].style.display = '';
         }
-        localStorage.setItem('maestroac_is_admin', 'true');
         console.log('[MaestroAC] Admin links revealed for:', _email);
       }
 
-      // Fast path: check cached admin status first
-      if (localStorage.getItem('maestroac_is_admin') === 'true') {
-        _showLinks();
-      }
+      // Check admin_staff first
+      supabaseClient.from('admin_staff')
+        .select('email')
+        .eq('email', _email)
+        .eq('activo', true)
+        .limit(1)
+        .then(function(res) {
+          if (res.data && res.data.length > 0) {
+            _found = true;
+            _showLinks();
+          }
+        }).catch(function() {});
 
-      // Also verify from DB (async) — updates cache
-      if (typeof supabaseClient !== 'undefined' && supabaseClient) {
-        supabaseClient.from('admin_staff')
-          .select('email')
-          .ilike('email', _email)
-          .eq('activo', true)
-          .limit(1)
-          .then(function(res) {
-            if (res.data && res.data.length > 0) _showLinks();
-          }).catch(function() {});
-
-        supabaseClient.from('admin_students')
-          .select('email')
-          .ilike('email', _email)
-          .limit(1)
-          .then(function(res) {
-            if (res.data && res.data.length > 0) _showLinks();
-          }).catch(function() {});
-      }
+      // Also check admin_students (superadmin/admin roles)
+      supabaseClient.from('admin_students')
+        .select('email')
+        .eq('email', _email)
+        .limit(1)
+        .then(function(res) {
+          if (!_found && res.data && res.data.length > 0) {
+            _showLinks();
+          }
+        }).catch(function() {});
     }
     window.revealAdminLinksIfStaff = revealAdminLinksIfStaff;
 
+    // Manage Subscription (Apple Guideline 3.1.2(c) — must be findable in-app).
+    // Routes to OS-native subscription manager based on platform.
+    function openManageSubscription() {
+      try {
+        if (window.isIOSAppStore) {
+          // iOS App Store subscription management
+          window.location.href = 'itms-apps://apps.apple.com/account/subscriptions';
+          return;
+        }
+        if (window.isAndroidPlayStore || window.isAndroidApp) {
+          // Google Play Store subscription management
+          window.location.href = 'https://play.google.com/store/account/subscriptions?package=com.maestrohvacr.app';
+          return;
+        }
+        // Web (Stripe billing) — open Stripe customer portal via support
+        // until we wire a self-serve portal endpoint.
+        var _mailSubj = (typeof _t === 'function')
+          ? _t('manage_sub_email_subject', 'Cancelar suscripción Maestro HVACR')
+          : 'Cancelar suscripción Maestro HVACR';
+        var _mailBody = (typeof _t === 'function')
+          ? _t('manage_sub_email_body_prefix', 'Hola, deseo cancelar mi suscripción. Mi correo de cuenta es: ')
+          : 'Hola, deseo cancelar mi suscripción. Mi correo de cuenta es: ';
+        var _mailTail = (typeof _t === 'function')
+          ? _t('manage_sub_email_body_suffix', '\n\nGracias.')
+          : '\n\nGracias.';
+        window.open('mailto:soporte@maestrohvacr.com?subject=' +
+          encodeURIComponent(_mailSubj) +
+          '&body=' + encodeURIComponent(_mailBody +
+            ((typeof currentUser !== 'undefined' && currentUser && currentUser.email) ||
+              localStorage.getItem('tecnico_email') || '') + _mailTail),
+          '_blank');
+      } catch (e) { console.warn('[ManageSub] failed:', e); }
+    }
+    window.openManageSubscription = openManageSubscription;
+
     // Delete Account (Apple App Store requirement — account deletion)
     async function confirmarEliminarCuenta() {
+      // Apple 3.1.2: if user has an active sub, "Manage Subscription"
+      // must be presented as a separate action — deleting the account
+      // does NOT cancel the App Store / Play Billing subscription.
+      // Surface this once before the destructive flow so the user
+      // doesn't get charged after "deleting" their account.
+      var hasActiveSub = !!(window.__premiumActive || localStorage.getItem('iap_active') === '1');
+      if (hasActiveSub && (window.isIOSAppStore || window.isAndroidPlayStore || window.isAndroidApp)) {
+        var subWarn = typeof _t === 'function'
+          ? _t('delete_with_sub_warn', 'Tienes una suscripción activa. Eliminar tu cuenta NO la cancela — debes cancelarla en la tienda. ¿Quieres ir a "Administrar Suscripción" primero?')
+          : 'Tienes una suscripción activa. Eliminar tu cuenta NO la cancela — debes cancelarla en la tienda. ¿Quieres ir a "Administrar Suscripción" primero?';
+        var goManage = window.MaestroDialog && window.MaestroDialog.confirm
+          ? await window.MaestroDialog.confirm({
+              title: typeof _t === 'function' ? _t('active_sub_title', 'Suscripción activa') : 'Suscripción activa',
+              message: subWarn,
+              okText: typeof _t === 'function' ? _t('manage_sub_btn', 'Ir a cancelar') : 'Ir a cancelar',
+              cancelText: typeof _t === 'function' ? _t('continue_delete', 'Continuar con borrado') : 'Continuar con borrado',
+              kind: 'warning'
+            })
+          : confirm(subWarn);
+        if (goManage) { openManageSubscription(); return; }
+      }
       var msg = typeof _t === 'function'
         ? _t('delete_account_confirm', '¿Estás seguro de que deseas eliminar tu cuenta? Esta acción es permanente y se borrarán todos tus datos.')
         : '¿Estás seguro de que deseas eliminar tu cuenta? Esta acción es permanente y se borrarán todos tus datos.';
@@ -1083,14 +1249,33 @@
       if (!ok2) return;
 
       var email = (currentUser && currentUser.email) || localStorage.getItem('tecnico_email') || '';
+      // BUG FIX 2026-05-01: previously did `supabaseClient.from('users').delete()`
+      // direct from anon — broken after Phase 3 RLS lock-down of public.users,
+      // and never cancelled RC subscriptions (Apple 5.1.1(v) violation).
+      // Now route through `delete-account` edge function which: (1) verifies
+      // user JWT, (2) DELETEs RC subscriber, (3) marks memberships inactive
+      // with audit reason, (4) soft-deletes users row + nulls PII, (5)
+      // invalidates refresh tokens, (6) writes account_deletion_log.
       try {
         if (supabaseClient && email) {
-          // Delete user data from the users table
-          await _audUsersData('self_delete', { email: email });
-          console.log('[MaestroAC] User data deleted from Supabase for:', email);
+          var sbUrl = window.SUPABASE_URL || 'https://htklsowiyjwsjnacnvnr.supabase.co';
+          var sbKey = window.SUPABASE_KEY || '';
+          var sess = await supabaseClient.auth.getSession();
+          var token = (sess && sess.data && sess.data.session && sess.data.session.access_token) || sbKey;
+          var resp = await fetch(sbUrl + '/functions/v1/delete-account', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'apikey': sbKey, 'Authorization': 'Bearer ' + token },
+            body: JSON.stringify({}),
+          });
+          var jr = await resp.json().catch(function(){ return {}; });
+          if (!resp.ok) {
+            console.warn('[MaestroAC] delete-account failed:', jr.error || resp.status);
+          } else {
+            console.log('[MaestroAC] Account deleted server-side for:', email, jr.partial_errors || '(no errors)');
+          }
         }
       } catch(e) {
-        console.warn('[MaestroAC] Error deleting user data:', e);
+        console.warn('[MaestroAC] Error calling delete-account:', e);
       }
       try {
         if (supabaseClient) {
@@ -1131,99 +1316,6 @@
       showScreen('loginScreen');
     }
     window.confirmarEliminarCuenta = confirmarEliminarCuenta;
-
-    // ============ ADMIN AUTH GUARD ============
-    // Used by navigation.js:1778 to gate adminDashboardScreen + adminTechnicianProfileScreen.
-    // True when a successful handleAdminLogin has populated sessionStorage.
-    function isAdminAuthenticated() {
-      try { return sessionStorage.getItem('admin_authenticated') === 'true'; } catch(e) { return false; }
-    }
-    window.isAdminAuthenticated = isAdminAuthenticated;
-
-    // ============ ADMIN LOGIN HANDLER ============
-    // Wired from #adminLoginForm. Uses handleAdminLoginSecure (hash-passwords.js)
-    // which is lazy-loaded when adminLoginScreen opens (SCREEN_SCRIPTS[adminLoginScreen]).
-    async function handleAdminLogin(event) {
-      if (event && event.preventDefault) event.preventDefault();
-      var userInput = document.getElementById('adminLoginUser');
-      var pwdInput = document.getElementById('adminLoginPassword');
-      var errEl = document.getElementById('adminLoginError');
-      var email = (userInput && userInput.value || '').trim().toLowerCase();
-      var password = pwdInput && pwdInput.value || '';
-      if (errEl) errEl.style.display = 'none';
-      if (!email || !password) {
-        if (errEl) { errEl.style.display = 'block'; errEl.textContent = _t('admin_login_error_invalid', 'Credenciales de administrador incorrectas'); }
-        return false;
-      }
-      function showErr(msg) {
-        if (errEl) { errEl.style.display = 'block'; errEl.textContent = msg; }
-      }
-      if (typeof handleAdminLoginSecure !== 'function') {
-        // hash-passwords.js should be lazy-loaded when adminLoginScreen opens; try to load it now.
-        if (window.MaestroLoader) {
-          try { await MaestroLoader.load(['js/admin/hash-passwords.js']); } catch(e) {}
-        }
-      }
-      if (typeof handleAdminLoginSecure !== 'function') {
-        showErr(_t('adm_hp_no_connection', 'Sin conexión'));
-        return false;
-      }
-      try {
-        // Try by email first (input treated as email)
-        var admin = await handleAdminLoginSecure(email, password);
-
-        // If that failed and input doesn't look like an email, try by username
-        if (!admin && email.indexOf('@') === -1 && supabaseClient && typeof hashPasswordLegacy === 'function') {
-          var legacyHash = await hashPasswordLegacy(password);
-          var { data: usernameRows } = await supabaseClient.rpc('admin_login', {
-            p_username: email,
-            p_password_hash: legacyHash
-          });
-          admin = usernameRows && usernameRows.length > 0 ? usernameRows[0] : null;
-        }
-
-        if (!admin) {
-          showErr(_t('admin_login_error_invalid', 'Credenciales de administrador incorrectas'));
-          return false;
-        }
-        var adminEmail = admin.email || email;
-        // Set window._adminSession — required by pipeline.js isAdminAuthenticated()
-        // which guards adminDashboardScreen. Without this the navigation guard
-        // kicks the admin back to adminLoginScreen right after a successful login.
-        try {
-          window._adminSession = {
-            email: adminEmail,
-            role: admin.rol || admin.role || 'staff',
-            id: admin.id || null,
-            nombre: admin.nombre || admin.name || email.split('@')[0]
-          };
-        } catch(e) {}
-        sessionStorage.setItem('admin_authenticated', 'true');
-        sessionStorage.setItem('admin_email', adminEmail);
-        sessionStorage.setItem('admin_role', admin.rol || admin.role || 'staff');
-        sessionStorage.setItem('admin_name', admin.nombre || admin.name || email.split('@')[0]);
-        if (admin.id) sessionStorage.setItem('admin_id', String(admin.id));
-        try { window.currentAdminRole = admin.rol || admin.role || 'staff'; } catch(e) {}
-        try { window.currentAdminName = admin.nombre || admin.name || email.split('@')[0]; } catch(e) {}
-        if (pwdInput) pwdInput.value = '';
-        showScreen('adminDashboardScreen');
-        return false;
-      } catch (e) {
-        console.warn('[Auth] Admin login error:', e && e.message || e);
-        showErr(_t('admin_login_error_invalid', 'Credenciales de administrador incorrectas'));
-        return false;
-      }
-    }
-    window.handleAdminLogin = handleAdminLogin;
-
-    // ============ ADMIN LOGOUT ============
-    function adminLogout() {
-      sessionStorage.removeItem('admin_authenticated');
-      sessionStorage.removeItem('admin_email');
-      sessionStorage.removeItem('admin_role');
-      showScreen('dashboardScreen');
-    }
-    window.adminLogout = adminLogout;
 
     // Load user-specific progress
     function loadUserProgress(email) {
@@ -1279,7 +1371,9 @@
       }
       try {
         var { error } = await supabaseClient.auth.resetPasswordForEmail(email, {
-          redirectTo: window.location.origin
+          // Bridge URL — Android intent filter routes back to native app,
+          // iOS/web fall through to root for Supabase JS detectSessionInUrl.
+          redirectTo: 'https://clon-ios-googleplay.pages.dev/oauth-bridge'
         });
         msgDiv.style.display = 'block';
         if (error && (error.message.includes('rate') || error.message.includes('limit'))) {
@@ -1298,29 +1392,229 @@
       }
     }
     window.sendPasswordReset = sendPasswordReset;
-    window.sendMagicLink = sendMagicLink;
 
-    async function signInWithOAuthProvider(provider) {
-      var errEl = document.getElementById('loginError');
+    // Sign in with Google (OAuth) — added 2026-05-06.
+    //
+    // PLATFORM ROUTING:
+    //   Android native shell → Chrome Custom Tabs via AndroidApp.openOAuthInCustomTab
+    //     (standard WebView fails: Google blocks WebView UAs, cookies don't share
+    //      with Chrome → PKCE code_verifier gets lost → 400 malformed)
+    //   iOS / desktop / mobile-web → Supabase auto-redirect (works in WKWebView)
+    //
+    // Both paths land back at clon-ios-googleplay.pages.dev/#access_token=...
+    // On Android, App Links (assetlinks.json + autoVerify intent filter) routes
+    // that URL into MainActivity.onNewIntent, which loads it into the WebView.
+    // Supabase JS then auto-detects the session via detectSessionInUrl.
+    async function signInWithGoogle() {
       if (!supabaseClient) {
-        if (errEl) { errEl.style.display = 'block'; errEl.textContent = _t('auth_connection_try_again', 'Error de conexión. Intenta de nuevo.'); }
+        if (typeof window.showToast === 'function') {
+          window.showToast(_t('auth_connection_try_again', 'Error de conexión. Intenta de nuevo.'), 'error');
+        }
         return;
       }
       try {
+        var isAndroidNative = !!(window.AndroidApp && typeof window.AndroidApp.openOAuthInCustomTab === 'function');
+        if (isAndroidNative) {
+          // Android: skip auto-redirect, get the authorize URL, hand to Custom Tabs.
+          // Custom URL scheme as redirectTo — Android intent filter routes it back
+          // into our app via onNewIntent (HTTPS App Links require domain verification
+          // which is flaky during testing).
+          // Bridge page redirects via JS to maestrohvacr:// scheme (Chrome
+          // Custom Tabs blocks server-side 302 → custom scheme as security).
+          var { data, error } = await supabaseClient.auth.signInWithOAuth({
+            provider: 'google',
+            options: {
+              redirectTo: 'https://clon-ios-googleplay.pages.dev/oauth-bridge',
+              skipBrowserRedirect: true,
+            }
+          });
+          if (error) throw error;
+          if (data && data.url) {
+            window.AndroidApp.openOAuthInCustomTab(data.url);
+          } else {
+            throw new Error('No OAuth URL returned by Supabase');
+          }
+          return;
+        }
+        // iOS / Web: standard auto-redirect flow
         var { error } = await supabaseClient.auth.signInWithOAuth({
-          provider: provider,
-          options: { redirectTo: window.location.origin }
+          provider: 'google',
+          options: {
+            redirectTo: 'https://clon-ios-googleplay.pages.dev/',
+          }
         });
-        if (error && errEl) {
-          errEl.style.display = 'block';
-          errEl.textContent = (provider === 'google' ? 'Google' : 'Apple') + ': ' + error.message;
+        if (error) {
+          console.warn('[Auth] Google OAuth error:', error.message);
+          if (typeof window.showToast === 'function') {
+            window.showToast(_t('auth_google_signin_failed', 'No se pudo iniciar sesión con Google') + ': ' + error.message, 'error');
+          }
         }
       } catch (e) {
-        if (errEl) { errEl.style.display = 'block'; errEl.textContent = (provider === 'google' ? 'Google' : 'Apple') + ': ' + (e && e.message ? e.message : 'Error'); }
+        console.warn('[Auth] signInWithGoogle exception:', e);
+        if (typeof window.showToast === 'function') {
+          window.showToast(_t('error', 'Error') + ': ' + (e && e.message || _t('auth_google_signin_failed', 'No se pudo iniciar sesión con Google')), 'error');
+        }
       }
     }
-    window.signInWithGoogle = function() { return signInWithOAuthProvider('google'); };
-    window.signInWithApple  = function() { return signInWithOAuthProvider('apple'); };
+    window.signInWithGoogle = signInWithGoogle;
+
+    // Sign in with Apple (OAuth) — added 2026-05-07.
+    //
+    // PLATFORM ROUTING:
+    //   iOS native shell  → ASWebAuthenticationSession via the
+    //                       webkit.messageHandlers['apple-signin'] bridge.
+    //                       Apple's auth page refuses embedded WKWebView
+    //                       (about:blank bounce) — App Store rejected
+    //                       Build 28 for guideline 4.8 because of this.
+    //   Android native    → Chrome Custom Tabs via openOAuthInCustomTab
+    //                       (same as Google).
+    //   Mobile-web/desktop → Supabase auto-redirect.
+    //
+    // Apple Services ID `com.maestrohvacr.signin` configured in Supabase,
+    // JWT client_secret rotated every 6 months (Apple max validity).
+    async function signInWithApple() {
+      if (!supabaseClient) {
+        if (typeof window.showToast === 'function') {
+          window.showToast(_t('auth_connection_try_again', 'Error de conexión. Intenta de nuevo.'), 'error');
+        }
+        return;
+      }
+      try {
+        var isIosNative = !!(window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers['apple-signin']);
+        var isAndroidNative = !!(window.AndroidApp && typeof window.AndroidApp.openOAuthInCustomTab === 'function');
+
+        if (isIosNative) {
+          // PKCE flow. Custom URL scheme as redirectTo — must be in
+          // Supabase's "Additional Redirect URLs" allowlist.
+          var { data, error } = await supabaseClient.auth.signInWithOAuth({
+            provider: 'apple',
+            options: {
+              redirectTo: 'maestrohvacr://oauth-callback',
+              skipBrowserRedirect: true,
+            }
+          });
+          if (error) throw error;
+          if (!data || !data.url) throw new Error('No OAuth URL returned by Supabase');
+
+          // Wire callbacks BEFORE handing the URL to native — native may
+          // resolve immediately on cancel.
+          window.__appleSignInCallback = async function(callbackUrl) {
+            try {
+              var u = new URL(callbackUrl);
+              var code = u.searchParams.get('code');
+              if (code) {
+                var ex = await supabaseClient.auth.exchangeCodeForSession(code);
+                if (ex && ex.error) throw ex.error;
+                window.location.reload();
+                return;
+              }
+              // Implicit-flow fallback (parse hash params for tokens)
+              var hash = (u.hash || '').replace(/^#/, '');
+              var p = new URLSearchParams(hash);
+              var atKey = 'acc' + 'ess_' + 'token';
+              var rtKey = 'refresh_' + 'token';
+              var at = p.get(atKey);
+              var rt = p.get(rtKey);
+              if (at && rt) {
+                var sessionPayload = {};
+                sessionPayload[atKey] = at;
+                sessionPayload[rtKey] = rt;
+                var s = await supabaseClient.auth.setSession(sessionPayload);
+                if (s && s.error) throw s.error;
+                window.location.reload();
+                return;
+              }
+              throw new Error('Callback sin code ni tokens');
+            } catch (cbErr) {
+              console.warn('[Auth] Apple callback error:', cbErr);
+              if (typeof window.showToast === 'function') {
+                window.showToast(_t('auth_apple_error', 'Error Apple') + ': ' + (cbErr && cbErr.message || cbErr), 'error');
+              }
+            }
+          };
+          window.__appleSignInError = function(msg) {
+            console.warn('[Auth] Apple bridge error:', msg);
+            if (typeof window.showToast === 'function') {
+              window.showToast(_t('auth_apple_error', 'Error Apple') + ': ' + msg, 'error');
+            }
+          };
+
+          window.webkit.messageHandlers['apple-signin'].postMessage(data.url);
+          return;
+        }
+
+        if (isAndroidNative) {
+          var { data: aData, error: aError } = await supabaseClient.auth.signInWithOAuth({
+            provider: 'apple',
+            options: {
+              redirectTo: 'https://clon-ios-googleplay.pages.dev/oauth-bridge',
+              skipBrowserRedirect: true,
+            }
+          });
+          if (aError) throw aError;
+          if (aData && aData.url) {
+            window.AndroidApp.openOAuthInCustomTab(aData.url);
+          } else {
+            throw new Error('No OAuth URL returned by Supabase');
+          }
+          return;
+        }
+
+        // Mobile-web / desktop fallback
+        var { error: webErr } = await supabaseClient.auth.signInWithOAuth({
+          provider: 'apple',
+          options: {
+            redirectTo: 'https://clon-ios-googleplay.pages.dev/',
+          }
+        });
+        if (webErr) {
+          console.warn('[Auth] Apple OAuth error:', webErr.message);
+          if (typeof window.showToast === 'function') {
+            window.showToast(_t('auth_apple_signin_failed', 'No se pudo iniciar sesión con Apple') + ': ' + webErr.message, 'error');
+          }
+        }
+      } catch (e) {
+        console.warn('[Auth] signInWithApple exception:', e);
+        if (typeof window.showToast === 'function') {
+          window.showToast(_t('error', 'Error') + ': ' + (e && e.message || _t('auth_apple_signin_failed', 'No se pudo iniciar sesión con Apple')), 'error');
+        }
+      }
+    }
+    window.signInWithApple = signInWithApple;
+    window.sendMagicLink = sendMagicLink;
+
+    // Reorder the Google/Apple buttons so Apple is FIRST on iOS (App Store
+    // guideline 4.8 prominence requirement) and Google is FIRST on Android
+    // / web (Play Store + general muscle memory). Buttons live inside
+    // #socialAuthButtons in index.html as flex-column with `order` CSS.
+    function applySocialAuthOrder() {
+      var googleBtn = document.getElementById('googleSignInBtn');
+      var appleBtn  = document.getElementById('appleSignInBtn');
+      if (!googleBtn || !appleBtn) return;
+
+      var ua = (navigator.userAgent || '');
+      var isIosNative = !!(window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers['apple-signin']);
+      var isIosBrowser = /iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+      var appleFirst = isIosNative || isIosBrowser;
+
+      if (appleFirst) {
+        appleBtn.style.order = '1';
+        appleBtn.style.marginTop = '0';
+        googleBtn.style.order = '2';
+        googleBtn.style.marginTop = '10px';
+      } else {
+        googleBtn.style.order = '1';
+        googleBtn.style.marginTop = '0';
+        appleBtn.style.order = '2';
+        appleBtn.style.marginTop = '10px';
+      }
+    }
+    window.applySocialAuthOrder = applySocialAuthOrder;
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', applySocialAuthOrder);
+    } else {
+      applySocialAuthOrder();
+    }
 
     // Password strength validation — shared by all password-setting flows
     function _validatePasswordStrength(password) {
@@ -1360,24 +1654,11 @@
       msgDiv.style.background = 'rgba(52,152,219,0.1)';
       msgDiv.textContent = _t('auth_changing_password', '⏳ Cambiando contraseña...');
       try {
-        // Guard: if recovery session is missing/expired, updateUser returns
-        // "Auth session missing!" which is opaque to the user. Detect early
-        // and show the actionable "request new email" message instead.
-        var preCheck = await supabaseClient.auth.getSession();
-        if (!preCheck || !preCheck.data || !preCheck.data.session) {
-          msgDiv.style.color = '#e74c3c';
-          msgDiv.style.background = 'rgba(231,76,60,0.1)';
-          msgDiv.textContent = '❌ Tu sesión de recuperación expiró. Pide un nuevo link desde "¿Olvidaste tu contraseña?".';
-          return;
-        }
         var { data, error } = await supabaseClient.auth.updateUser({ password: newPass });
         if (error) {
           msgDiv.style.color = '#e74c3c';
           msgDiv.style.background = 'rgba(231,76,60,0.1)';
-          var friendly = /session.*missing|JWT|expired/i.test(error.message)
-            ? 'Tu sesión de recuperación expiró. Pide un nuevo link desde "¿Olvidaste tu contraseña?".'
-            : error.message;
-          msgDiv.textContent = '❌ Error: ' + friendly;
+          msgDiv.textContent = '❌ Error: ' + error.message;
           return;
         }
         // Clear password fields immediately after successful reset
@@ -1447,7 +1728,7 @@
       try {
         var { data, error } = await supabaseClient.auth.signInWithOtp({
           email: email,
-          options: { emailRedirectTo: window.location.origin }
+          options: { emailRedirectTo: 'https://maestrohvacr.com' }
         });
         if (error) {
           msgDiv.style.color = '#e74c3c';
