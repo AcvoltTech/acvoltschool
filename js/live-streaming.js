@@ -15,6 +15,12 @@ var _lsEndedGraceTimer = null; // 90s grace period before showing "stream ended"
 var _lsCurrentPlaybackUrl = null; // track current playback URL for device-switch detection
 var _lsUrlPollInterval = null; // playback URL polling interval
 
+/* ── VOD Quiz state ─────────────────────────────────────────── */
+var _lsVodQuizPassed = {};        // recordingId → true if student passed
+var _lsCurrentVodQuiz = null;     // active quiz state
+var _lsVodRecordingsCache = [];   // cache recordings with quiz_questions
+var _lsLastVodQuizRecId = null;   // for retry
+
 // Helper: lock/unlock viewport zoom for streaming (prevents pinch-zoom instability on iPhone/Android)
 function _lsLockViewportZoom() {
   var vp = document.querySelector('meta[name="viewport"]');
@@ -653,6 +659,10 @@ async function loadRecordings() {
       return !group || myGroups.indexOf(group) !== -1;
     });
 
+    // Cache recordings and preload quiz progress
+    _lsVodRecordingsCache = data;
+    await _lsLoadVodQuizPassed();
+
     if (!data || data.length === 0) {
       list.innerHTML =
         '<div style="text-align:center;padding:40px;">' +
@@ -668,10 +678,19 @@ async function loadRecordings() {
       var stream = r.live_streams || {};
       var dur = r.duration_seconds ? Math.round(r.duration_seconds / 60) + ' min' : '';
       var date = new Date(r.created_at).toLocaleDateString('es-US', { month: 'short', day: 'numeric', year: 'numeric' });
+      var hasQuiz = r.quiz_questions && r.quiz_questions.length > 0;
+      var quizPassed = hasQuiz && _lsVodQuizPassed[r.id];
+      var quizBadge = '';
+      if (hasQuiz) {
+        quizBadge = quizPassed
+          ? '<span style="background:rgba(5,150,105,0.15);color:#059669;padding:3px 10px;border-radius:10px;font-size:11px;font-weight:800;">✅ Quiz aprobado</span>'
+          : '<span style="background:rgba(59,130,246,0.15);color:#3b82f6;padding:3px 10px;border-radius:10px;font-size:11px;font-weight:800;">📝 Quiz</span>';
+      }
 
-      html += '<div onclick="watchRecording(\'' + _lsJsEsc(r.playback_url || '') + '\',\'' + _lsJsEsc(stream.title || 'Grabación') + '\',\'' + _lsJsEsc(r.stream_id || '') + '\')" style="background:#FFFFFF;border:1px solid rgba(0,0,0,0.08);border-left:4px solid #7c3aed;border-radius:16px;padding:14px;margin-bottom:10px;cursor:pointer;transition:border-color .2s,transform .15s;box-shadow:0 2px 8px rgba(0,0,0,0.06);">' +
-        '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">' +
+      html += '<div onclick="watchRecording(\'' + _lsJsEsc(r.playback_url || '') + '\',\'' + _lsJsEsc(stream.title || 'Grabación') + '\',\'' + _lsJsEsc(r.stream_id || '') + '\',\'' + _lsJsEsc(r.id || '') + '\')" style="background:#FFFFFF;border:1px solid rgba(0,0,0,0.08);border-left:4px solid #7c3aed;border-radius:16px;padding:14px;margin-bottom:10px;cursor:pointer;transition:border-color .2s,transform .15s;box-shadow:0 2px 8px rgba(0,0,0,0.06);">' +
+        '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap;">' +
           '<span style="background:rgba(124,58,237,0.15);color:#7c3aed;padding:3px 10px;border-radius:10px;font-size:11px;font-weight:800;letter-spacing:0.5px;">VOD</span>' +
+          quizBadge +
           '<span style="color:#111111;font-weight:700;font-size:15px;">' + _lsEsc(stream.title || 'Grabación') + '</span>' +
         '</div>' +
         '<div style="color:#111111;font-size:13px;display:flex;gap:12px;">' +
@@ -1567,7 +1586,7 @@ function _lsShowStreamEndedOverlay() {
 }
 
 /* ── Watch VOD recording ────────────────────────────────────── */
-function watchRecording(playbackUrl, title, streamId) {
+function watchRecording(playbackUrl, title, streamId, recordingId) {
   if (!playbackUrl) { window.showToast(_t('ls_playback_unavailable', 'URL de playback no disponible'), 'warning'); return; }
 
   _lsCurrentStreamId = null;
@@ -1661,6 +1680,28 @@ function watchRecording(playbackUrl, title, streamId) {
       }
     } catch(e) { console.warn('[LiveStream] VOD attendance error:', e); }
   }
+
+  // Remove previous quiz CTA if exists
+  var oldCta = document.getElementById('lsVodQuizCta');
+  if (oldCta) oldCta.remove();
+
+  // Inject quiz CTA below player if recording has quiz
+  if (recordingId) {
+    var rec = _lsVodRecordingsCache.find(function(r) { return r.id === recordingId; });
+    if (rec && rec.quiz_questions && rec.quiz_questions.length > 0) {
+      var qPassed = _lsVodQuizPassed[recordingId];
+      var ctaDiv = document.createElement('div');
+      ctaDiv.id = 'lsVodQuizCta';
+      ctaDiv.style.cssText = 'text-align:center;padding:14px 12px;';
+      ctaDiv.innerHTML = qPassed
+        ? '<div style="display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap;">' +
+            '<span style="color:#059669;font-weight:700;font-size:14px;">✅ Quiz aprobado</span>' +
+            '<button onclick="lsStartVodQuiz(\'' + _lsJsEsc(recordingId) + '\')" style="background:transparent;border:1px solid #3b82f6;color:#3b82f6;padding:6px 14px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;">Repetir Quiz</button>' +
+          '</div>'
+        : '<button onclick="lsStartVodQuiz(\'' + _lsJsEsc(recordingId) + '\')" style="background:linear-gradient(135deg,#3b82f6,#2563eb);color:#fff;border:none;padding:12px 24px;border-radius:10px;font-size:15px;font-weight:700;cursor:pointer;box-shadow:0 2px 8px rgba(37,99,235,0.3);">📝 Tomar Quiz</button>';
+      if (playerSection) playerSection.insertAdjacentElement('afterend', ctaDiv);
+    }
+  }
 }
 
 /* ── Close player ───────────────────────────────────────────── */
@@ -1713,6 +1754,12 @@ function lsClosePlayer() {
   if (kickedOverlay) kickedOverlay.remove();
   var endedOverlay = document.getElementById('lsStreamEndedOverlay');
   if (endedOverlay) endedOverlay.remove();
+  // Clean up VOD quiz elements
+  var vodQuizCta = document.getElementById('lsVodQuizCta');
+  if (vodQuizCta) vodQuizCta.remove();
+  var vodQuizOverlay = document.getElementById('lsVodQuizOverlay');
+  if (vodQuizOverlay) vodQuizOverlay.remove();
+  _lsCurrentVodQuiz = null;
 
   var playerSection = document.getElementById('lsPlayerSection');
   var iframe = document.getElementById('lsPlayerIframe');
@@ -4149,6 +4196,314 @@ function _lsUpdateStudentCountdownDisplay() {
   var m = Math.floor(_lsCountdownLocalSeconds / 60);
   var s = _lsCountdownLocalSeconds % 60;
   timeEl.textContent = String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
+}
+
+/* ===================================================================
+   VOD Quiz Engine — Student quiz for VOD recordings
+   Follows video-tutoriales.js pattern (start, render, select, confirm, finish, retry)
+   =================================================================== */
+
+/* ── Preload passed quizzes for current student ────────────── */
+async function _lsLoadVodQuizPassed() {
+  _lsVodQuizPassed = {};
+  try {
+    var stuEmail = '';
+    try { stuEmail = (JSON.parse(localStorage.getItem('tecnico_user') || '{}').email || '').toLowerCase().trim(); } catch(e) {}
+    if (!stuEmail || !supabaseClient) return;
+    var res = await supabaseClient.from('stream_recording_quiz_results')
+      .select('recording_id').eq('student_email', stuEmail).eq('passed', true);
+    if (res.data) {
+      res.data.forEach(function(r) { _lsVodQuizPassed[r.recording_id] = true; });
+    }
+  } catch(e) { /* non-blocking */ }
+}
+
+/* ── Start VOD quiz ────────────────────────────────────────── */
+function lsStartVodQuiz(recordingId) {
+  var rec = _lsVodRecordingsCache.find(function(r) { return r.id === recordingId; });
+  if (!rec || !rec.quiz_questions || rec.quiz_questions.length === 0) return;
+
+  _lsLastVodQuizRecId = recordingId;
+  _lsCurrentVodQuiz = {
+    recordingId: recordingId,
+    recording: rec,
+    title: (rec.live_streams ? rec.live_streams.title : '') || 'Grabación',
+    questions: rec.quiz_questions.slice(),
+    currentIndex: 0,
+    answers: [],
+    correctCount: 0,
+    selectedOption: -1,
+    confirmed: false,
+    startTime: Date.now()
+  };
+
+  _lsRenderVodQuizQuestion();
+}
+
+/* ── Render current quiz question ──────────────────────────── */
+function _lsRenderVodQuizQuestion() {
+  var q = _lsCurrentVodQuiz;
+  if (!q) return;
+
+  // Create or get overlay
+  var overlay = document.getElementById('lsVodQuizOverlay');
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.id = 'lsVodQuizOverlay';
+    overlay.style.cssText = 'position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;padding:16px;overflow-y:auto;';
+    document.body.appendChild(overlay);
+  }
+  overlay.style.display = 'flex';
+
+  var question = q.questions[q.currentIndex];
+  var total = q.questions.length;
+  var current = q.currentIndex + 1;
+  var pct = Math.round((current / total) * 100);
+
+  // Progress dots
+  var dots = '';
+  for (var i = 0; i < total; i++) {
+    var dotColor = '#E7E5DE';
+    if (i < q.answers.length) {
+      dotColor = q.answers[i].correct ? '#059669' : '#DC2626';
+    } else if (i === q.currentIndex) {
+      dotColor = '#3b82f6';
+    }
+    dots += '<div style="width:10px;height:10px;border-radius:50%;background:' + dotColor + '"></div>';
+  }
+
+  // Options
+  var optionsHtml = '';
+  question.options.forEach(function(opt, idx) {
+    var letter = ['A', 'B', 'C', 'D'][idx];
+    optionsHtml += '<button class="lsq-option" data-idx="' + idx + '" onclick="lsSelectVodQuizOption(' + idx + ')" ' +
+      'style="display:flex;align-items:center;gap:12px;width:100%;padding:14px 16px;background:#FFFFFF;border:2px solid #E7E5DE;border-radius:10px;color:#0F0F0F;font-size:14px;cursor:pointer;text-align:left;margin-bottom:8px;transition:all .2s">' +
+      '<span style="min-width:28px;height:28px;border-radius:50%;background:#FAFAF7;border:2px solid #E7E5DE;display:flex;align-items:center;justify-content:center;font-weight:bold;font-size:13px;color:#6B6B66">' + letter + '</span>' +
+      '<span>' + _lsEsc(opt) + '</span></button>';
+  });
+
+  overlay.innerHTML =
+    '<div style="background:#FFFFFF;border-radius:16px;max-width:600px;width:100%;max-height:90vh;overflow-y:auto;padding:28px;position:relative;border:1px solid #E7E5DE;box-shadow:0 1px 2px rgba(17,17,17,0.04),0 8px 24px -8px rgba(17,17,17,0.08)">' +
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">' +
+        '<h3 style="color:#0F0F0F;font-size:16px;margin:0">📝 Quiz: ' + _lsEsc(q.title) + '</h3>' +
+        '<span style="color:#6B6B66;font-size:13px;font-weight:600">' + current + '/' + total + '</span>' +
+      '</div>' +
+      '<div style="background:#E7E5DE;height:6px;border-radius:3px;margin-bottom:12px;overflow:hidden"><div style="height:100%;background:linear-gradient(90deg,#3b82f6,#2563eb);border-radius:3px;width:' + pct + '%;transition:width .3s"></div></div>' +
+      '<div style="display:flex;gap:6px;justify-content:center;margin-bottom:20px;flex-wrap:wrap">' + dots + '</div>' +
+      '<div style="background:#FAFAF7;border:1px solid #E7E5DE;border-radius:12px;padding:20px;margin-bottom:20px">' +
+        '<p style="color:#0F0F0F;font-size:15px;margin:0;line-height:1.5;font-weight:500">' + _lsEsc(question.question) + '</p>' +
+      '</div>' +
+      '<div id="lsqOptions">' + optionsHtml + '</div>' +
+      '<div id="lsqFeedback" style="display:none;margin-top:12px"></div>' +
+      '<div style="display:flex;gap:10px;margin-top:16px">' +
+        '<button id="lsqConfirmBtn" onclick="lsConfirmVodQuizAnswer()" disabled style="flex:1;padding:12px;border-radius:10px;border:none;font-size:14px;font-weight:bold;cursor:pointer;background:#E7E5DE;color:#6B6B66">Confirmar Respuesta</button>' +
+      '</div>' +
+    '</div>';
+
+  // Escape handler
+  if (overlay._escHandler) document.removeEventListener('keydown', overlay._escHandler);
+  overlay._escHandler = function(e) {
+    if (e.key !== 'Escape') return;
+    var _ask = (window.MaestroDialog && window.MaestroDialog.confirm)
+      ? window.MaestroDialog.confirm({ title: 'Salir del quiz', message: '¿Salir del quiz? Tu progreso se perderá.', okText: 'Salir', cancelText: 'Continuar', destructive: true, kind: 'warning' })
+      : Promise.resolve(confirm('¿Salir del quiz? Tu progreso se perderá.'));
+    _ask.then(function(ok) {
+      if (!ok) return;
+      _lsCurrentVodQuiz = null;
+      overlay.style.display = 'none';
+      overlay.innerHTML = '';
+      document.removeEventListener('keydown', overlay._escHandler);
+    });
+  };
+  document.addEventListener('keydown', overlay._escHandler);
+}
+
+/* ── Select quiz option ────────────────────────────────────── */
+function lsSelectVodQuizOption(idx) {
+  var q = _lsCurrentVodQuiz;
+  if (!q || q.confirmed) return;
+
+  q.selectedOption = idx;
+
+  var options = document.querySelectorAll('.lsq-option');
+  options.forEach(function(opt, i) {
+    if (i === idx) {
+      opt.style.borderColor = '#3b82f6';
+      opt.style.background = '#EFF6FF';
+      opt.querySelector('span').style.borderColor = '#3b82f6';
+      opt.querySelector('span').style.color = '#3b82f6';
+    } else {
+      opt.style.borderColor = '#E7E5DE';
+      opt.style.background = '#FFFFFF';
+      opt.querySelector('span').style.borderColor = '#E7E5DE';
+      opt.querySelector('span').style.color = '#6B6B66';
+    }
+  });
+
+  var btn = document.getElementById('lsqConfirmBtn');
+  if (btn) {
+    btn.disabled = false;
+    btn.style.background = 'linear-gradient(135deg,#3b82f6,#2563eb)';
+    btn.style.color = '#fff';
+  }
+}
+
+/* ── Confirm answer ────────────────────────────────────────── */
+function lsConfirmVodQuizAnswer() {
+  var q = _lsCurrentVodQuiz;
+  if (!q || q.confirmed || q.selectedOption < 0) return;
+  q.confirmed = true;
+
+  var question = q.questions[q.currentIndex];
+  var isCorrect = q.selectedOption === question.correct;
+  if (isCorrect) q.correctCount++;
+
+  q.answers.push({
+    questionIndex: q.currentIndex,
+    selected: q.selectedOption,
+    correct: isCorrect
+  });
+
+  // Show feedback on options
+  var options = document.querySelectorAll('.lsq-option');
+  options.forEach(function(opt, i) {
+    opt.style.cursor = 'default';
+    opt.onclick = null;
+    if (i === question.correct) {
+      opt.style.borderColor = '#059669';
+      opt.style.background = '#D1FAE5';
+    } else if (i === q.selectedOption && !isCorrect) {
+      opt.style.borderColor = '#DC2626';
+      opt.style.background = '#FEE2E2';
+    }
+  });
+
+  // Show feedback message
+  var fb = document.getElementById('lsqFeedback');
+  if (fb) {
+    fb.style.display = 'block';
+    fb.innerHTML =
+      '<div style="background:' + (isCorrect ? '#D1FAE5;border:1px solid #059669' : '#FEE2E2;border:1px solid #DC2626') + ';border-radius:10px;padding:12px 16px">' +
+        '<div style="font-size:14px;font-weight:bold;color:' + (isCorrect ? '#065F46' : '#991B1B') + ';margin-bottom:4px">' +
+          (isCorrect ? '✅ ¡Correcto!' : '❌ Incorrecto') +
+        '</div>' +
+        (question.explanation ? '<p style="color:#3D3D3A;font-size:13px;margin:0;line-height:1.4">' + _lsEsc(question.explanation) + '</p>' : '') +
+      '</div>';
+  }
+
+  // Change confirm button to "Next"
+  var btn = document.getElementById('lsqConfirmBtn');
+  if (btn) {
+    var isLast = q.currentIndex >= q.questions.length - 1;
+    btn.textContent = isLast ? 'Ver Resultado' : 'Siguiente →';
+    btn.disabled = false;
+    btn.style.background = 'linear-gradient(135deg,#3b82f6,#2563eb)';
+    btn.style.color = '#fff';
+    btn.onclick = function() {
+      if (isLast) {
+        lsFinishVodQuiz();
+      } else {
+        q.currentIndex++;
+        q.selectedOption = -1;
+        q.confirmed = false;
+        _lsRenderVodQuizQuestion();
+      }
+    };
+  }
+}
+
+/* ── Finish quiz — show results, save to Supabase ──────────── */
+async function lsFinishVodQuiz() {
+  var q = _lsCurrentVodQuiz;
+  if (!q) return;
+
+  var total = q.questions.length;
+  var correct = q.correctCount;
+  var percentage = Math.round((correct / total) * 100);
+  var passingScore = 70;
+  var passed = percentage >= passingScore;
+  var timeTaken = Math.round((Date.now() - q.startTime) / 1000);
+
+  // Get student info
+  var stuEmail = '', stuName = '';
+  try {
+    var t = JSON.parse(localStorage.getItem('tecnico_user') || '{}');
+    stuEmail = (t.email || '').toLowerCase().trim();
+    stuName = t.nombre || '';
+  } catch(e) {}
+
+  // Save attempt to database
+  try {
+    await supabaseClient.from('stream_recording_quiz_results').insert({
+      recording_id: q.recordingId,
+      student_email: stuEmail,
+      student_name: stuName,
+      total_questions: total,
+      correct_answers: correct,
+      percentage: percentage,
+      passed: passed,
+      answers: q.answers
+    });
+  } catch(e) { console.log('[LiveStreaming] Error saving quiz result:', e); }
+
+  // Update local state
+  if (passed) {
+    _lsVodQuizPassed[q.recordingId] = true;
+  }
+
+  // Render result screen
+  var overlay = document.getElementById('lsVodQuizOverlay');
+  if (!overlay) return;
+
+  var resultColor = passed ? '#059669' : '#DC2626';
+  var resultBg = passed ? '#D1FAE5' : '#FEE2E2';
+  var resultIcon = passed ? '🎉' : '😔';
+  var resultTitle = passed ? '¡Felicidades, aprobaste!' : 'No aprobaste esta vez';
+
+  // Score breakdown dots
+  var scoreDots = '';
+  q.answers.forEach(function(a, i) {
+    scoreDots += '<div style="width:12px;height:12px;border-radius:50%;background:' + (a.correct ? '#059669' : '#DC2626') + '" title="Pregunta ' + (i + 1) + '"></div>';
+  });
+
+  overlay.innerHTML =
+    '<div style="background:#FFFFFF;border-radius:16px;max-width:480px;width:100%;padding:32px;position:relative;border:1px solid #E7E5DE;box-shadow:0 1px 2px rgba(17,17,17,0.04),0 8px 24px -8px rgba(17,17,17,0.08);text-align:center">' +
+      '<div style="font-size:48px;margin-bottom:12px">' + resultIcon + '</div>' +
+      '<h3 style="color:#0F0F0F;font-size:20px;margin:0 0 8px">' + resultTitle + '</h3>' +
+      '<p style="color:#6B6B66;font-size:14px;font-weight:500;margin:0 0 20px">' + _lsEsc(q.title) + '</p>' +
+      '<div style="background:' + resultBg + ';border:2px solid ' + resultColor + ';border-radius:16px;padding:20px;margin-bottom:20px">' +
+        '<div style="font-size:42px;font-weight:bold;color:' + resultColor + '">' + percentage + '%</div>' +
+        '<div style="color:#3D3D3A;font-size:13px;margin-top:4px">' + correct + ' de ' + total + ' correctas · Mínimo: ' + passingScore + '%</div>' +
+      '</div>' +
+      '<div style="display:flex;gap:6px;justify-content:center;margin-bottom:20px;flex-wrap:wrap">' + scoreDots + '</div>' +
+      '<div style="color:#6B6B66;font-size:12px;font-weight:500;margin-bottom:20px">Tiempo: ' + Math.floor(timeTaken / 60) + ':' + (timeTaken % 60 < 10 ? '0' : '') + (timeTaken % 60) + '</div>' +
+      (passed
+        ? '<div style="background:#D1FAE5;border:1px solid #059669;border-radius:10px;padding:12px;color:#065F46;font-size:14px;margin-bottom:8px">🏆 ¡Excelente trabajo!</div>'
+        : '<button onclick="lsRetryVodQuiz()" style="width:100%;padding:14px;border-radius:10px;border:none;background:linear-gradient(135deg,#f59e0b,#d97706);color:#fff;font-size:15px;font-weight:bold;cursor:pointer;margin-bottom:8px">🔄 Reintentar Quiz</button>'
+      ) +
+      '<button onclick="_lsCloseVodQuizOverlay()" style="width:100%;padding:12px;border-radius:10px;border:1px solid #E7E5DE;background:transparent;color:#6B6B66;font-size:14px;font-weight:500;cursor:pointer">← Volver</button>' +
+    '</div>';
+
+  _lsCurrentVodQuiz = null;
+
+  // Refresh the VOD list to update badges
+  if (passed) {
+    try { loadRecordings(); } catch(e) {}
+  }
+}
+
+/* ── Close quiz overlay ────────────────────────────────────── */
+function _lsCloseVodQuizOverlay() {
+  var overlay = document.getElementById('lsVodQuizOverlay');
+  if (overlay) { overlay.style.display = 'none'; overlay.innerHTML = ''; }
+  _lsCurrentVodQuiz = null;
+}
+
+/* ── Retry quiz ────────────────────────────────────────────── */
+function lsRetryVodQuiz() {
+  if (_lsLastVodQuizRecId) {
+    lsStartVodQuiz(_lsLastVodQuizRecId);
+  }
 }
 
 /* ── Auto-start: check for live streams on page load ────────── */
