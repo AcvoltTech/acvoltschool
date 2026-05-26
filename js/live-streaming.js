@@ -210,7 +210,8 @@ function buildLiveStreamingHTML() {
 
       // Live-only banner (no recordings) — pulses to grab attention
       '<style>@keyframes lsBannerPulse{0%,100%{box-shadow:0 2px 8px rgba(0,0,0,0.06),0 0 0 0 rgba(255,59,48,0.45);border-color:rgba(255,59,48,0.3)}50%{box-shadow:0 2px 14px rgba(255,59,48,0.35),0 0 0 8px rgba(255,59,48,0)}}</style>' +
-      '<div id="lsLiveBanner" style="background:#FFFFFF;border:1px solid rgba(255,59,48,0.3);border-left:4px solid #FF3B30;border-radius:12px;padding:14px;margin-bottom:12px;text-align:center;box-shadow:0 2px 8px rgba(0,0,0,0.06);animation:lsBannerPulse 1.6s ease-in-out infinite;">' +
+      '<div id="lsLiveBanner" style="position:relative;background:#FFFFFF;border:1px solid rgba(255,59,48,0.3);border-left:4px solid #FF3B30;border-radius:12px;padding:14px;margin-bottom:12px;text-align:center;box-shadow:0 2px 8px rgba(0,0,0,0.06);animation:lsBannerPulse 1.6s ease-in-out infinite;">' +
+        '<button onclick="document.getElementById(\'lsLiveBanner\').style.display=\'none\'" style="position:absolute;top:8px;right:10px;background:none;border:none;font-size:18px;color:#999;cursor:pointer;padding:0 4px;line-height:1;" aria-label="Cerrar">&times;</button>' +
         '<div style="font-size:24px;margin-bottom:6px;">🔴</div>' +
         '<p style="color:#FF3B30;font-size:15px;font-weight:800;margin-bottom:4px;">Las clases son EN VIVO y NO se graban</p>' +
         '<p style="color:#111111;font-size:14px;">Si no atiendes, no hay segundas oportunidades. Conéctate a la hora programada.</p>' +
@@ -407,9 +408,11 @@ function lsToggleChat() {
   var chatSection = document.getElementById('lsChatSection');
   var toggleBtn = document.getElementById('lsChatToggleBtn');
   var playerContainer = document.getElementById('lsPlayerContainer');
+  var tbChatBtn = document.getElementById('lsTbChatBtn');
   if (_lsChatHidden) {
     if (chatSection) chatSection.style.setProperty('display', 'none', 'important');
     if (toggleBtn) toggleBtn.style.setProperty('display', 'flex', 'important');
+    if (tbChatBtn) tbChatBtn.textContent = '💬 Abrir Chat';
     // Expand video: use viewport height in both portrait and landscape
     if (playerContainer) {
       playerContainer.style.setProperty('padding-bottom', '0', 'important');
@@ -419,6 +422,7 @@ function lsToggleChat() {
   } else {
     if (chatSection) { chatSection.style.setProperty('display', 'flex', 'important'); chatSection.style.flexDirection = 'column'; }
     if (toggleBtn) toggleBtn.style.setProperty('display', 'none', 'important');
+    if (tbChatBtn) tbChatBtn.textContent = '💬 Chat';
     // Restore 16:9
     if (playerContainer) {
       playerContainer.style.paddingBottom = '56.25%';
@@ -3853,7 +3857,6 @@ function _lsJsEsc(str) {
       '.ls-mod-action:hover{opacity:1;}' +
       /* Hide the legacy floating buttons in EVERY orientation — the tools bar at the bottom of the video now owns reload + chat toggle. */
       '#lsFloatingReload{display:none!important;}' +
-      '#lsChatToggleBtn{display:none!important;}' +
       /* ── Landscape (ALL heights: iPhone, iPad, iPad Pro) ── */
       '@media(orientation:landscape){' +
         '#lsContentArea{padding:0!important;display:flex!important;flex-direction:row!important;position:fixed!important;inset:0!important;overflow:hidden!important;touch-action:manipulation!important;background:#000!important;}' +
