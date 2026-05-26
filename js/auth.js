@@ -1373,7 +1373,7 @@
         var { error } = await supabaseClient.auth.resetPasswordForEmail(email, {
           // Bridge URL — Android intent filter routes back to native app,
           // iOS/web fall through to root for Supabase JS detectSessionInUrl.
-          redirectTo: 'https://clon-ios-googleplay.pages.dev/oauth-bridge'
+          redirectTo: 'https://acvoltschool.com'
         });
         msgDiv.style.display = 'block';
         if (error && (error.message.includes('rate') || error.message.includes('limit'))) {
@@ -1424,7 +1424,7 @@
           var { data, error } = await supabaseClient.auth.signInWithOAuth({
             provider: 'google',
             options: {
-              redirectTo: 'https://clon-ios-googleplay.pages.dev/oauth-bridge',
+              redirectTo: 'https://acvoltschool.com',
               skipBrowserRedirect: true,
             }
           });
@@ -1440,7 +1440,7 @@
         var { error } = await supabaseClient.auth.signInWithOAuth({
           provider: 'google',
           options: {
-            redirectTo: 'https://clon-ios-googleplay.pages.dev/',
+            redirectTo: 'https://acvoltschool.com',
           }
         });
         if (error) {
@@ -1547,7 +1547,7 @@
           var { data: aData, error: aError } = await supabaseClient.auth.signInWithOAuth({
             provider: 'apple',
             options: {
-              redirectTo: 'https://clon-ios-googleplay.pages.dev/oauth-bridge',
+              redirectTo: 'https://acvoltschool.com',
               skipBrowserRedirect: true,
             }
           });
@@ -1564,7 +1564,7 @@
         var { error: webErr } = await supabaseClient.auth.signInWithOAuth({
           provider: 'apple',
           options: {
-            redirectTo: 'https://clon-ios-googleplay.pages.dev/',
+            redirectTo: 'https://acvoltschool.com',
           }
         });
         if (webErr) {
