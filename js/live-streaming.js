@@ -211,7 +211,7 @@ function buildLiveStreamingHTML() {
       // Live-only banner (no recordings) — pulses to grab attention
       '<style>@keyframes lsBannerPulse{0%,100%{box-shadow:0 2px 8px rgba(0,0,0,0.06),0 0 0 0 rgba(255,59,48,0.45);border-color:rgba(255,59,48,0.3)}50%{box-shadow:0 2px 14px rgba(255,59,48,0.35),0 0 0 8px rgba(255,59,48,0)}}</style>' +
       '<div id="lsLiveBanner" style="position:relative;background:#FFFFFF;border:1px solid rgba(255,59,48,0.3);border-left:4px solid #FF3B30;border-radius:12px;padding:14px;margin-bottom:12px;text-align:center;box-shadow:0 2px 8px rgba(0,0,0,0.06);animation:lsBannerPulse 1.6s ease-in-out infinite;">' +
-        '<button onclick="document.getElementById(\'lsLiveBanner\').style.display=\'none\'" style="position:absolute;top:8px;right:10px;background:none;border:none;font-size:18px;color:#999;cursor:pointer;padding:0 4px;line-height:1;" aria-label="Cerrar">&times;</button>' +
+        '<button onclick="document.getElementById(\'lsLiveBanner\').style.display=\'none\'" style="position:absolute;top:6px;right:8px;background:rgba(0,0,0,0.08);border:none;font-size:22px;color:#555;cursor:pointer;padding:2px 8px;line-height:1;border-radius:50%;" aria-label="Cerrar">&times;</button>' +
         '<div style="font-size:24px;margin-bottom:6px;">🔴</div>' +
         '<p style="color:#FF3B30;font-size:15px;font-weight:800;margin-bottom:4px;">Las clases son EN VIVO y NO se graban</p>' +
         '<p style="color:#111111;font-size:14px;">Si no atiendes, no hay segundas oportunidades. Conéctate a la hora programada.</p>' +
