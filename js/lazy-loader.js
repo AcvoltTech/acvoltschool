@@ -3,7 +3,7 @@
 window.MaestroLoader = {
   _loaded: {},
   _loading: {},
-  _v: 'v389',
+  _v: 'v390',
 
   _bust: function(url) {
     var sep = url.indexOf('?') === -1 ? '?' : '&';
@@ -35,8 +35,11 @@ window.MaestroLoader = {
         // Retry: fetch with no-cache to bypass SW and browser cache, then inject as Blob
         fetch(self._bust(src), { cache: 'no-store' }).then(function(r) {
           if (!r.ok) throw new Error('HTTP ' + r.status);
+          var ct = r.headers.get('content-type') || '';
+          if (ct.indexOf('text/html') !== -1) throw new Error('Got HTML instead of JS for ' + src);
           return r.text();
         }).then(function(code) {
+          if (code.length > 0 && code.trimStart().charAt(0) === '<') throw new Error('Response is HTML for ' + src);
           var blob = new Blob([code], { type: 'application/javascript' });
           var s2 = document.createElement('script');
           s2.src = URL.createObjectURL(blob);

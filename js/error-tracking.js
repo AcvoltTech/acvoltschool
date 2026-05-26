@@ -114,7 +114,9 @@
     'Lock was stolen',
     'Failed to update a ServiceWorker',
     'Failed to execute \'subscribe\' on \'PushManager\'',
-    'The operation was aborted'
+    'The operation was aborted',
+    'Previous session ended without clean close',
+    'Main thread blocked for'
   ];
 
   function _isIgnored(msg) {
