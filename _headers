@@ -15,6 +15,15 @@
 /js/*
   Cache-Control: public, max-age=0, must-revalidate
 
+/js/crm/*
+  Cache-Control: public, max-age=0, must-revalidate
+
+/js/admin/*
+  Cache-Control: public, max-age=0, must-revalidate
+
+/js/vendor/*
+  Cache-Control: public, max-age=86400
+
 /css/*
   Cache-Control: public, max-age=0, must-revalidate
 
