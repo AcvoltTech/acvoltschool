@@ -825,7 +825,17 @@ function showCrmSection(sectionId, clickedItem) {
       if (typeof DeviceViewer !== 'undefined') { try { DeviceViewer.render(); } catch(e) { console.log('DeviceViewer render error:', e); } }
       else if (window.MaestroLoader) { MaestroLoader.load(['js/admin/device-viewer.js']).then(function() { if (typeof DeviceViewer !== 'undefined') DeviceViewer.render(); }); }
     }
-    if (sectionId === 'streaming') { renderAdminLiveStreamPanel(); }
+    if (sectionId === 'streaming') {
+      if (typeof renderAdminLiveStreamPanel === 'function') {
+        try { renderAdminLiveStreamPanel(); } catch(e) { console.error('[Streaming] render error:', e); }
+      } else if (window.MaestroLoader) {
+        MaestroLoader.load(['js/admin/live-stream-admin.js']).then(function() {
+          if (typeof renderAdminLiveStreamPanel === 'function') {
+            try { renderAdminLiveStreamPanel(); } catch(e) { console.error('[Streaming] render error after load:', e); }
+          } else { console.error('[Streaming] renderAdminLiveStreamPanel still undefined after load'); }
+        });
+      } else { console.error('[Streaming] No MaestroLoader available'); }
+    }
     if (sectionId === 'tutorialVideos') { tvLoadVideos(); }
     if (sectionId === 'soporteAdmin') { try { initSoporteAdmin(); } catch(e) { console.log('Soporte Admin not loaded:', e); } }
     if (sectionId === 'desafioAdmin') { try { loadDesafioAdmin(); } catch(e) { console.log('Desafio not loaded:', e); } }
