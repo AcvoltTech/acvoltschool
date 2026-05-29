@@ -1109,16 +1109,19 @@ function initCrmRedesign() {
     var modeToggle = document.querySelector('.crm-mode-toggle');
     if (modeToggle) modeToggle.style.display = 'none';
     // Replace quick-access with editor-specific buttons
+    // Mario 2026-05-29: added 📡 Streaming so Manuel (editor) can run lives.
     var quickAccess = document.querySelector('.crm-quick-access');
     if (quickAccess) {
       quickAccess.innerHTML =
         '<button class="crm-quick-btn teal" onclick="showCrmSection(\'tutorialVideos\',document.querySelector(\'[data-crm-section=tutorialVideos]\'))">🎓 HVAC Certification</button>' +
+        '<button class="crm-quick-btn red" onclick="showCrmSection(\'streaming\',document.querySelector(\'[data-crm-section=streaming]\'))">📡 Streaming</button>' +
         '<button class="crm-quick-btn blue" onclick="showCrmSection(\'bandeja\',document.querySelector(\'[data-crm-section=bandeja]\'))">📥 Bandeja</button>' +
         '<button class="crm-quick-btn teal" onclick="showCrmSection(\'clases\',document.querySelector(\'[data-crm-section=clases]\'))">📅 Clases</button>' +
         '<button class="crm-quick-btn purple" onclick="showCrmSection(\'zoomResumenes\',document.querySelector(\'[data-crm-section=zoomResumenes]\'))">📝 Resúmenes Zoom</button>';
     }
     // Hide admin section panels on dashboard that editor shouldn't see
-    var editorAllowed = ['adminBandejaSection'];
+    // Mario 2026-05-29: added adminStreamingSection so editor can use streaming.
+    var editorAllowed = ['adminBandejaSection', 'adminStreamingSection'];
     document.querySelectorAll('.admin-section.admin-grid-full').forEach(function(sec) {
       if (editorAllowed.indexOf(sec.id) === -1) sec.style.display = 'none';
     });
@@ -1226,9 +1229,10 @@ function setCrmMode(mode, skipNav) {
   }
 
   // Editor role: show only allowed admin sections
+  // Mario 2026-05-29: added 'streaming' so Manuel (editor) can run live streams.
   var editorRole = sessionStorage.getItem('admin_role') || currentAdminRole || '';
   if (editorRole === 'editor' && nav) {
-    var allowedSections = ['dashboard', 'bandeja', 'tutorialVideos', 'clases', 'zoomResumenes'];
+    var allowedSections = ['dashboard', 'bandeja', 'tutorialVideos', 'clases', 'zoomResumenes', 'streaming'];
     var sidebarItems = nav.querySelectorAll('[data-crm-section]');
     sidebarItems.forEach(function(el) {
       var sec = el.getAttribute('data-crm-section');
