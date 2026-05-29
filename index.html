@@ -1637,11 +1637,19 @@ function closeMarioV2(){document.getElementById('marioV2Overlay').style.display=
         <!-- Main admin content (hidden in mobile portrait) -->
         <div class="admin-main-content">
 
-        <!-- Quick Stats -->
+        <!-- Quick Stats — 6 tiles since 2026-05-29 (added Suscriptores Pagando + Revenue MTD) -->
         <div class="admin-stats-grid" id="adminStatsGrid">
           <div class="admin-stat-card" onclick="showStatDetail('tecnicos')" style="cursor:pointer;">
             <div class="admin-stat-value" id="statTotalTecnicos">0</div>
             <div class="admin-stat-label" data-i18n="admin_stats_registered_technicians">Técnicos Registrados</div>
+          </div>
+          <div class="admin-stat-card" onclick="showStatDetail('suscriptores')" style="cursor:pointer;">
+            <div class="admin-stat-value" id="statSuscriptoresPagando" style="color:#22c55e;">0</div>
+            <div class="admin-stat-label" data-i18n="admin_stats_paying_subscribers">💳 Suscriptores Pagando</div>
+          </div>
+          <div class="admin-stat-card" onclick="showStatDetail('revenue')" style="cursor:pointer;">
+            <div class="admin-stat-value" id="statRevenueMTD" style="color:#10b981;">$0</div>
+            <div class="admin-stat-label" data-i18n="admin_stats_revenue_mtd">💰 Revenue del Mes</div>
           </div>
           <div class="admin-stat-card" onclick="showStatDetail('certificados')" style="cursor:pointer;">
             <div class="admin-stat-value" id="statTotalCertificados">0</div>

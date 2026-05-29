@@ -2750,12 +2750,14 @@
         return false;
       }).length;
 
-      // statTotalTecnicos is set by the Edge Function (zm-navigation.js) — don't overwrite
-      var _stEl = document.getElementById('statTotalTecnicos');
-      if (_stEl && totalTechs > (parseInt(_stEl.textContent) || 0)) _stEl.textContent = totalTechs;
-      document.getElementById('statTotalCertificados').textContent = totalCerts;
-      document.getElementById('statPromedioScore').textContent = avgScore + '%';
-      document.getElementById('statActivosHoy').textContent = activeToday;
+      // Mario 2026-05-29: ALL stats are now set authoritatively by admin-dashboard-stats
+      // edge function (called from zm-navigation.js). Client-side calc here used
+      // window.allTechnicians[].progress which is partial — always returned 0% for
+      // statPromedioScore and undercounted totalCerts. Edge function reads the real
+      // tables (user_progress.porcentaje, certificates count, etc) via service role
+      // so RLS doesn't filter. Don't overwrite the edge function values.
+      // (The avgScore + activeToday + totalCerts + totalTechs computed above are
+      //  kept in scope for any sub-views that might still need them as quick refs.)
     }
 
     // Show stat detail when clicking dashboard cards

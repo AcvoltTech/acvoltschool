@@ -951,6 +951,13 @@ async function _crmLoadDashboardStats() {
     if (el) el.textContent = data.total_certs || 0;
     el = document.getElementById('statActivosHoy');
     if (el) el.textContent = data.active_today || 0;
+    // Mario 2026-05-29: 3 new stats — paying subscribers, MTD revenue, real avg score
+    el = document.getElementById('statSuscriptoresPagando');
+    if (el) el.textContent = data.active_memberships || 0;
+    el = document.getElementById('statRevenueMTD');
+    if (el) el.textContent = '$' + (data.revenue_mtd || 0).toLocaleString();
+    el = document.getElementById('statPromedioScore');
+    if (el) el.textContent = (data.avg_score || 0) + '%';
 
     console.log('[CRM] Dashboard stats loaded:', data);
   } catch(e) { console.error('[CRM] Dashboard stats error:', e); }

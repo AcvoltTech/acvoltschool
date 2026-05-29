@@ -3455,6 +3455,8 @@
     admin_stats_certificates_issued: { es: 'Certificados Otorgados', en: 'Certificates Issued' },
     admin_stats_general_average: { es: 'Promedio General', en: 'General Average' },
     admin_stats_active_today: { es: 'Activos Hoy', en: 'Active Today' },
+    admin_stats_paying_subscribers: { es: '💳 Suscriptores Pagando', en: '💳 Paying Subscribers' },
+    admin_stats_revenue_mtd: { es: '💰 Revenue del Mes', en: '💰 Revenue This Month' },
 
     // ── Student Success Survey ──
     ss_new_survey_title: { es: '\ud83d\udccb Nuevo Survey de Estudiante', en: '\ud83d\udccb New Student Survey' },

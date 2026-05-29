@@ -59,18 +59,43 @@ serve(async (req) => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    const [usersRes, certsRes, activeRes, membershipsRes] = await Promise.all([
+    // Month-to-date window for revenue
+    const monthStart = new Date(today.getFullYear(), today.getMonth(), 1).toISOString();
+
+    const [usersRes, certsRes, activeRes, membershipsRes, progressRes, revenueRes] = await Promise.all([
       sb.from('users').select('*', { count: 'exact', head: true }),
       sb.from('certificates').select('*', { count: 'exact', head: true }),
       sb.from('users').select('*', { count: 'exact', head: true }).gte('ultimo_acceso', today.toISOString()),
       sb.from('memberships').select('*', { count: 'exact', head: true }).eq('activa', true),
+      // Mario 2026-05-29: avg score from user_progress.porcentaje — replaces broken
+      // client-side calc that always returned 0%. Filters NULL + zeros so we only
+      // average real attempts.
+      sb.from('user_progress').select('porcentaje').not('porcentaje', 'is', null).gt('porcentaje', 0),
+      // Revenue MTD — sum of successful Stripe events in current month
+      sb.from('stripe_payments').select('amount').eq('status', 'succeeded').gte('created_at', monthStart),
     ]);
+
+    // Compute average score
+    let avg_score = 0;
+    if (progressRes.data && progressRes.data.length > 0) {
+      const sum = progressRes.data.reduce((a: number, r: { porcentaje: number }) => a + Number(r.porcentaje || 0), 0);
+      avg_score = Math.round(sum / progressRes.data.length);
+    }
+
+    // Compute revenue MTD (Stripe amounts are in cents)
+    let revenue_mtd = 0;
+    if (revenueRes.data && revenueRes.data.length > 0) {
+      const cents = revenueRes.data.reduce((a: number, r: { amount: number }) => a + Number(r.amount || 0), 0);
+      revenue_mtd = Math.round(cents / 100);
+    }
 
     const stats = {
       total_users: usersRes.count || 0,
       total_certs: certsRes.count || 0,
       active_today: activeRes.count || 0,
       active_memberships: membershipsRes.count || 0,
+      avg_score,
+      revenue_mtd,
     };
 
     console.log('[admin-dashboard-stats]', stats);
