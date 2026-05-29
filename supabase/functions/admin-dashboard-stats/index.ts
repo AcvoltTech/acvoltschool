@@ -9,11 +9,13 @@ import { verifyAdminAuth } from "../_shared/admin-auth.ts";
 
 const ALLOWED_ORIGINS = [
   'https://maestrohvacr.com',
+  'https://www.maestrohvacr.com',
+  'https://acvoltschool.com',
+  'https://www.acvoltschool.com',
   'https://maestroac-clon.netlify.app',
   'https://maestroac-app-clon.pages.dev',
-  'https://www.maestrohvacr.com',
-  'https://maestrohvacr.com',
-  'https://www.maestrohvacr.com',
+  'https://clon-ios-googleplay.pages.dev',
+  'https://acvoltschool.pages.dev',
   'https://acvolttech.github.io',
   'http://localhost:3000',
   'http://127.0.0.1:5500',
