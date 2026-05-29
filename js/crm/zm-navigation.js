@@ -770,7 +770,7 @@ function showCrmSection(sectionId, clickedItem) {
   // Role-based section guard
   var _guardRole = sessionStorage.getItem('admin_role') || (typeof currentAdminRole !== 'undefined' ? currentAdminRole : '');
   if (_guardRole === 'editor') {
-    var _editorAllowed = ['dashboard', 'bandeja', 'tutorialVideos', 'clases', 'zoomResumenes'];
+    var _editorAllowed = ['dashboard', 'bandeja', 'tutorialVideos', 'clases', 'zoomResumenes', 'streaming'];
     if (_editorAllowed.indexOf(sectionId) === -1) {
       console.warn('[CRM] Editor blocked from section: ' + sectionId);
       return;
