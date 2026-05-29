@@ -155,7 +155,12 @@ serve(async (req) => {
       .select('source, activa')
       .eq('activa', true);
 
-    const [usersRes, certsRes, activeRes, membershipsRes, progressRes, revenueRes, recentPayRes, recentSignupsRes, iapBreakdownRes] = await Promise.all([
+    // Reengagement campaign ROI tracking — count sent / returned / pending
+    const reengagementPromise = sb.from('users')
+      .select('reengagement_sent_at, reengagement_returned_at')
+      .not('reengagement_sent_at', 'is', null);
+
+    const [usersRes, certsRes, activeRes, membershipsRes, progressRes, revenueRes, recentPayRes, recentSignupsRes, iapBreakdownRes, reengagementRes] = await Promise.all([
       sb.from('users').select('*', { count: 'exact', head: true }),
       sb.from('certificates').select('*', { count: 'exact', head: true }),
       sb.from('users').select('*', { count: 'exact', head: true }).gte('ultimo_acceso', today.toISOString()),
@@ -179,6 +184,7 @@ serve(async (req) => {
         .order('fecha_registro', { ascending: false })
         .limit(10),
       iapBreakdownPromise,
+      reengagementPromise,
     ]);
 
     // Compute average score
@@ -228,6 +234,17 @@ serve(async (req) => {
       total: iapRows.length,
     };
 
+    // Reengagement campaign ROI
+    const reengRows = (reengagementRes.data || []) as { reengagement_sent_at: string; reengagement_returned_at: string | null }[];
+    const reengagement = {
+      sent: reengRows.length,
+      returned: reengRows.filter(r => !!r.reengagement_returned_at).length,
+      pending: reengRows.filter(r => !r.reengagement_returned_at).length,
+      rate_pct: reengRows.length > 0
+        ? Math.round((reengRows.filter(r => !!r.reengagement_returned_at).length / reengRows.length) * 100)
+        : 0,
+    };
+
     // Live Stripe data — runs in parallel with the Supabase queries above so
     // total response time stays under ~3s. If Stripe fails, the dashboard
     // still gets all the Supabase-derived metrics — Stripe block just shows
@@ -247,6 +264,8 @@ serve(async (req) => {
       stripe: stripeStats,
       // IAP active subscriptions by source (iOS, Android, Stripe-membership)
       iap_breakdown,
+      // Reengagement campaign ROI tracking
+      reengagement,
     };
 
     console.log('[admin-dashboard-stats]', stats);

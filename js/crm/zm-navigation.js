@@ -984,6 +984,14 @@ async function _crmLoadDashboardStats() {
       ? ('$' + (stripe.stripe_balance || 0).toLocaleString())
       : '—';
 
+    // Reengagement campaign ROI — Mario 2026-05-29
+    var reeng = data.reengagement || {};
+    el = document.getElementById('reengSent');     if (el) el.textContent = reeng.sent || 0;
+    el = document.getElementById('reengReturned'); if (el) el.textContent = reeng.returned || 0;
+    el = document.getElementById('reengPending');  if (el) el.textContent = reeng.pending || 0;
+    el = document.getElementById('reengRatePct');
+    if (el) el.textContent = (reeng.rate_pct || 0) + '% conversion rate';
+
     // IAP breakdown by source — Mario 2026-05-29
     var iap = data.iap_breakdown || {};
     el = document.getElementById('iapStripe');     if (el) el.textContent = iap.stripe_membership || 0;
