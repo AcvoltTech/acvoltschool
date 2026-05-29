@@ -5,6 +5,7 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { encode as base64url } from "https://deno.land/std@0.168.0/encoding/base64url.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const ALLOWED_ORIGINS = [
   'https://maestrohvacr.com',
@@ -87,6 +88,24 @@ serve(async (req) => {
           callerIsAdmin = ADMIN_EMAILS.includes(callerEmail) || decoded.role === 'service_role';
         }
       } catch (_e) { /* JWT decode failed — treat as non-admin */ }
+    }
+
+    // Fallback: check admin_staff table for editor/master/admin/tecnico_video roles
+    // This lets Manuel (editor) and other staff broadcast without hardcoding emails.
+    if (!callerIsAdmin && callerEmail && SUPABASE_URL && SUPABASE_SERVICE_KEY) {
+      try {
+        const sb = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
+        const { data: staff } = await sb
+          .from('admin_staff')
+          .select('rol, activo')
+          .ilike('email', callerEmail)
+          .eq('activo', true)
+          .maybeSingle();
+        if (staff && ['master', 'admin', 'editor', 'tecnico_video'].includes(staff.rol)) {
+          callerIsAdmin = true;
+          console.log(`[hms-token] Admin via admin_staff: ${callerEmail} (rol=${staff.rol})`);
+        }
+      } catch (e) { console.warn('[hms-token] admin_staff lookup failed:', (e as Error).message); }
     }
 
     const { action, role, room_id, user_id, user_name, admin_email, name, description } = await req.json();
