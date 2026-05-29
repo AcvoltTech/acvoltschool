@@ -10,8 +10,12 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 const ALLOWED_ORIGINS = [
   'https://maestrohvacr.com',
   'https://www.maestrohvacr.com',
+  'https://acvoltschool.com',
+  'https://www.acvoltschool.com',
+  'https://acvoltschool.pages.dev',
   'https://maestroac-clon.netlify.app',
   'https://maestroac-app-clon.pages.dev',
+  'https://clon-ios-googleplay.pages.dev',
   'https://acvolttech.github.io',
   'http://localhost:3000',
   'http://127.0.0.1:5500',
