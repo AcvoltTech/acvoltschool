@@ -216,12 +216,15 @@ serve(async (req) => {
     }));
 
     // IAP breakdown by source (iOS, Android, Stripe, etc.)
+    // Mario 2026-05-29: DB constraint enforces source ∈ {stripe, ios_iap, play_billing, manual}.
+    // 'play_billing' is the canonical name for Google Play (not 'google_play_iap').
     const iapRows = (iapBreakdownRes.data || []) as { source: string }[];
     const iap_breakdown = {
       ios: iapRows.filter(r => r.source === 'ios_iap').length,
-      android: iapRows.filter(r => r.source === 'google_play_iap').length,
+      android: iapRows.filter(r => r.source === 'play_billing').length,
       stripe_membership: iapRows.filter(r => r.source === 'stripe').length,
-      other: iapRows.filter(r => !['ios_iap', 'google_play_iap', 'stripe'].includes(r.source)).length,
+      manual: iapRows.filter(r => r.source === 'manual').length,
+      other: iapRows.filter(r => !['ios_iap', 'play_billing', 'stripe', 'manual'].includes(r.source)).length,
       total: iapRows.length,
     };
 
