@@ -984,6 +984,15 @@ async function _crmLoadDashboardStats() {
       ? ('$' + (stripe.stripe_balance || 0).toLocaleString())
       : '—';
 
+    // IAP breakdown by source — Mario 2026-05-29
+    var iap = data.iap_breakdown || {};
+    el = document.getElementById('iapStripe');     if (el) el.textContent = iap.stripe_membership || 0;
+    el = document.getElementById('iapIos');        if (el) el.textContent = iap.ios || 0;
+    el = document.getElementById('iapAndroid');    if (el) el.textContent = iap.android || 0;
+    el = document.getElementById('iapTotal');      if (el) el.textContent = iap.total || 0;
+    el = document.getElementById('iapBreakdownTotal');
+    if (el) el.textContent = (iap.total || 0) + ' subs activas';
+
     // ── Live feeds — Mario 2026-05-29 ──────────────────────────────────
     function _fmtRelTime(iso) {
       try {

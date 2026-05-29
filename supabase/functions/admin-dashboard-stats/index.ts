@@ -148,7 +148,14 @@ serve(async (req) => {
     // Month-to-date window for revenue
     const monthStart = new Date(today.getFullYear(), today.getMonth(), 1).toISOString();
 
-    const [usersRes, certsRes, activeRes, membershipsRes, progressRes, revenueRes, recentPayRes, recentSignupsRes] = await Promise.all([
+    // Mario 2026-05-29: IAP breakdown — memberships grouped by source so we
+    // see iOS vs Android vs Stripe individually + total. Will fill in as
+    // RevenueCat syncs more iOS / Google Play purchases via the sync edge fns.
+    const iapBreakdownPromise = sb.from('memberships')
+      .select('source, activa')
+      .eq('activa', true);
+
+    const [usersRes, certsRes, activeRes, membershipsRes, progressRes, revenueRes, recentPayRes, recentSignupsRes, iapBreakdownRes] = await Promise.all([
       sb.from('users').select('*', { count: 'exact', head: true }),
       sb.from('certificates').select('*', { count: 'exact', head: true }),
       sb.from('users').select('*', { count: 'exact', head: true }).gte('ultimo_acceso', today.toISOString()),
@@ -171,6 +178,7 @@ serve(async (req) => {
         .select('nombre, email, ciudad, estado, fecha_registro')
         .order('fecha_registro', { ascending: false })
         .limit(10),
+      iapBreakdownPromise,
     ]);
 
     // Compute average score
@@ -207,6 +215,16 @@ serve(async (req) => {
       when: u.fecha_registro,
     }));
 
+    // IAP breakdown by source (iOS, Android, Stripe, etc.)
+    const iapRows = (iapBreakdownRes.data || []) as { source: string }[];
+    const iap_breakdown = {
+      ios: iapRows.filter(r => r.source === 'ios_iap').length,
+      android: iapRows.filter(r => r.source === 'google_play_iap').length,
+      stripe_membership: iapRows.filter(r => r.source === 'stripe').length,
+      other: iapRows.filter(r => !['ios_iap', 'google_play_iap', 'stripe'].includes(r.source)).length,
+      total: iapRows.length,
+    };
+
     // Live Stripe data — runs in parallel with the Supabase queries above so
     // total response time stays under ~3s. If Stripe fails, the dashboard
     // still gets all the Supabase-derived metrics — Stripe block just shows
@@ -224,6 +242,8 @@ serve(async (req) => {
       recent_signups,
       // Live Stripe block (mrr_real, active_subs_real, failed_revenue, ltv_avg, stripe_balance)
       stripe: stripeStats,
+      // IAP active subscriptions by source (iOS, Android, Stripe-membership)
+      iap_breakdown,
     };
 
     console.log('[admin-dashboard-stats]', stats);
