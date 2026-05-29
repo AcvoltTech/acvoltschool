@@ -959,6 +959,62 @@ async function _crmLoadDashboardStats() {
     el = document.getElementById('statPromedioScore');
     if (el) el.textContent = (data.avg_score || 0) + '%';
 
+    // ── Live feeds — Mario 2026-05-29 ──────────────────────────────────
+    function _fmtRelTime(iso) {
+      try {
+        var d = new Date(iso);
+        var diffSec = Math.max(0, (Date.now() - d.getTime()) / 1000);
+        if (diffSec < 60) return 'ahora';
+        if (diffSec < 3600) return Math.floor(diffSec/60) + ' min';
+        if (diffSec < 86400) return Math.floor(diffSec/3600) + ' h';
+        if (diffSec < 604800) return Math.floor(diffSec/86400) + ' d';
+        return d.toLocaleDateString();
+      } catch(_) { return ''; }
+    }
+    function _esc(s) {
+      return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    }
+
+    var payList = document.getElementById('recentPaymentsList');
+    var payCount = document.getElementById('recentPaymentsCount');
+    var payments = data.recent_payments || [];
+    if (payList) {
+      if (payments.length === 0) {
+        payList.innerHTML = '<div style="font-size:12px;color:#94a3b8;text-align:center;padding:20px 0;">Sin pagos recientes</div>';
+      } else {
+        payList.innerHTML = payments.map(function(p) {
+          return '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:rgba(255,255,255,0.6);border-radius:8px;border:1px solid rgba(34,197,94,0.15);">' +
+            '<div style="min-width:0;flex:1;">' +
+              '<div style="font-size:13px;font-weight:700;color:#0f172a;text-overflow:ellipsis;overflow:hidden;white-space:nowrap;">' + _esc(p.name) + '</div>' +
+              '<div style="font-size:10px;color:#64748b;font-weight:600;">' + _fmtRelTime(p.when) + ' · ' + _esc(p.event) + '</div>' +
+            '</div>' +
+            '<div style="font-size:14px;font-weight:900;color:#10b981;white-space:nowrap;">$' + (p.amount_dollars || 0).toLocaleString() + '</div>' +
+          '</div>';
+        }).join('');
+      }
+    }
+    if (payCount) payCount.textContent = payments.length + ' último(s)';
+
+    var sgnList = document.getElementById('recentSignupsList');
+    var sgnCount = document.getElementById('recentSignupsCount');
+    var signups = data.recent_signups || [];
+    if (sgnList) {
+      if (signups.length === 0) {
+        sgnList.innerHTML = '<div style="font-size:12px;color:#94a3b8;text-align:center;padding:20px 0;">Sin signups recientes</div>';
+      } else {
+        sgnList.innerHTML = signups.map(function(s) {
+          return '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:rgba(255,255,255,0.6);border-radius:8px;border:1px solid rgba(99,102,241,0.15);">' +
+            '<div style="min-width:0;flex:1;">' +
+              '<div style="font-size:13px;font-weight:700;color:#0f172a;text-overflow:ellipsis;overflow:hidden;white-space:nowrap;">' + _esc(s.name) + '</div>' +
+              '<div style="font-size:10px;color:#64748b;font-weight:600;">' + _esc(s.location || s.email) + '</div>' +
+            '</div>' +
+            '<div style="font-size:11px;font-weight:700;color:#6366f1;white-space:nowrap;">' + _fmtRelTime(s.when) + '</div>' +
+          '</div>';
+        }).join('');
+      }
+    }
+    if (sgnCount) sgnCount.textContent = signups.length + ' último(s)';
+
     console.log('[CRM] Dashboard stats loaded:', data);
   } catch(e) { console.error('[CRM] Dashboard stats error:', e); }
 }

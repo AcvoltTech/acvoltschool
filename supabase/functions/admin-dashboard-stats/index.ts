@@ -62,7 +62,7 @@ serve(async (req) => {
     // Month-to-date window for revenue
     const monthStart = new Date(today.getFullYear(), today.getMonth(), 1).toISOString();
 
-    const [usersRes, certsRes, activeRes, membershipsRes, progressRes, revenueRes] = await Promise.all([
+    const [usersRes, certsRes, activeRes, membershipsRes, progressRes, revenueRes, recentPayRes, recentSignupsRes] = await Promise.all([
       sb.from('users').select('*', { count: 'exact', head: true }),
       sb.from('certificates').select('*', { count: 'exact', head: true }),
       sb.from('users').select('*', { count: 'exact', head: true }).gte('ultimo_acceso', today.toISOString()),
@@ -73,6 +73,18 @@ serve(async (req) => {
       sb.from('user_progress').select('porcentaje').not('porcentaje', 'is', null).gt('porcentaje', 0),
       // Revenue MTD — sum of successful Stripe events in current month
       sb.from('stripe_payments').select('amount').eq('status', 'succeeded').gte('created_at', monthStart),
+      // Recent payments stream — last 10 succeeded Stripe events with customer info
+      sb.from('stripe_payments')
+        .select('amount, currency, customer_email, customer_name, event_type, created_at, description')
+        .eq('status', 'succeeded')
+        .order('created_at', { ascending: false })
+        .limit(10),
+      // Recent signups — last 10 users for the live activity feel
+      // (users table uses fecha_registro, not created_at)
+      sb.from('users')
+        .select('nombre, email, ciudad, estado, fecha_registro')
+        .order('fecha_registro', { ascending: false })
+        .limit(10),
     ]);
 
     // Compute average score
@@ -89,6 +101,26 @@ serve(async (req) => {
       revenue_mtd = Math.round(cents / 100);
     }
 
+    // Recent payments — normalize for client (dollars not cents, name fallback to email)
+    interface PayRow { amount: number; currency?: string; customer_email?: string; customer_name?: string; event_type?: string; created_at: string; description?: string }
+    const recent_payments = (recentPayRes.data || []).map((p: PayRow) => ({
+      amount_dollars: Math.round((p.amount || 0) / 100),
+      currency: (p.currency || 'usd').toUpperCase(),
+      name: p.customer_name || (p.customer_email ? p.customer_email.split('@')[0] : 'Anónimo'),
+      email: p.customer_email || '',
+      event: p.event_type || '',
+      when: p.created_at,
+      description: p.description || '',
+    }));
+
+    interface UserRow { nombre?: string; email?: string; ciudad?: string; estado?: string; fecha_registro: string }
+    const recent_signups = (recentSignupsRes.data || []).map((u: UserRow) => ({
+      name: u.nombre || (u.email ? u.email.split('@')[0] : 'Anónimo'),
+      email: u.email || '',
+      location: [u.ciudad, u.estado].filter(Boolean).join(', '),
+      when: u.fecha_registro,
+    }));
+
     const stats = {
       total_users: usersRes.count || 0,
       total_certs: certsRes.count || 0,
@@ -96,6 +128,8 @@ serve(async (req) => {
       active_memberships: membershipsRes.count || 0,
       avg_score,
       revenue_mtd,
+      recent_payments,
+      recent_signups,
     };
 
     console.log('[admin-dashboard-stats]', stats);
