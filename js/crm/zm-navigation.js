@@ -951,13 +951,38 @@ async function _crmLoadDashboardStats() {
     if (el) el.textContent = data.total_certs || 0;
     el = document.getElementById('statActivosHoy');
     if (el) el.textContent = data.active_today || 0;
-    // Mario 2026-05-29: 3 new stats — paying subscribers, MTD revenue, real avg score
+    // Mario 2026-05-29: stats now prefer Stripe LIVE numbers over cached/membership
+    // table values (which were inflated — memberships.activa=true had 333 ghost
+    // entries vs Stripe's real 178 active subs).
+    var stripe = data.stripe || {};
     el = document.getElementById('statSuscriptoresPagando');
-    if (el) el.textContent = data.active_memberships || 0;
+    if (el) {
+      // Prefer Stripe live, fall back to membership count if Stripe fails
+      el.textContent = (stripe._src === 'stripe_live')
+        ? (stripe.active_subs_real || 0)
+        : (data.active_memberships || 0);
+    }
     el = document.getElementById('statRevenueMTD');
-    if (el) el.textContent = '$' + (data.revenue_mtd || 0).toLocaleString();
+    if (el) {
+      // Show MRR (Stripe live) preferred over MTD revenue from webhook cache
+      var mrr = (stripe._src === 'stripe_live') ? (stripe.mrr_real || 0) : (data.revenue_mtd || 0);
+      el.textContent = '$' + Number(mrr).toLocaleString();
+    }
     el = document.getElementById('statPromedioScore');
     if (el) el.textContent = (data.avg_score || 0) + '%';
+    // New stats — Stripe-derived only (no fallback, "—" if missing)
+    el = document.getElementById('statRevenuePerdido');
+    if (el) el.textContent = (stripe._src === 'stripe_live')
+      ? ('$' + (stripe.failed_revenue || 0).toLocaleString())
+      : '—';
+    el = document.getElementById('statLtvAvg');
+    if (el) el.textContent = (stripe._src === 'stripe_live')
+      ? ('$' + (stripe.ltv_avg || 0).toLocaleString())
+      : '—';
+    el = document.getElementById('statStripeBalance');
+    if (el) el.textContent = (stripe._src === 'stripe_live')
+      ? ('$' + (stripe.stripe_balance || 0).toLocaleString())
+      : '—';
 
     // ── Live feeds — Mario 2026-05-29 ──────────────────────────────────
     function _fmtRelTime(iso) {

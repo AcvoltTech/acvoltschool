@@ -1637,24 +1637,26 @@ function closeMarioV2(){document.getElementById('marioV2Overlay').style.display=
         <!-- Main admin content (hidden in mobile portrait) -->
         <div class="admin-main-content">
 
-        <!-- Quick Stats — 6 tiles since 2026-05-29 (added Suscriptores Pagando + Revenue MTD) -->
+        <!-- Quick Stats — 9 tiles since 2026-05-29 (Stripe LIVE integration) -->
         <div class="admin-stats-grid" id="adminStatsGrid">
+          <!-- Row 1: Users + Subs + MRR + Certs -->
           <div class="admin-stat-card" onclick="showStatDetail('tecnicos')" style="cursor:pointer;">
             <div class="admin-stat-value" id="statTotalTecnicos">0</div>
             <div class="admin-stat-label" data-i18n="admin_stats_registered_technicians">Técnicos Registrados</div>
           </div>
           <div class="admin-stat-card" onclick="showStatDetail('suscriptores')" style="cursor:pointer;">
             <div class="admin-stat-value" id="statSuscriptoresPagando" style="color:#22c55e;">0</div>
-            <div class="admin-stat-label" data-i18n="admin_stats_paying_subscribers">💳 Suscriptores Pagando</div>
+            <div class="admin-stat-label" data-i18n="admin_stats_paying_subscribers">💳 Suscriptores Activos (Stripe)</div>
           </div>
           <div class="admin-stat-card" onclick="showStatDetail('revenue')" style="cursor:pointer;">
             <div class="admin-stat-value" id="statRevenueMTD" style="color:#10b981;">$0</div>
-            <div class="admin-stat-label" data-i18n="admin_stats_revenue_mtd">💰 Revenue del Mes</div>
+            <div class="admin-stat-label" data-i18n="admin_stats_revenue_mtd">💰 MRR Real (Stripe)</div>
           </div>
           <div class="admin-stat-card" onclick="showStatDetail('certificados')" style="cursor:pointer;">
             <div class="admin-stat-value" id="statTotalCertificados">0</div>
             <div class="admin-stat-label" data-i18n="admin_stats_certificates_issued">Certificados Otorgados</div>
           </div>
+          <!-- Row 2: Stats + Money loss/balance -->
           <div class="admin-stat-card" onclick="showStatDetail('promedio')" style="cursor:pointer;">
             <div class="admin-stat-value" id="statPromedioScore">0%</div>
             <div class="admin-stat-label" data-i18n="admin_stats_general_average">Promedio General</div>
@@ -1662,6 +1664,18 @@ function closeMarioV2(){document.getElementById('marioV2Overlay').style.display=
           <div class="admin-stat-card" onclick="showStatDetail('activos')" style="cursor:pointer;">
             <div class="admin-stat-value" id="statActivosHoy">0</div>
             <div class="admin-stat-label" data-i18n="admin_stats_active_today">Activos Hoy</div>
+          </div>
+          <div class="admin-stat-card" onclick="showStatDetail('perdido')" style="cursor:pointer;">
+            <div class="admin-stat-value" id="statRevenuePerdido" style="color:#ef4444;">$0</div>
+            <div class="admin-stat-label" data-i18n="admin_stats_revenue_lost">💸 Revenue Perdido (60d)</div>
+          </div>
+          <div class="admin-stat-card" onclick="showStatDetail('ltv')" style="cursor:pointer;">
+            <div class="admin-stat-value" id="statLtvAvg" style="color:#6366f1;">$0</div>
+            <div class="admin-stat-label" data-i18n="admin_stats_ltv_avg">📊 LTV Promedio</div>
+          </div>
+          <div class="admin-stat-card" onclick="showStatDetail('balance')" style="cursor:pointer;">
+            <div class="admin-stat-value" id="statStripeBalance" style="color:#8b5cf6;">$0</div>
+            <div class="admin-stat-label" data-i18n="admin_stats_stripe_balance">🏦 Stripe Balance</div>
           </div>
         </div>
 

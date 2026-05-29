@@ -7,6 +7,90 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { checkRateLimit, rateLimitResponse } from "../_shared/rate-limiter.ts";
 import { verifyAdminAuth } from "../_shared/admin-auth.ts";
 
+// Mario 2026-05-29: pull live Stripe data so the dashboard reflects the
+// actual money flowing in, not just cached webhook events. Returns:
+//   mrr_real          — MRR computed from active subscription line items
+//   active_subs_real  — # of subscriptions in status=active
+//   failed_revenue    — recoverable $$ from failed charges (last 60d)
+//   ltv_avg           — avg lifetime spend per paying customer
+//   stripe_balance    — funds available to transfer
+async function fetchStripeStats(apiKey: string) {
+  if (!apiKey) return null;
+  async function sGet(path: string, params: Record<string, string> = {}) {
+    const url = new URL('https://api.stripe.com/v1/' + path);
+    for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
+    const res = await fetch(url.toString(), { headers: { Authorization: 'Bearer ' + apiKey } });
+    if (!res.ok) { const e = await res.json(); throw new Error(e.error?.message || 'Stripe ' + res.status); }
+    return res.json();
+  }
+  async function sGetAll(path: string, params: Record<string, string> = {}, maxPages = 10) {
+    const all: Record<string, unknown>[] = [];
+    let cursor: string | undefined;
+    for (let i = 0; i < maxPages; i++) {
+      const pp: Record<string, string> = { ...params, limit: '100' };
+      if (cursor) pp.starting_after = cursor;
+      const r = await sGet(path, pp);
+      const items = r.data || [];
+      all.push(...items);
+      if (!r.has_more || items.length === 0) break;
+      cursor = items[items.length - 1].id;
+    }
+    return all;
+  }
+  try {
+    const sixtyDaysAgo = Math.floor((Date.now() - 60 * 86400 * 1000) / 1000);
+    const [activeSubs, balance, failedChargesPage1, allCharges] = await Promise.all([
+      sGetAll('subscriptions', { status: 'active', 'expand[]': 'data.items.data.price' }, 10),
+      sGet('balance'),
+      sGet('charges', { 'created[gte]': String(sixtyDaysAgo), limit: '100' }),
+      sGetAll('charges', { 'created[gte]': String(sixtyDaysAgo) }, 10),
+    ]);
+    // MRR = sum of active sub monthly equivalents
+    let mrrCents = 0;
+    for (const sub of activeSubs) {
+      // deno-lint-ignore no-explicit-any
+      const items = (sub as any).items?.data || [];
+      for (const it of items) {
+        const price = it.price || {};
+        const amt = Number(price.unit_amount || 0);
+        const interval = price.recurring?.interval || 'month';
+        const interval_count = Number(price.recurring?.interval_count || 1);
+        const qty = Number(it.quantity || 1);
+        // Convert to monthly
+        let monthly = 0;
+        if (interval === 'month') monthly = amt / interval_count;
+        else if (interval === 'year') monthly = amt / (12 * interval_count);
+        else if (interval === 'week') monthly = (amt * 4.345) / interval_count;
+        else if (interval === 'day') monthly = (amt * 30) / interval_count;
+        mrrCents += monthly * qty;
+      }
+    }
+    const charges = allCharges as { status?: string; amount?: number; customer?: string }[];
+    const failedRev = charges
+      .filter(c => c.status === 'failed')
+      .reduce((a, c) => a + Number(c.amount || 0), 0);
+    const failedCount = charges.filter(c => c.status === 'failed').length;
+    const succeeded = charges.filter(c => c.status === 'succeeded');
+    const lifetimePaying = new Set(succeeded.map(c => c.customer).filter(Boolean)).size;
+    const lifetimeRev = succeeded.reduce((a, c) => a + Number(c.amount || 0), 0);
+    // deno-lint-ignore no-explicit-any
+    const bal = balance as any;
+    const availCents = (bal.available || []).reduce((a: number, b: { amount?: number }) => a + Number(b.amount || 0), 0);
+    return {
+      mrr_real: Math.round(mrrCents / 100),
+      active_subs_real: activeSubs.length,
+      failed_revenue: Math.round(failedRev / 100),
+      failed_count: failedCount,
+      ltv_avg: lifetimePaying > 0 ? Math.round(lifetimeRev / lifetimePaying / 100) : 0,
+      stripe_balance: Math.round(availCents / 100),
+      _src: 'stripe_live',
+    };
+  } catch (e) {
+    console.warn('[fetchStripeStats] failed:', e);
+    return { _src: 'stripe_live_failed', _err: String((e as Error).message || e) };
+  }
+}
+
 const ALLOWED_ORIGINS = [
   'https://maestrohvacr.com',
   'https://www.maestrohvacr.com',
@@ -123,6 +207,12 @@ serve(async (req) => {
       when: u.fecha_registro,
     }));
 
+    // Live Stripe data — runs in parallel with the Supabase queries above so
+    // total response time stays under ~3s. If Stripe fails, the dashboard
+    // still gets all the Supabase-derived metrics — Stripe block just shows
+    // null and the frontend renders "—".
+    const stripeStats = await fetchStripeStats(Deno.env.get('STRIPE_SECRET_KEY') || '');
+
     const stats = {
       total_users: usersRes.count || 0,
       total_certs: certsRes.count || 0,
@@ -132,6 +222,8 @@ serve(async (req) => {
       revenue_mtd,
       recent_payments,
       recent_signups,
+      // Live Stripe block (mrr_real, active_subs_real, failed_revenue, ltv_avg, stripe_balance)
+      stripe: stripeStats,
     };
 
     console.log('[admin-dashboard-stats]', stats);

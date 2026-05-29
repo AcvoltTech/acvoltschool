@@ -3455,8 +3455,11 @@
     admin_stats_certificates_issued: { es: 'Certificados Otorgados', en: 'Certificates Issued' },
     admin_stats_general_average: { es: 'Promedio General', en: 'General Average' },
     admin_stats_active_today: { es: 'Activos Hoy', en: 'Active Today' },
-    admin_stats_paying_subscribers: { es: '💳 Suscriptores Pagando', en: '💳 Paying Subscribers' },
-    admin_stats_revenue_mtd: { es: '💰 Revenue del Mes', en: '💰 Revenue This Month' },
+    admin_stats_paying_subscribers: { es: '💳 Suscriptores Activos (Stripe)', en: '💳 Active Subscriptions (Stripe)' },
+    admin_stats_revenue_mtd: { es: '💰 MRR Real (Stripe)', en: '💰 Real MRR (Stripe)' },
+    admin_stats_revenue_lost: { es: '💸 Revenue Perdido (60d)', en: '💸 Revenue Lost (60d)' },
+    admin_stats_ltv_avg: { es: '📊 LTV Promedio', en: '📊 Average LTV' },
+    admin_stats_stripe_balance: { es: '🏦 Stripe Balance', en: '🏦 Stripe Balance' },
 
     // ── Student Success Survey ──
     ss_new_survey_title: { es: '\ud83d\udccb Nuevo Survey de Estudiante', en: '\ud83d\udccb New Student Survey' },
