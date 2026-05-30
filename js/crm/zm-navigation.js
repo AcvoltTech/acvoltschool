@@ -1065,7 +1065,7 @@ async function _crmLoadDashboardStats() {
         }).join('');
       }
     }
-    if (sgnCount) sgnCount.textContent = signups.length + ' último(s)';
+    if (sgnCount) sgnCount.textContent = (data.signups_24h != null ? data.signups_24h + ' en 24h' : signups.length + ' último(s)');
 
     console.log('[CRM] Dashboard stats loaded:', data);
   } catch(e) { console.error('[CRM] Dashboard stats error:', e); }

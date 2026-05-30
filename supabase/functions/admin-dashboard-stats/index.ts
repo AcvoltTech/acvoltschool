@@ -251,6 +251,17 @@ serve(async (req) => {
     // null and the frontend renders "—".
     const stripeStats = await fetchStripeStats(Deno.env.get('STRIPE_SECRET_KEY') || '');
 
+    // Signups in the last rolling 24h — live counter for the dashboard (Mario 2026-05-30).
+    // Isolated try/catch so a failure here can NEVER break the rest of the dashboard.
+    let signups_24h = 0;
+    try {
+      const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+      const { count } = await sb.from('users')
+        .select('*', { count: 'exact', head: true })
+        .gte('fecha_registro', since24h);
+      signups_24h = count || 0;
+    } catch (_e) { signups_24h = 0; }
+
     const stats = {
       total_users: usersRes.count || 0,
       total_certs: certsRes.count || 0,
@@ -260,6 +271,7 @@ serve(async (req) => {
       revenue_mtd,
       recent_payments,
       recent_signups,
+      signups_24h,
       // Live Stripe block (mrr_real, active_subs_real, failed_revenue, ltv_avg, stripe_balance)
       stripe: stripeStats,
       // IAP active subscriptions by source (iOS, Android, Stripe-membership)
