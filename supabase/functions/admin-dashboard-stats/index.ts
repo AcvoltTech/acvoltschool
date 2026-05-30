@@ -251,16 +251,22 @@ serve(async (req) => {
     // null and the frontend renders "—".
     const stripeStats = await fetchStripeStats(Deno.env.get('STRIPE_SECRET_KEY') || '');
 
-    // Signups in the last rolling 24h — live counter for the dashboard (Mario 2026-05-30).
+    // Rolling signup counters for the live dashboard (Mario 2026-05-30): last 1h
+    // (real-time, moves during a live) + last 24h (daily context).
     // Isolated try/catch so a failure here can NEVER break the rest of the dashboard.
     let signups_24h = 0;
+    let signups_1h = 0;
     try {
-      const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-      const { count } = await sb.from('users')
-        .select('*', { count: 'exact', head: true })
-        .gte('fecha_registro', since24h);
-      signups_24h = count || 0;
-    } catch (_e) { signups_24h = 0; }
+      const nowMs = Date.now();
+      const since24h = new Date(nowMs - 24 * 60 * 60 * 1000).toISOString();
+      const since1h = new Date(nowMs - 60 * 60 * 1000).toISOString();
+      const [r24, r1] = await Promise.all([
+        sb.from('users').select('*', { count: 'exact', head: true }).gte('fecha_registro', since24h),
+        sb.from('users').select('*', { count: 'exact', head: true }).gte('fecha_registro', since1h),
+      ]);
+      signups_24h = r24.count || 0;
+      signups_1h = r1.count || 0;
+    } catch (_e) { signups_24h = 0; signups_1h = 0; }
 
     const stats = {
       total_users: usersRes.count || 0,
@@ -272,6 +278,7 @@ serve(async (req) => {
       recent_payments,
       recent_signups,
       signups_24h,
+      signups_1h,
       // Live Stripe block (mrr_real, active_subs_real, failed_revenue, ltv_avg, stripe_balance)
       stripe: stripeStats,
       // IAP active subscriptions by source (iOS, Android, Stripe-membership)
