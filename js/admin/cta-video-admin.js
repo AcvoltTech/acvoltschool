@@ -228,6 +228,10 @@
       if (!window.confirm('¿Borrar esta explicación?')) return;
       post({ action: 'delete_video', id: id }, function (res) { if (res) { STATE.videos = res.items || STATE.videos.filter(function (v) { return v.id !== id; }); rerender(); } });
     },
+    _delPet: function (id) {
+      if (!window.supabaseClient || !supabaseClient.from) return;
+      supabaseClient.from('suggestions').delete().eq('id', id).then(function () { loadPeticiones(); }, function () {});
+    },
     render: function () {
       var panel = document.getElementById('crm-section-ctaVideo');
       if (!panel) return;
@@ -255,8 +259,31 @@
       '<p style="color:#475569;font-size:13px;line-height:1.5;margin:0 0 16px;">Estos videos aparecen en el dashboard de la app (banner → biblioteca por fecha). Tu gancho de redes manda aquí: descargan la app para ver la explicación. Los videos son verticales (TikTok/Reels).</p>' +
       videoFormHtml(editing) +
       socialHtml() +
-      '<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:14px;padding:14px;">' + listHtml() + '</div>' +
+      '<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:14px;padding:14px;margin-bottom:16px;">' + listHtml() + '</div>' +
+      '<div id="ctaPeticiones" style="background:#faf5ff;border:1px solid #e9d5ff;border-radius:14px;padding:14px;"><div style="color:#6b21a8;font-size:14px;">Cargando peticiones...</div></div>' +
       '</div>';
     wire();
+    loadPeticiones();
+  }
+
+  var PET_MARK = '🎬 PETICIÓN VIDEO: ';
+  function loadPeticiones() {
+    var box = document.getElementById('ctaPeticiones'); if (!box) return;
+    if (!window.supabaseClient || !supabaseClient.from) { box.innerHTML = ''; return; }
+    supabaseClient.from('suggestions').select('id,user_name,suggestion_text,created_at').order('created_at', { ascending: false }).limit(150).then(function (res) {
+      var rows = (res && res.data) ? res.data.filter(function (r) { return String(r.suggestion_text || '').indexOf('🎬 PETICIÓN VIDEO') === 0; }) : [];
+      var h = '<div style="font-size:15px;font-weight:800;color:#6b21a8;margin-bottom:10px;">📋 Peticiones de Videos (' + rows.length + ')</div>';
+      if (!rows.length) { box.innerHTML = h + '<div style="color:#a78bfa;font-size:13px;">Aún no hay peticiones. Cuando un técnico pida un video desde la app, aparece aquí.</div>'; return; }
+      for (var i = 0; i < rows.length; i++) {
+        var r = rows[i]; var txt = String(r.suggestion_text || '').replace(PET_MARK, '').replace('🎬 PETICIÓN VIDEO:', '').trim();
+        var d = ''; try { d = new Date(r.created_at).toLocaleDateString('es-MX', { day: '2-digit', month: 'short' }); } catch (_) {}
+        h += '<div style="display:flex;gap:10px;align-items:flex-start;padding:10px;background:#fff;border:1px solid #e9d5ff;border-radius:10px;margin-bottom:6px;">' +
+          '<div style="flex:1;min-width:0;"><div style="font-size:14px;color:#0f172a;line-height:1.35;">' + esc(txt) + '</div>' +
+          '<div style="font-size:11px;color:#9333ea;margin-top:3px;">' + esc(r.user_name || 'Técnico') + ' · ' + d + '</div></div>' +
+          '<button onclick="window.CTAVideoAdmin._delPet(\'' + esc(r.id) + '\')" style="padding:6px 9px;background:#fff;color:#dc2626;border:1px solid #fecaca;border-radius:7px;font-size:11px;font-weight:700;cursor:pointer;flex-shrink:0;">✕</button>' +
+        '</div>';
+      }
+      box.innerHTML = h;
+    }, function () { box.innerHTML = '<div style="color:#a78bfa;font-size:13px;">No se pudieron cargar las peticiones.</div>'; });
   }
 })();
