@@ -60,10 +60,10 @@
     var isUrl = /^https?:\/\//i.test(ref);
     var isFile = /\.(mp4|mov|webm|m4v|ogg)(\?|$)/i.test(ref);
     var inner;
-    if (isUrl && isFile) inner = '<video controls style="width:100%;max-height:240px;border-radius:8px;background:#000;" src="' + esc(ref) + '"></video>';
+    if (isUrl && isFile) inner = '<video controls style="display:block;margin:0 auto;max-width:100%;max-height:55vh;border-radius:8px;background:#000;" src="' + esc(ref) + '"></video>';
     else {
       var src = isUrl ? ref : 'https://iframe.videodelivery.net/' + encodeURIComponent(ref);
-      inner = '<div style="position:relative;padding-top:56.25%;border-radius:8px;overflow:hidden;background:#000;"><iframe src="' + esc(src) + '" style="position:absolute;inset:0;width:100%;height:100%;border:0;" allowfullscreen></iframe></div>';
+      inner = '<div style="position:relative;width:100%;max-width:300px;margin:0 auto;padding-top:min(177.78%,55vh);border-radius:8px;overflow:hidden;background:#000;"><iframe src="' + esc(src) + '" style="position:absolute;inset:0;width:100%;height:100%;border:0;" allowfullscreen></iframe></div>';
     }
     return '<div style="font-size:12px;color:#64748b;margin-bottom:4px;">Vista previa:</div>' + inner;
   }
