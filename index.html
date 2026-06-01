@@ -218,7 +218,7 @@
   }catch(_e){}
 })();
 
-var APP_VERSION = 'v6.04-signups-1h-counter';
+var APP_VERSION = 'v6.05-cta-video-panel';
 (function(){
   var stored = localStorage.getItem('maestroac_app_version');
   if(stored && stored !== APP_VERSION){
@@ -249,7 +249,7 @@ var APP_VERSION = 'v6.04-signups-1h-counter';
 // ── FORCE CACHE PURGE — nuke old caches so students don't have to reinstall ──
 // Runs once per cache version. Deletes stale caches quietly without reload loops.
 (function(){
-  var CURRENT_CACHE = 'maestrohvacr-v181';
+  var CURRENT_CACHE = 'maestrohvacr-v182';
   var PURGE_KEY = 'maestro_cache_purged_v';
   if(typeof caches==='undefined') return;
   if(localStorage.getItem(PURGE_KEY)===CURRENT_CACHE) return;
@@ -1538,6 +1538,9 @@ function closeMarioV2(){document.getElementById('marioV2Overlay').style.display=
     </a>
     <a class="crm-sidebar-item" data-crm-section="streaming" data-crm-mode="admin">
       <span class="crm-icon">📡</span> <span data-i18n="adm_crm_streaming">Streaming</span>
+    </a>
+    <a class="crm-sidebar-item" data-crm-section="ctaVideo" data-crm-mode="admin" onclick="showCrmSection('ctaVideo', this)">
+      <span class="crm-icon">📣</span> <span>Call to Action</span>
     </a>
     <a class="crm-sidebar-item" data-crm-section="acvoltSchool" data-crm-mode="admin">
       <span class="crm-icon">🏫</span> <span data-i18n="adm_crm_videos_maestro_hvacr">Videos Maestro HVACR</span>
@@ -3584,6 +3587,7 @@ function closeMarioV2(){document.getElementById('marioV2Overlay').style.display=
 
     <!-- Device Viewer — JS-rendered panel -->
     <div class="crm-section-panel" id="crm-section-deviceViewer"></div>
+    <div class="crm-section-panel" id="crm-section-ctaVideo"></div>
 
     <!-- Live Streaming Admin — JS-rendered panel -->
     <div class="crm-section-panel" id="crm-section-streaming"></div>
