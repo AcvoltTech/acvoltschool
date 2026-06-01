@@ -160,7 +160,11 @@
             var pub = supabaseClient.storage.from('school-files').getPublicUrl(path);
             var url = (pub && pub.data) ? pub.data.publicUrl : '';
             var inp = document.getElementById('ctaUid'); if (inp) inp.value = url;
-            if (status) { status.style.color = '#16a34a'; status.textContent = '✅ Video subido. Dale "Publicar".'; }
+            var isMov = /\.mov($|\?)/i.test(String(file.name || '')) || String(file.type || '').indexOf('quicktime') >= 0;
+            if (status) {
+              status.style.color = '#16a34a';
+              status.innerHTML = '✅ Video subido. Dale "Publicar".' + (isMov ? '<div style="color:#b45309;font-weight:700;margin-top:5px;line-height:1.4;">⚠️ Es .MOV — se ve en iPhone pero <b>NO en Android</b>. Para que jale en los dos, sube <b>MP4</b>.</div>' : '');
+            }
             if (btn) { btn.disabled = false; btn.textContent = '⬆️ Subir otro video'; }
             refreshPreview();
           } else {
