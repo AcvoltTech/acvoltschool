@@ -38,7 +38,8 @@
       _field('Título (el gancho)', 'ctaTitle', v.title, 'Ej: 3 pruebas a un compresor que no sabías') +
       _area('Texto de enganche', 'ctaTeaser', v.teaser, 'Ej: Si mides presión y no sabes hacer estas 3 pruebas, solo estás adivinando...') +
       '<div style="margin-bottom:12px;">' +
-        '<label style="display:block;font-size:13px;font-weight:700;color:#334155;margin-bottom:6px;">Video (vertical) de la explicación</label>' +
+        '<label style="display:block;font-size:13px;font-weight:700;color:#334155;margin-bottom:4px;">Video (vertical) de la explicación</label>' +
+        '<div style="font-size:11px;color:#94a3b8;margin-bottom:6px;line-height:1.4;">💡 Sube <b>vertical en MP4</b> (no .MOV) para que cargue rápido y se vea en TODOS los teléfonos. Ideal: 1-2 min, 30-80 MB.</div>' +
         '<input type="file" id="ctaFile" accept="video/*" style="display:none;">' +
         '<button type="button" id="ctaUploadBtn" style="width:100%;padding:12px;background:#2563eb;color:#fff;border:none;border-radius:8px;font-weight:800;font-size:14px;cursor:pointer;margin-bottom:6px;">⬆️ Subir video de mi dispositivo</button>' +
         '<div style="font-size:12px;color:#94a3b8;text-align:center;margin-bottom:6px;">— o pega un link / Stream UID —</div>' +
@@ -113,25 +114,65 @@
     return '<div style="font-size:12px;color:#64748b;margin-bottom:4px;">Vista previa:</div>' + inner;
   }
   function refreshPreview() { var box = document.getElementById('ctaPreview'); if (box) box.innerHTML = previewHtml((document.getElementById('ctaUid') || {}).value || ''); }
+  // Robust upload via XHR — real % progress + bar + timeout, so it NEVER looks
+  // stuck on big files and a true stall fails cleanly instead of hanging forever.
+  // Mario 2026-05-31: "asegúrate que la subida nunca se atore."
+  function _getToken(cb) {
+    try {
+      if (window.supabaseClient && supabaseClient.auth && supabaseClient.auth.getSession) {
+        supabaseClient.auth.getSession().then(function (s) { cb((s && s.data && s.data.session) ? s.data.session.access_token : _sbKey()); }, function () { cb(_sbKey()); });
+        return;
+      }
+    } catch (_) {}
+    cb(_sbKey());
+  }
   function uploadVideo(file) {
     var status = document.getElementById('ctaUpStatus'), btn = document.getElementById('ctaUploadBtn');
     if (!file) return;
-    if (!window.supabaseClient || !supabaseClient.storage) { if (status) { status.style.color = '#dc2626'; status.textContent = 'Subida no disponible aquí — pega un link.'; } return; }
     var mb = file.size / (1024 * 1024);
-    if (status) { status.style.color = '#2563eb'; status.textContent = '⏳ Subiendo video (' + mb.toFixed(1) + ' MB)... no cierres esta ventana.'; }
+    function fail(m) {
+      if (status) { status.style.color = '#dc2626'; status.textContent = '⚠️ ' + m + ' — reintenta o pega un link.'; }
+      if (btn) { btn.disabled = false; btn.textContent = '⬆️ Subir video de mi dispositivo'; }
+    }
+    if (status) {
+      status.style.color = '#2563eb';
+      status.innerHTML = '⏳ Subiendo (' + mb.toFixed(1) + ' MB)... <b id="ctaUpPct">0%</b><div style="height:7px;background:#e2e8f0;border-radius:4px;margin-top:5px;overflow:hidden;"><div id="ctaUpBar" style="height:100%;width:0;background:#2563eb;transition:width .25s;"></div></div>';
+    }
     if (btn) { btn.disabled = true; btn.textContent = 'Subiendo...'; }
     var path = 'cta-videos/' + Date.now() + '_' + String(file.name || 'video.mp4').replace(/[^a-zA-Z0-9._-]/g, '_');
-    supabaseClient.storage.from('school-files').upload(path, file, { cacheControl: '3600', upsert: false }).then(function (up) {
-      if (up && up.error) throw up.error;
-      var pub = supabaseClient.storage.from('school-files').getPublicUrl(path);
-      var url = (pub && pub.data) ? pub.data.publicUrl : '';
-      var inp = document.getElementById('ctaUid'); if (inp) inp.value = url;
-      if (status) { status.style.color = '#16a34a'; status.textContent = '✅ Video subido. Dale "Publicar".'; }
-      if (btn) { btn.disabled = false; btn.textContent = '⬆️ Subir otro video'; }
-      refreshPreview();
-    }, function (err) {
-      if (status) { status.style.color = '#dc2626'; status.textContent = '⚠️ No se pudo subir: ' + ((err && err.message) || err) + '. Pega un link.'; }
-      if (btn) { btn.disabled = false; btn.textContent = '⬆️ Subir video de mi dispositivo'; }
+    _getToken(function (token) {
+      try {
+        var xhr = new XMLHttpRequest();
+        xhr.open('POST', _sbUrl() + '/storage/v1/object/school-files/' + path, true);
+        xhr.setRequestHeader('Authorization', 'Bearer ' + token);
+        xhr.setRequestHeader('apikey', _sbKey());
+        xhr.setRequestHeader('Content-Type', file.type || 'video/mp4');
+        xhr.setRequestHeader('x-upsert', 'false');
+        xhr.upload.onprogress = function (e) {
+          if (e.lengthComputable) {
+            var pct = Math.round(e.loaded / e.total * 100);
+            var p = document.getElementById('ctaUpPct'); if (p) p.textContent = pct + '%';
+            var b = document.getElementById('ctaUpBar'); if (b) b.style.width = pct + '%';
+          }
+        };
+        xhr.onload = function () {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            var pub = supabaseClient.storage.from('school-files').getPublicUrl(path);
+            var url = (pub && pub.data) ? pub.data.publicUrl : '';
+            var inp = document.getElementById('ctaUid'); if (inp) inp.value = url;
+            if (status) { status.style.color = '#16a34a'; status.textContent = '✅ Video subido. Dale "Publicar".'; }
+            if (btn) { btn.disabled = false; btn.textContent = '⬆️ Subir otro video'; }
+            refreshPreview();
+          } else {
+            var m = 'Error ' + xhr.status; try { var d = JSON.parse(xhr.responseText); m = d.message || d.error || m; } catch (_) {}
+            fail(m);
+          }
+        };
+        xhr.onerror = function () { fail('Falló la conexión.'); };
+        xhr.timeout = 900000; // 15 min ceiling — true stalls fail cleanly
+        xhr.ontimeout = function () { fail('La subida tardó demasiado (señal lenta o archivo muy pesado).'); };
+        xhr.send(file);
+      } catch (e) { fail((e && e.message) || 'Error inesperado.'); }
     });
   }
 
