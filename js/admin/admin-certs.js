@@ -29,6 +29,7 @@
     });
     async function loadAdminCertificates() {
       try { dirSigInitCrm(); } catch (_) {}
+      try { certReqLoadCrm(); } catch (_) {}
       if (!supabaseClient) return;
       try {
         // Try fetching certificates with user name join
@@ -289,5 +290,61 @@
     window.dirSigInitCrm = dirSigInitCrm;
     window.dirSigClearCrm = dirSigClearCrm;
     window.dirSigSaveCrm = dirSigSaveCrm;
+
+    // ==================== SOLICITUDES DEL EXAMEN FINAL ====================
+    // Mario 2026-06-02. Los técnicos que pasan el Examen Final (>=80%) crean una
+    // solicitud PENDIENTE (edge fn cert-request). Aquí el Director las lista y FIRMA.
+    var _crUrl = _dscSbUrl + '/functions/v1/cert-request';
+    function _crEsc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+    function _crZones(z) { if (!Array.isArray(z)) return ''; return z.length + ' zonas'; }
+    function certReqLoadCrm() {
+      var box = document.getElementById('certReqList'); if (!box) return;
+      box.innerHTML = 'Cargando…';
+      fetch(_crUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'apikey': _dscSbKey(), 'Authorization': 'Bearer ' + _dscSbKey() },
+        body: JSON.stringify({ action: 'list', admin_email: _dscAdminEmail() })
+      }).then(function (r) { return r.json(); }).then(function (res) {
+        if (!res || !res.ok) { box.innerHTML = '<div style="color:#dc2626;font-weight:700;">' + _crEsc((res && res.error) || 'No se pudo cargar.') + '</div>'; return; }
+        var reqs = res.requests || [];
+        if (!reqs.length) { box.innerHTML = '<div style="color:#94a3b8;">No hay solicitudes todavía.</div>'; return; }
+        var pend = reqs.filter(function (x) { return x.status !== 'signed'; });
+        var signed = reqs.filter(function (x) { return x.status === 'signed'; });
+        var h = '';
+        if (pend.length) h += '<div style="font-size:11px;font-weight:800;color:#b45309;margin:4px 0 6px;">PENDIENTES DE FIRMA (' + pend.length + ')</div>';
+        pend.forEach(function (x) {
+          h += '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;background:#fff;border:1px solid #f0d9a0;border-radius:10px;padding:10px 12px;margin-bottom:7px;">';
+          h += '<div style="min-width:0;"><div style="font-weight:800;color:#1f2937;">' + _crEsc(x.name) + ' <span style="font-weight:600;color:#16a34a;">· ' + (x.score || 0) + '%</span></div>';
+          h += '<div style="font-size:11px;color:#64748b;">' + _crEsc(x.email || 's/correo') + ' · ' + _crEsc(x.title || '') + ' · ' + _crEsc(x.cert_id) + '</div></div>';
+          h += '<button onclick="certReqSignCrm(\'' + _crEsc(x.cert_id) + '\')" style="flex-shrink:0;padding:9px 14px;background:linear-gradient(135deg,#c9a14a,#a8842f);color:#1a1206;border:none;border-radius:9px;font-weight:900;font-size:13px;cursor:pointer;">✍️ Firmar</button></div>';
+        });
+        if (signed.length) {
+          h += '<div style="font-size:11px;font-weight:800;color:#16a34a;margin:12px 0 6px;">FIRMADOS (' + signed.length + ')</div>';
+          signed.forEach(function (x) {
+            h += '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:9px 12px;margin-bottom:6px;">';
+            h += '<div style="min-width:0;"><div style="font-weight:700;color:#166534;">✅ ' + _crEsc(x.name) + ' <span style="font-weight:600;">· ' + (x.score || 0) + '%</span></div>';
+            h += '<div style="font-size:11px;color:#64748b;">' + _crEsc(x.cert_id) + '</div></div>';
+            h += '<button onclick="certReqRevokeCrm(\'' + _crEsc(x.cert_id) + '\')" style="flex-shrink:0;padding:7px 11px;background:#f1f5f9;color:#475569;border:none;border-radius:8px;font-weight:700;font-size:12px;cursor:pointer;">Revocar</button></div>';
+          });
+        }
+        box.innerHTML = h;
+      }).catch(function () { box.innerHTML = '<div style="color:#dc2626;font-weight:700;">Error de conexión.</div>'; });
+    }
+    function _certReqAction(action, certId, okMsg) {
+      var msg = document.getElementById('certReqMsg'); if (msg) { msg.style.color = '#64748b'; msg.textContent = 'Procesando…'; }
+      fetch(_crUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'apikey': _dscSbKey(), 'Authorization': 'Bearer ' + _dscSbKey() },
+        body: JSON.stringify({ action: action, admin_email: _dscAdminEmail(), cert_id: certId })
+      }).then(function (r) { return r.json(); }).then(function (res) {
+        if (res && res.ok) { if (msg) { msg.style.color = '#16a34a'; msg.textContent = okMsg; } certReqLoadCrm(); }
+        else { if (msg) { msg.style.color = '#dc2626'; msg.textContent = (res && res.error) || 'No se pudo completar.'; } }
+      }).catch(function () { if (msg) { msg.style.color = '#dc2626'; msg.textContent = 'Error de conexión.'; } });
+    }
+    function certReqSignCrm(certId) { _certReqAction('sign', certId, '✅ Certificado firmado.'); }
+    function certReqRevokeCrm(certId) { _certReqAction('revoke', certId, 'Regresado a pendiente.'); }
+    window.certReqLoadCrm = certReqLoadCrm;
+    window.certReqSignCrm = certReqSignCrm;
+    window.certReqRevokeCrm = certReqRevokeCrm;
 
     // ==================== END ADMIN SECTION ====================
