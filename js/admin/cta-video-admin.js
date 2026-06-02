@@ -117,11 +117,27 @@
   // Robust upload via XHR — real % progress + bar + timeout, so it NEVER looks
   // stuck on big files and a true stall fails cleanly instead of hanging forever.
   // Mario 2026-05-31: "asegúrate que la subida nunca se atore."
-  function _getToken(cb) {
+  function _sessTokenCb(cb) {
     try {
-      if (window.supabaseClient && supabaseClient.auth && supabaseClient.auth.getSession) {
-        supabaseClient.auth.getSession().then(function (s) { cb((s && s.data && s.data.session) ? s.data.session.access_token : _sbKey()); }, function () { cb(_sbKey()); });
-        return;
+      supabaseClient.auth.getSession().then(function (s) { cb((s && s.data && s.data.session) ? s.data.session.access_token : _sbKey()); }, function () { cb(_sbKey()); });
+    } catch (_) { cb(_sbKey()); }
+  }
+  function _getToken(cb) {
+    // Mario 2026-06-01: el token de sesión EXPIRA si llevas rato logueado en el CRM
+    // o si la subida es larga → "exp claim timestamp check failed". Refrescamos el
+    // token JUSTO antes de subir para que vaya fresco; si el refresh falla, caemos
+    // a getSession y luego a la anon key.
+    try {
+      if (window.supabaseClient && supabaseClient.auth) {
+        if (supabaseClient.auth.refreshSession) {
+          supabaseClient.auth.refreshSession().then(function (r) {
+            var t = (r && r.data && r.data.session) ? r.data.session.access_token : null;
+            if (t) { cb(t); return; }
+            _sessTokenCb(cb);
+          }, function () { _sessTokenCb(cb); });
+          return;
+        }
+        if (supabaseClient.auth.getSession) { _sessTokenCb(cb); return; }
       }
     } catch (_) {}
     cb(_sbKey());
