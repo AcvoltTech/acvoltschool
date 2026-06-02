@@ -94,6 +94,25 @@ serve(async (req) => {
       return json({ ok: true });
     }
 
+    if (action === 'save_director_signature') {
+      const sig = String(body.signature || '');
+      if (sig.indexOf('data:image/') !== 0 || sig.length > 800000) {
+        return json({ error: 'Firma inválida.' }, 400);
+      }
+      // Store RAW (the app reads app_config.director_signature.value directly as
+      // an <img> src — do NOT JSON-wrap it).
+      const ex = await sb.from('app_config').select('key').eq('key', 'director_signature').limit(1);
+      if (ex.error) throw ex.error;
+      if (ex.data && ex.data.length) {
+        const { error } = await sb.from('app_config').update({ value: sig, updated_at: now() }).eq('key', 'director_signature');
+        if (error) throw error;
+      } else {
+        const { error } = await sb.from('app_config').insert({ key: 'director_signature', value: sig, updated_at: now() });
+        if (error) throw error;
+      }
+      return json({ ok: true });
+    }
+
     if (action === 'delete_video') {
       const id = String(body.id || '');
       let arr = await readArr();

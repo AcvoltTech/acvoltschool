@@ -2973,6 +2973,18 @@ function closeMarioV2(){document.getElementById('marioV2Overlay').style.display=
               <button onclick="adminBulkSetPayment('cash')" style="background:#a16207;padding:5px 10px;border-radius:6px;color:#fff;border:none;cursor:pointer;font-size:10px;" data-i18n="adm_certs_all_cash">💵 Todos Cash</button>
             </div>
           </div>
+          <!-- Firma del Director — se estampa en TODOS los certificados válidos del Desafío -->
+          <div style="background:#faf5ff;border:1px solid #e9d5ff;border-radius:12px;padding:14px;margin:10px 0;">
+            <div style="font-size:13px;font-weight:800;color:#6b21a8;margin-bottom:4px;">✍️ Firma del Director</div>
+            <div style="font-size:11px;color:#7c3aed;margin-bottom:10px;line-height:1.5;">Firma una sola vez. Se guarda y se estampa automáticamente en TODOS los certificados válidos del Desafío, para todos los técnicos.</div>
+            <div id="dirSigCurrentWrap" style="margin-bottom:8px;"></div>
+            <canvas id="dirSigCanvasCrm" style="display:block;width:100%;height:160px;border:2px dashed #c4b5fd;border-radius:10px;background:#fff;touch-action:none;cursor:crosshair;"></canvas>
+            <div style="display:flex;gap:8px;margin-top:10px;">
+              <button onclick="dirSigClearCrm()" style="flex:1;padding:11px;background:#f1f5f9;color:#334155;border:none;border-radius:9px;font-weight:700;font-size:13px;cursor:pointer;">Limpiar</button>
+              <button onclick="dirSigSaveCrm()" style="flex:2;padding:11px;background:linear-gradient(135deg,#7c3aed,#6d28d9);color:#fff;border:none;border-radius:9px;font-weight:800;font-size:14px;cursor:pointer;">Guardar firma</button>
+            </div>
+            <div id="dirSigMsgCrm" style="font-size:12px;font-weight:700;margin-top:8px;min-height:14px;"></div>
+          </div>
           <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;margin:10px 0;">
             <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:12px;text-align:center;">
               <div style="font-size:9px;color:#92400e;font-weight:500;" data-i18n="adm_certs_total">🏆 Total Certificados</div>

@@ -28,6 +28,7 @@
       adm_cert_platino: { es: 'Platino', en: 'Platinum' },
     });
     async function loadAdminCertificates() {
+      try { dirSigInitCrm(); } catch (_) {}
       if (!supabaseClient) return;
       try {
         // Try fetching certificates with user name join
@@ -212,5 +213,81 @@
         loadAdminCertificates();
       } catch(e) { alert(_t('adm_cert_bulk_payment_error', 'Error en pago masivo: ') + e.message); }
     }
+
+    // ==================== FIRMA DEL DIRECTOR ====================
+    // Mario 2026-06-02. Se dibuja una vez aquí (CRM, master verificado contra
+    // admin_staff vía la edge function cta-video-save → app_config.director_signature).
+    // La app la lee y la estampa en todos los certificados válidos del Desafío.
+    var _dscSbUrl = (typeof SUPABASE_URL !== 'undefined' && SUPABASE_URL) ? SUPABASE_URL : 'https://htklsowiyjwsjnacnvnr.supabase.co';
+    function _dscSbKey() {
+      if (typeof SUPABASE_KEY !== 'undefined' && SUPABASE_KEY) return SUPABASE_KEY;
+      if (typeof SUPABASE_ANON_KEY !== 'undefined' && SUPABASE_ANON_KEY) return SUPABASE_ANON_KEY;
+      try { if (window.supabaseClient && window.supabaseClient.supabaseKey) return window.supabaseClient.supabaseKey; } catch (_) {}
+      return '';
+    }
+    function _dscAdminEmail() {
+      try { if (typeof getAdminEmail === 'function') { var e = getAdminEmail(); if (e) return e; } } catch (_) {}
+      try { return sessionStorage.getItem('admin_email') || localStorage.getItem('tecnico_email') || ''; } catch (_) { return ''; }
+    }
+    var _dscDrawing = false, _dscHasInk = false;
+    function dirSigInitCrm() {
+      var cv = document.getElementById('dirSigCanvasCrm'); if (!cv) return;
+      // Load + preview the current saved signature (anon SELECT allowed on app_config)
+      try {
+        fetch(_dscSbUrl + '/rest/v1/app_config?select=value&key=eq.director_signature', { headers: { apikey: _dscSbKey(), Authorization: 'Bearer ' + _dscSbKey() } })
+          .then(function (r) { return r.json(); })
+          .then(function (rows) {
+            var v = (rows && rows[0] && rows[0].value) ? rows[0].value : '';
+            var wrap = document.getElementById('dirSigCurrentWrap');
+            if (wrap) wrap.innerHTML = v ? '<div style="font-size:11px;color:#16a34a;font-weight:700;margin-bottom:4px;">✅ Firma actual guardada:</div><img src="' + v + '" style="max-height:48px;max-width:180px;background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:4px;">' : '<div style="font-size:11px;color:#dc2626;font-weight:700;">⚠️ Aún no hay firma. Los certificados saldrán marcados como NO válidos hasta que firmes.</div>';
+          }).catch(function () {});
+      } catch (_) {}
+      // Set up the drawing canvas
+      var ratio = window.devicePixelRatio || 1;
+      var rect = cv.getBoundingClientRect();
+      cv.width = Math.round((rect.width || 320) * ratio);
+      cv.height = Math.round(160 * ratio);
+      var ctx = cv.getContext('2d');
+      ctx.scale(ratio, ratio);
+      ctx.lineWidth = 2.5; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.strokeStyle = '#0f172a';
+      _dscHasInk = false;
+      function pos(e) {
+        var r = cv.getBoundingClientRect();
+        var t = (e.touches && e.touches[0]) ? e.touches[0] : e;
+        return { x: t.clientX - r.left, y: t.clientY - r.top };
+      }
+      function start(e) { e.preventDefault(); _dscDrawing = true; var p = pos(e); ctx.beginPath(); ctx.moveTo(p.x, p.y); }
+      function move(e) { if (!_dscDrawing) return; e.preventDefault(); var p = pos(e); ctx.lineTo(p.x, p.y); ctx.stroke(); _dscHasInk = true; }
+      function end() { _dscDrawing = false; }
+      cv.onmousedown = start; cv.onmousemove = move; cv.onmouseup = end; cv.onmouseleave = end;
+      cv.ontouchstart = start; cv.ontouchmove = move; cv.ontouchend = end;
+    }
+    function dirSigClearCrm() {
+      var cv = document.getElementById('dirSigCanvasCrm'); if (!cv) return;
+      cv.getContext('2d').clearRect(0, 0, cv.width, cv.height); _dscHasInk = false;
+      var m = document.getElementById('dirSigMsgCrm'); if (m) m.textContent = '';
+    }
+    function dirSigSaveCrm() {
+      var cv = document.getElementById('dirSigCanvasCrm'); var msg = document.getElementById('dirSigMsgCrm');
+      if (!cv || !_dscHasInk) { if (msg) { msg.style.color = '#dc2626'; msg.textContent = 'Dibuja tu firma primero.'; } return; }
+      var dataUrl; try { dataUrl = cv.toDataURL('image/png'); } catch (_) { dataUrl = null; }
+      if (!dataUrl) { if (msg) { msg.style.color = '#dc2626'; msg.textContent = 'No se pudo capturar la firma.'; } return; }
+      if (msg) { msg.style.color = '#334155'; msg.textContent = 'Guardando...'; }
+      fetch(_dscSbUrl + '/functions/v1/cta-video-save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'apikey': _dscSbKey(), 'Authorization': 'Bearer ' + _dscSbKey() },
+        body: JSON.stringify({ action: 'save_director_signature', signature: dataUrl, admin_email: _dscAdminEmail() })
+      }).then(function (r) { return r.json(); }).then(function (res) {
+        if (res && res.ok) {
+          if (msg) { msg.style.color = '#16a34a'; msg.textContent = '✅ Firma guardada. Ya se estampa en todos los certificados válidos.'; }
+          try { dirSigInitCrm(); } catch (_) {}
+        } else {
+          if (msg) { msg.style.color = '#dc2626'; msg.textContent = 'Error: ' + ((res && res.error) || 'no se pudo guardar') + '. ¿Estás logueado como master?'; }
+        }
+      }, function () { if (msg) { msg.style.color = '#dc2626'; msg.textContent = 'Error de red al guardar.'; } });
+    }
+    window.dirSigInitCrm = dirSigInitCrm;
+    window.dirSigClearCrm = dirSigClearCrm;
+    window.dirSigSaveCrm = dirSigSaveCrm;
 
     // ==================== END ADMIN SECTION ====================
