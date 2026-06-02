@@ -88,6 +88,18 @@ serve(async (req) => {
       return json({ ok: true, cert_id, status: 'pending' });
     }
 
+    // ── PÚBLICO: el técnico consulta el estado de SU certificado (por folio) ──
+    if (action === 'status') {
+      const cert_id = clip(body.cert_id, 60).trim();
+      if (!cert_id) return json({ error: 'cert_id requerido' }, 400);
+      const { data, error } = await sb.from('cert_requests')
+        .select('cert_id,name,score,lang,title,status,signed_at').eq('cert_id', cert_id).limit(1);
+      if (error) throw error;
+      if (!data || !data.length) return json({ ok: true, found: false });
+      const r = data[0];
+      return json({ ok: true, found: true, status: r.status, signed: r.status === 'signed', name: r.name, score: r.score, title: r.title, lang: r.lang, signed_at: r.signed_at });
+    }
+
     // ── ADMIN: verificar identidad del Director (admin_staff) ──
     const { admin_email } = body;
     const auth = await verifyAdminAuth(req, sb, admin_email);

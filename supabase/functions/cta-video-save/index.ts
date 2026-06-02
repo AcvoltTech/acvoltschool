@@ -113,6 +113,22 @@ serve(async (req) => {
       return json({ ok: true });
     }
 
+    // Curso de Refrigeración — overrides de videos (quitar/mover) que el DUEÑO
+    // edita desde la app. Solo las cuentas de Mario. Mario 2026-06-02.
+    if (action === 'save_curso_overrides') {
+      const OWNER = ['floresmario30@hotmail.com', 'floresmario30@gmail.com'];
+      if (OWNER.indexOf(String(admin_email || '').toLowerCase().trim()) === -1) {
+        return json({ error: 'Solo el dueño puede editar los videos del curso.' }, 403);
+      }
+      const ov = body.overrides || {};
+      const clean = {
+        removed: Array.isArray(ov.removed) ? ov.removed.slice(0, 2000).map((s: unknown) => String(s).slice(0, 400)) : [],
+        moved: (ov.moved && typeof ov.moved === 'object') ? ov.moved : {},
+      };
+      await setKey('curso_videos_overrides', clean);
+      return json({ ok: true, overrides: clean });
+    }
+
     if (action === 'delete_video') {
       const id = String(body.id || '');
       let arr = await readArr();
