@@ -13,6 +13,7 @@
 
   var _all = [];     // [{src,title,thumb,kind,uid?,url?,cat}]
   var _assign = {};  // src -> zona ('' | zona | 'calefaccion')
+  var _title = {};   // src -> título efectivo (editable; corrige errores de escritura)
 
   window.loadCursoVideosAdmin = async function () {
     var box = document.getElementById('cvAdminList'); if (!box) return;
@@ -24,10 +25,11 @@
       _all = [];
       (acv.data || []).forEach(function (v) { if (!v.stream_uid) return; _all.push({ src: v.stream_uid, uid: v.stream_uid, kind: 'uid', title: v.title || '(sin título)', thumb: 'https://iframe.videodelivery.net/' + v.stream_uid + '/thumbnails/thumbnail.jpg?time=4s&height=120', cat: 'acvolt_lessons' }); });
       (tut.data || []).forEach(function (v) { if (!v.video_url) return; _all.push({ src: v.video_url, url: v.video_url, kind: 'url', title: v.title || '(sin título)', thumb: v.thumbnail_url || '', cat: v.category || 'tutorial_videos' }); });
+      _title = {}; _all.forEach(function (v) { _title[v.src] = v.title; });
       var mres = await supabaseClient.from('app_config').select('value').eq('key', 'curso_videos_map').limit(1);
       _assign = {};
       var mv = mres.data && mres.data[0] && mres.data[0].value;
-      if (mv) { var map; try { map = (typeof mv === 'string') ? JSON.parse(mv) : mv; } catch (_) { map = {}; } Object.keys(map || {}).forEach(function (z) { (map[z] || []).forEach(function (v) { var s = v.uid || v.url; if (s) _assign[s] = z; }); }); }
+      if (mv) { var map; try { map = (typeof mv === 'string') ? JSON.parse(mv) : mv; } catch (_) { map = {}; } Object.keys(map || {}).forEach(function (z) { (map[z] || []).forEach(function (v) { var s = v.uid || v.url; if (s) { _assign[s] = z; if (v.title) _title[s] = v.title; } }); }); }
       renderList();
     } catch (e) { box.innerHTML = '<div style="color:#dc2626;">Error: ' + esc(e.message || e) + '</div>'; }
   };
@@ -50,7 +52,7 @@
       var bg = z ? (z === 'calefaccion' ? '#fff3ee' : '#f0fdf4') : '#fff';
       rows += '<div style="display:flex;align-items:center;gap:10px;padding:8px 6px;border-bottom:1px solid #eef2f7;">';
       rows += '<div style="width:78px;height:44px;border-radius:6px;overflow:hidden;background:#0b1426;flex-shrink:0;">' + (v.thumb ? '<img src="' + esc(v.thumb) + '" loading="lazy" style="width:100%;height:100%;object-fit:cover;" onerror="this.style.opacity=0">' : '') + '</div>';
-      rows += '<div style="flex:1;min-width:0;"><div style="font-size:12.5px;font-weight:700;color:#1f2937;line-height:1.3;">' + esc(v.title) + '</div><div style="font-size:10px;color:#94a3b8;">' + esc(v.cat) + '</div></div>';
+      rows += '<div style="flex:1;min-width:0;"><input value="' + esc(_title[v.src] != null ? _title[v.src] : v.title) + '" onchange="window.cvSetTitle(\'' + esc(v.src).replace(/'/g, '&#39;') + '\',this.value)" title="Edita el título (corrige errores)" style="width:100%;font-size:12.5px;font-weight:700;color:#1f2937;border:1px solid transparent;border-radius:6px;padding:4px 6px;background:transparent;" onfocus="this.style.border=\'1px solid #c9a14a\';this.style.background=\'#fffdf5\'" onblur="this.style.border=\'1px solid transparent\';this.style.background=\'transparent\'"><div style="font-size:10px;color:#94a3b8;padding-left:6px;">' + esc(v.cat) + ' · ✎ título editable</div></div>';
       rows += '<select onchange="window.cvSetAssign(\'' + esc(v.src).replace(/'/g, '&#39;') + '\',this.value,this)" style="flex-shrink:0;padding:7px;border:1px solid ' + brd + ';border-radius:8px;background:' + bg + ';font-size:12px;font-weight:700;color:#13294a;max-width:160px;">';
       rows += '<option value="">— Sin asignar —</option>';
       Object.keys(ZLABELS).forEach(function (zz) { rows += '<option value="' + zz + '"' + (z === zz ? ' selected' : '') + '>' + ZLABELS[zz] + '</option>'; });
@@ -66,11 +68,15 @@
     updateSummary();
     var sv = document.getElementById('cvSaveBtn'); if (sv) { sv.textContent = '💾 Guardar cambios *'; sv.style.background = '#c9a14a'; }
   };
+  window.cvSetTitle = function (src, val) {
+    _title[src] = String(val == null ? '' : val).trim() || _title[src];
+    var sv = document.getElementById('cvSaveBtn'); if (sv) { sv.textContent = '💾 Guardar cambios *'; sv.style.background = '#c9a14a'; }
+  };
   window.cvFilter = function () { renderList(); };
 
   window.cvSaveCursoVideos = function () {
     var map = {}; Object.keys(ZLABELS).forEach(function (z) { map[z] = []; });
-    _all.forEach(function (v) { var z = _assign[v.src]; if (z && ZLABELS[z]) { map[z].push(v.kind === 'uid' ? { uid: v.uid, title: v.title } : { url: v.url, thumb: v.thumb, title: v.title }); } });
+    _all.forEach(function (v) { var z = _assign[v.src]; if (z && ZLABELS[z]) { var t = _title[v.src] != null ? _title[v.src] : v.title; map[z].push(v.kind === 'uid' ? { uid: v.uid, title: t } : { url: v.url, thumb: v.thumb, title: t }); } });
     var msg = document.getElementById('cvSaveMsg'); if (msg) { msg.style.color = '#64748b'; msg.textContent = 'Guardando…'; }
     fetch(SB_URL + '/functions/v1/cta-video-save', { method: 'POST', headers: { 'Content-Type': 'application/json', apikey: SB_KEY(), Authorization: 'Bearer ' + SB_KEY() }, body: JSON.stringify({ action: 'save_curso_map', admin_email: adminEmail(), map: map }) })
       .then(function (r) { return r.json(); })
