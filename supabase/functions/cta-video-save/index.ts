@@ -129,6 +129,15 @@ serve(async (req) => {
       return json({ ok: true, overrides: clean });
     }
 
+    // Curso de Refrigeración — MAPA de videos clasificado por staff (Manuel) en el CRM.
+    // { zona: [ {uid,title} | {url,thumb,title} ] }. Cualquier admin_staff (ya verificado).
+    if (action === 'save_curso_map') {
+      const m = body.map;
+      if (!m || typeof m !== 'object' || Array.isArray(m)) return json({ error: 'map inválido' }, 400);
+      await setKey('curso_videos_map', m);
+      return json({ ok: true });
+    }
+
     if (action === 'delete_video') {
       const id = String(body.id || '');
       let arr = await readArr();
