@@ -48,7 +48,7 @@ serve(async (req) => {
     const sb = createClient(SB_URL, SB_KEY);
 
     const body = await req.json();
-    const { video_url, video_id, admin_email } = body;
+    const { video_url, video_id, admin_email, subs_only = false } = body;
     if (!admin_email) return json({ error: 'Authentication required' }, 401);
     const emailLower = String(admin_email).toLowerCase().trim();
     const { data: staff } = await sb.from('admin_staff').select('id').eq('activo', true).ilike('email', emailLower).limit(1);
@@ -83,6 +83,9 @@ serve(async (req) => {
           const lines = (clr?.content?.[0]?.text || "").split("\n").filter((l: string) => l.trim());
           for (let j = 0; j < batch.length; j++) { const cleaned = (lines[j] || "").replace(/^\d+\.\s*/, "").trim(); tr.push({ start: batch[j].start, end: batch[j].end, text: cleaned || batch[j].text }); }
         }
+        // Corrección de marca: variantes mal oídas → "ACVOLT Tech School".
+        const fixBrand = (t: string) => t.replace(/ace[\s-]?bolt\s?tech(\s?school)?/gi, 'ACVOLT Tech School').replace(/aceboltech/gi, 'ACVOLT Tech School').replace(/\bac[\s-]?volt\b/gi, 'ACVOLT');
+        tr.forEach((s) => { s.text = fixBrand(s.text); });
 
         // 3. WebVTT
         let vtt = "WEBVTT\n\n";
@@ -91,22 +94,28 @@ serve(async (req) => {
         await sb.storage.from("school-files").upload(vttPath, new Blob([vtt], { type: "text/vtt" }), { contentType: "text/vtt", upsert: true });
         const subtitle_url_en = sb.storage.from("school-files").getPublicUrl(vttPath).data.publicUrl;
 
-        // 4. ElevenLabs (audio EN con la voz de Mario)
         const fullEn = tr.map((s) => s.text).join(" ").replace(/\s+/g, " ").trim();
-        const chunks = chunkText(fullEn, 2400);
-        const parts: Uint8Array[] = [];
-        for (const c of chunks) {
-          const el = await fetch("https://api.elevenlabs.io/v1/text-to-speech/" + EL_VOICE, { method: "POST", headers: { "xi-api-key": EL_KEY, "Content-Type": "application/json", "Accept": "audio/mpeg" }, body: JSON.stringify({ text: c, model_id: "eleven_multilingual_v2", voice_settings: { stability: 0.5, similarity_boost: 0.8 } }) });
-          if (!el.ok) throw new Error("ElevenLabs: " + el.status + " " + (await el.text()).slice(0, 200));
-          parts.push(new Uint8Array(await el.arrayBuffer()));
-        }
-        let total = 0; parts.forEach((p) => total += p.length);
-        const audio = new Uint8Array(total); let off = 0; parts.forEach((p) => { audio.set(p, off); off += p.length; });
-        const mp3Path = `audio-en/${video_id}_en.mp3`;
-        await sb.storage.from("school-files").upload(mp3Path, new Blob([audio], { type: "audio/mpeg" }), { contentType: "audio/mpeg", upsert: true });
-        const audio_url_en = sb.storage.from("school-files").getPublicUrl(mp3Path).data.publicUrl;
 
-        await patchExplicacion(sb, video_id, { en_status: 'ready', subtitle_url_en, audio_url_en, en_chars: fullEn.length, en_segments: tr.length });
+        // 4. ElevenLabs (audio EN con la voz de Mario) — SOLO si no es subs_only.
+        // El doblaje de voz no cuadra con la boca en videos largos; subtítulos sí.
+        // Mario 2026-06-03 → subs_only = la vía recomendada (rápida, sin gastar voz).
+        let audio_url_en: string | null = null;
+        if (!subs_only) {
+          const chunks = chunkText(fullEn, 2400);
+          const parts: Uint8Array[] = [];
+          for (const c of chunks) {
+            const el = await fetch("https://api.elevenlabs.io/v1/text-to-speech/" + EL_VOICE, { method: "POST", headers: { "xi-api-key": EL_KEY, "Content-Type": "application/json", "Accept": "audio/mpeg" }, body: JSON.stringify({ text: c, model_id: "eleven_multilingual_v2", voice_settings: { stability: 0.5, similarity_boost: 0.8 } }) });
+            if (!el.ok) throw new Error("ElevenLabs: " + el.status + " " + (await el.text()).slice(0, 200));
+            parts.push(new Uint8Array(await el.arrayBuffer()));
+          }
+          let total = 0; parts.forEach((p) => total += p.length);
+          const audio = new Uint8Array(total); let off = 0; parts.forEach((p) => { audio.set(p, off); off += p.length; });
+          const mp3Path = `audio-en/${video_id}_en.mp3`;
+          await sb.storage.from("school-files").upload(mp3Path, new Blob([audio], { type: "audio/mpeg" }), { contentType: "audio/mpeg", upsert: true });
+          audio_url_en = sb.storage.from("school-files").getPublicUrl(mp3Path).data.publicUrl;
+        }
+
+        await patchExplicacion(sb, video_id, { en_status: 'ready', subtitle_url_en, audio_url_en, en_chars: fullEn.length, en_segments: tr.length, en_subs_only: !!subs_only });
       } catch (e) {
         await patchExplicacion(sb, video_id, { en_status: 'error', en_error: String((e as Error)?.message || e).slice(0, 300) });
       }

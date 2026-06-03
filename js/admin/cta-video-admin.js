@@ -58,7 +58,8 @@
         '<button id="ctaSaveBtn" style="flex:2;padding:13px;background:linear-gradient(135deg,#f59e0b,#d97706);color:#fff;border:none;border-radius:10px;font-weight:800;font-size:15px;cursor:pointer;">' + (v.id ? 'Guardar cambios' : 'Publicar explicación') + '</button>' +
         (v.id ? '<button id="ctaCancelBtn" style="flex:1;padding:13px;background:#e2e8f0;color:#334155;border:none;border-radius:10px;font-weight:800;font-size:14px;cursor:pointer;">Cancelar</button>' : '') +
       '</div>' +
-      '<button id="ctaGenEnBtn" onclick="window.ctaGenEnglish()" style="width:100%;margin-top:8px;padding:12px;background:linear-gradient(135deg,#13294a,#1e3a5f);color:#fff;border:none;border-radius:10px;font-weight:800;font-size:14px;cursor:pointer;">🌐 Generar versión en inglés (con tu voz)</button>' +
+      '<button id="ctaGenSubsBtn" onclick="window.ctaGenEnglish(true)" style="width:100%;margin-top:8px;padding:12px;background:linear-gradient(135deg,#1d4ed8,#2563eb);color:#fff;border:none;border-radius:10px;font-weight:800;font-size:14px;cursor:pointer;">💬 Generar subtítulos en inglés (recomendado · rápido)</button>' +
+      '<button id="ctaGenEnBtn" onclick="window.ctaGenEnglish(false)" style="width:100%;margin-top:6px;padding:10px;background:#eef2f7;color:#334155;border:1px solid #cbd5e1;border-radius:10px;font-weight:700;font-size:12.5px;cursor:pointer;">🌐 …o versión con tu voz en inglés (más lento)</button>' +
       '<div id="ctaEnStatus" style="margin-top:8px;font-size:12.5px;font-weight:700;min-height:16px;color:#475569;">' + (v.en_status === 'ready' ? '✅ Versión en inglés lista.' : '') + '</div>' +
       '<div id="ctaEnResult" style="' + (v.en_status === 'ready' ? '' : 'display:none;') + 'margin-top:6px;">' + (v.en_status === 'ready' ? _enLinks(v) : '') + '</div>' +
       '<div id="ctaMsg" style="margin-top:10px;font-size:13px;text-align:center;min-height:18px;"></div>' +
@@ -70,26 +71,29 @@
     return '<div style="display:flex;gap:8px;flex-wrap:wrap;">' +
       '<a href="' + esc(v.audio_url_en || '') + '" download="voz-ingles.mp3" style="padding:9px 14px;background:#f0fdf4;color:#166534;border:1px solid #bbf7d0;border-radius:9px;font-weight:800;font-size:13px;text-decoration:none;">⬇️ Audio inglés (.mp3)</a>' +
       '<a href="' + esc(v.subtitle_url_en || '') + '" download="subtitulos-en.vtt" style="padding:9px 14px;background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe;border-radius:9px;font-weight:800;font-size:13px;text-decoration:none;">⬇️ Subtítulos (.vtt)</a>' +
-      '</div><div style="font-size:11px;color:#64748b;margin-top:8px;line-height:1.5;">💡 Para postear: baja el audio inglés y ponlo sobre tu video en CapCut (silencia el original).</div>';
+      '</div><div style="font-size:11.5px;color:#166534;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:8px 10px;margin-top:8px;line-height:1.55;">✅ Los subtítulos en inglés <b>ya se ven automáticamente</b> sobre este video en el dashboard de la app (botón <b>🔤 English subtitles</b>). No necesitas hacer nada más.</div>' +
+      '<div style="font-size:11px;color:#64748b;margin-top:6px;line-height:1.5;">💡 El .vtt es por si quieres quemarlos en CapCut para postearlos en redes. El audio en inglés es opcional (no siempre cuadra con la boca en videos largos).</div>';
   }
-  window.ctaGenEnglish = function () {
+  window.ctaGenEnglish = function (subsOnly) {
     var url = (document.getElementById('ctaUid') || {}).value || '';
     var id = (document.getElementById('ctaEditId') || {}).value || '';
     var st = document.getElementById('ctaEnStatus');
     var setSt = function (m, c) { if (st) { st.textContent = m; st.style.color = c || '#475569'; } };
     if (!url) { setSt('Primero sube o pega el video.', '#dc2626'); return; }
     if (!id) { setSt('⚠️ Dale "Publicar explicación" primero; luego genera el inglés.', '#b45309'); return; }
-    var btn = document.getElementById('ctaGenEnBtn'); if (btn) btn.disabled = true;
-    setSt('⏳ Generando tu voz en inglés… (1-2 min, no cierres esta pestaña)', '#475569');
-    fetch(_sbUrl() + '/functions/v1/translate-video-en', { method: 'POST', headers: { 'Content-Type': 'application/json', 'apikey': _sbKey(), 'Authorization': 'Bearer ' + _sbKey() }, body: JSON.stringify({ video_url: url, video_id: id, admin_email: _adminEmail() }) })
+    var b1 = document.getElementById('ctaGenSubsBtn'), b2 = document.getElementById('ctaGenEnBtn');
+    if (b1) b1.disabled = true; if (b2) b2.disabled = true;
+    setSt(subsOnly ? '⏳ Generando subtítulos en inglés… (~30-60s, no cierres esta pestaña)' : '⏳ Generando tu voz en inglés… (1-2 min, no cierres esta pestaña)', '#475569');
+    fetch(_sbUrl() + '/functions/v1/translate-video-en', { method: 'POST', headers: { 'Content-Type': 'application/json', 'apikey': _sbKey(), 'Authorization': 'Bearer ' + _sbKey() }, body: JSON.stringify({ video_url: url, video_id: id, admin_email: _adminEmail(), subs_only: !!subsOnly }) })
       .then(function (r) { return r.json(); })
       .then(function (res) {
-        if (!res || res.status !== 'processing') { setSt((res && res.error) || 'No se pudo arrancar.', '#dc2626'); if (btn) btn.disabled = false; return; }
-        _ctaPollEn(id, st, btn);
+        if (!res || res.status !== 'processing') { setSt((res && res.error) || 'No se pudo arrancar.', '#dc2626'); if (b1) b1.disabled = false; if (b2) b2.disabled = false; return; }
+        _ctaPollEn(id, st);
       })
-      .catch(function () { setSt('Error de conexión.', '#dc2626'); if (btn) btn.disabled = false; });
+      .catch(function () { setSt('Error de conexión.', '#dc2626'); if (b1) b1.disabled = false; if (b2) b2.disabled = false; });
   };
-  function _ctaPollEn(id, st, btn) {
+  function _ctaPollEn(id, st) {
+    var reEnable = function () { var a = document.getElementById('ctaGenSubsBtn'), b = document.getElementById('ctaGenEnBtn'); if (a) a.disabled = false; if (b) b.disabled = false; };
     var n = 0;
     function tick() {
       n++;
@@ -98,12 +102,12 @@
         .then(function (rows) {
           var arr = []; try { arr = JSON.parse(rows[0].value); } catch (_) {}
           var v = arr.filter(function (x) { return x.id === id; })[0] || {};
-          if (v.en_status === 'ready') { if (st) { st.textContent = '✅ ¡Lista! Tu voz en inglés + subtítulos generados.'; st.style.color = '#16a34a'; } var rr = document.getElementById('ctaEnResult'); if (rr) { rr.style.display = 'block'; rr.innerHTML = _enLinks(v); } if (btn) btn.disabled = false; return; }
-          if (v.en_status === 'error') { if (st) { st.textContent = '❌ ' + (v.en_error || 'Error'); st.style.color = '#dc2626'; } if (btn) btn.disabled = false; return; }
-          if (n >= 80) { if (st) { st.textContent = 'Está tardando (video grande). Usa uno comprimido ≤80MB, o espera y recarga.'; st.style.color = '#b45309'; } if (btn) btn.disabled = false; return; }
+          if (v.en_status === 'ready') { if (st) { st.textContent = v.en_subs_only ? '✅ ¡Subtítulos en inglés listos! Ya se ven en el video del CTA dentro de la app.' : '✅ ¡Lista! Tu voz en inglés + subtítulos generados.'; st.style.color = '#16a34a'; } var rr = document.getElementById('ctaEnResult'); if (rr) { rr.style.display = 'block'; rr.innerHTML = _enLinks(v); } reEnable(); return; }
+          if (v.en_status === 'error') { if (st) { st.textContent = '❌ ' + (v.en_error || 'Error'); st.style.color = '#dc2626'; } reEnable(); return; }
+          if (n >= 80) { if (st) { st.textContent = 'Está tardando (video grande). Usa uno comprimido ≤80MB, o espera y recarga.'; st.style.color = '#b45309'; } reEnable(); return; }
           setTimeout(tick, 5000);
         })
-        .catch(function () { if (n < 80) setTimeout(tick, 5000); else if (btn) btn.disabled = false; });
+        .catch(function () { if (n < 80) setTimeout(tick, 5000); else reEnable(); });
     }
     setTimeout(tick, 5000);
   }
