@@ -218,7 +218,7 @@
   }catch(_e){}
 })();
 
-var APP_VERSION = 'v6.17-traducir-video';
+var APP_VERSION = 'v6.18-traducir-sidebar';
 (function(){
   var stored = localStorage.getItem('maestroac_app_version');
   if(stored && stored !== APP_VERSION){
@@ -1541,6 +1541,9 @@ function closeMarioV2(){document.getElementById('marioV2Overlay').style.display=
     </a>
     <a class="crm-sidebar-item" data-crm-section="ctaVideo" data-crm-mode="admin" onclick="showCrmSection('ctaVideo', this)">
       <span class="crm-icon">📣</span> <span>Call to Action</span>
+    </a>
+    <a class="crm-sidebar-item" data-crm-mode="admin" onclick="if(typeof showCrmSection==='function')showCrmSection('certificados', this); setTimeout(function(){var e=document.getElementById('adminTraducirVideo'); if(e)e.scrollIntoView({behavior:'smooth',block:'start'}); if(window.loadTraducirVideo) loadTraducirVideo();}, 350);">
+      <span class="crm-icon">🌐</span> <span>Traducir Video (inglés)</span>
     </a>
     <a class="crm-sidebar-item" data-crm-section="acvoltSchool" data-crm-mode="admin">
       <span class="crm-icon">🏫</span> <span data-i18n="adm_crm_videos_maestro_hvacr">Videos Maestro HVACR</span>
