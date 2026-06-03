@@ -218,7 +218,7 @@
   }catch(_e){}
 })();
 
-var APP_VERSION = 'v6.16-errmon-benign';
+var APP_VERSION = 'v6.17-traducir-video';
 (function(){
   var stored = localStorage.getItem('maestroac_app_version');
   if(stored && stored !== APP_VERSION){
@@ -1776,6 +1776,7 @@ function closeMarioV2(){document.getElementById('marioV2Overlay').style.display=
           <button onclick="document.getElementById('adminAnalytics').scrollIntoView({behavior:'smooth'})" class="admin-nav-btn" data-i18n="adm_nav_analytics">📊 Analytics</button>
           <button onclick="document.getElementById('adminCertificados').scrollIntoView({behavior:'smooth'})" class="admin-nav-btn" data-i18n="adm_nav_certificados">🏆 Certificados</button>
           <button onclick="document.getElementById('adminCursoVideos').scrollIntoView({behavior:'smooth'}); if(window.loadCursoVideosAdmin) loadCursoVideosAdmin();" class="admin-nav-btn">📹 Videos Curso</button>
+          <button onclick="document.getElementById('adminTraducirVideo').scrollIntoView({behavior:'smooth'}); if(window.loadTraducirVideo) loadTraducirVideo();" class="admin-nav-btn">🌐 Traducir Video</button>
           <button onclick="document.getElementById('adminInactivityAlerts').scrollIntoView({behavior:'smooth'})" class="admin-nav-btn" data-i18n="adm_nav_alertas">⚠️ Alertas</button>
         </div>
 
@@ -2963,6 +2964,28 @@ function closeMarioV2(){document.getElementById('marioV2Overlay').style.display=
 
 
         <!-- ========== CERTIFICADOS DE ESTUDIANTES — ADMIN ========== -->
+        <!-- ============ TRADUCIR VIDEO A INGLÉS (con la voz de Mario) ============ -->
+        <div class="admin-section admin-grid-full" id="adminTraducirVideo" style="background:#ffffff;border:1px solid #e2e8f0;box-shadow:0 1px 3px rgba(0,0,0,0.06);">
+          <h3 style="margin:0 0 4px;color:#13294a;">🌐 Traducir Video a Inglés <span style="font-size:12px;color:#a8842f;">(con tu voz)</span></h3>
+          <p style="font-size:12.5px;color:#64748b;margin:0 0 12px;line-height:1.5;">Elige un video en español → saca el audio → lo traduce → genera <b>tu voz en inglés</b> + subtítulos. Se genera <b>una vez</b> (gratis después). Tip: usa un video comprimido (≤350 MB) para que vaya rápido.</p>
+          <input type="file" accept="video/*" onchange="tvOnFile(this)" style="font-size:13px;margin-bottom:10px;">
+          <div style="margin:8px 0;"><button id="tvGoBtn" onclick="tvTranslate()" disabled style="padding:10px 18px;background:#13294a;color:#fff;border:none;border-radius:9px;font-weight:800;font-size:14px;cursor:pointer;">🌐 Traducir a inglés</button></div>
+          <div id="tvStatus" style="font-size:12.5px;font-weight:700;margin:8px 0;min-height:16px;color:#475569;">Elige un video en español.</div>
+          <video id="tvVideo" controls playsinline style="display:none;width:100%;max-width:360px;border-radius:12px;background:#000;margin:8px 0;"></video>
+          <audio id="tvEnAudio" preload="auto" style="display:none;"></audio>
+          <div id="tvDownloads" style="display:none;border-top:1px solid #eef2f7;margin-top:12px;padding-top:12px;">
+            <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:10px;">
+              <button onclick="tvPlayEnglish()" style="padding:9px 14px;background:linear-gradient(135deg,#c9a14a,#a8842f);color:#1a1206;border:none;border-radius:9px;font-weight:800;font-size:13px;cursor:pointer;">▶️ Previsualizar en inglés</button>
+              <button onclick="tvStopEnglish()" style="padding:9px 12px;background:#f1f5f9;color:#475569;border:none;border-radius:9px;font-weight:700;font-size:13px;cursor:pointer;">⏹ Parar</button>
+              <a id="tvDlAudio" download="voz-ingles.mp3" style="padding:9px 14px;background:#f0fdf4;color:#166534;border:1px solid #bbf7d0;border-radius:9px;font-weight:800;font-size:13px;text-decoration:none;">⬇️ Audio inglés (.mp3)</a>
+              <a id="tvDlSubs" download="subtitulos-en.vtt" style="padding:9px 14px;background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe;border-radius:9px;font-weight:800;font-size:13px;text-decoration:none;">⬇️ Subtítulos (.vtt)</a>
+            </div>
+            <div style="font-size:11px;color:#94a3b8;margin-bottom:6px;">Traducción (inglés):</div>
+            <div id="tvEnText" style="font-size:13px;color:#334155;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:10px 12px;line-height:1.5;max-height:140px;overflow:auto;"></div>
+            <div style="font-size:11px;color:#64748b;margin-top:10px;line-height:1.5;">💡 Para postear en TikTok/FB: baja el <b>audio inglés</b> y ponlo sobre tu video en CapCut (silencia el original) — o usa la previsualización para validar. El bake automático a un MP4 lo agregamos si lo quieres.</div>
+          </div>
+        </div>
+
         <!-- ============ VIDEOS DEL CURSO DE REFRIGERACIÓN (clasificación humana) ============ -->
         <div class="admin-section admin-grid-full" id="adminCursoVideos" style="background:#ffffff;border:1px solid #e2e8f0;box-shadow:0 1px 3px rgba(0,0,0,0.06);">
           <h3 style="margin:0 0 4px;color:#13294a;">📹 Videos del Curso de Refrigeración</h3>

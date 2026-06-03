@@ -712,6 +712,7 @@
             'js/admin/hash-passwords.js',
             'js/admin/admin-certs.js',
             'js/admin/curso-videos-admin.js',
+            'js/admin/traducir-video.js',
             'js/admin/gatekeeper.js',
             'js/admin/device-viewer.js',
             'js/crm/student-roster.js',

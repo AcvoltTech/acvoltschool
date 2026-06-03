@@ -1806,6 +1806,7 @@ function showScreen(screenId) {
           'js/admin/pdf-reports.js',
           'js/admin/admin-certs.js',
             'js/admin/curso-videos-admin.js',
+            'js/admin/traducir-video.js',
           'js/admin/gatekeeper.js',
           'js/admin/tutorial-videos.js',
           'js/admin/soporte-admin.js',
