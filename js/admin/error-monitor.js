@@ -201,7 +201,21 @@ function _errMonGroupErrors(rows) {
 }
 
 /* ── Severity badge ─────────────────────────────────────── */
-function _errMonSeverity(count) {
+// Patrones BENIGNOS (no son errores reales): cierre de app normal, pantalla
+// bloqueada/segundo plano, y ruido del navegador/extensiones. Se marcan INFO sin
+// importar el conteo, para que el dashboard no grite CRÍTICO ante comportamiento
+// normal. Mario 2026-06-03.
+function _errMonIsBenign(message) {
+  var m = String(message || '');
+  return /ended without clean close/i.test(m)        // app cerrada/minimizada normal
+    || /Main thread blocked/i.test(m)                 // casi siempre = app en segundo plano
+    || /_AutofillCallbackHandler/i.test(m)            // autocompletar de iOS/gestor de contraseñas
+    || /EmptyRanges/i.test(m)                         // interno de WebKit/Safari
+    || /^Script error\.?$/i.test(m)                   // error opaco cross-origin (sin detalle)
+    || /ResizeObserver loop/i.test(m);
+}
+function _errMonSeverity(count, message) {
+  if (_errMonIsBenign(message)) return { label: 'INFO', bg: 'rgba(148,163,184,0.12)', color: '#94a3b8' };
   if (count >= 50) return { label: 'CRITICAL', bg: 'rgba(239,68,68,0.2)', color: '#ef4444' };
   if (count >= 10) return { label: 'HIGH', bg: 'rgba(245,158,11,0.2)', color: '#f59e0b' };
   if (count >= 3) return { label: 'MEDIUM', bg: 'rgba(59,130,246,0.2)', color: '#3b82f6' };
@@ -222,7 +236,7 @@ function _errMonRenderTable(groups) {
   var limit = Math.min(groups.length, 50);
   for (var i = 0; i < limit; i++) {
     var g = groups[i];
-    var sev = _errMonSeverity(g.count);
+    var sev = _errMonSeverity(g.count, g.message);
     var userCount = Object.keys(g.users).length;
     var msgTrunc = g.message.length > 80 ? g.message.substring(0, 80) + '...' : g.message;
 
