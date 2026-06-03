@@ -89,12 +89,21 @@ serve(async (req) => {
     for (let i = 0; i < segments.length; i += 40) {
       const batch = segments.slice(i, i + 40);
       const numbered = batch.map((s: { text: string }, idx: number) => `${i + idx + 1}. ${s.text}`).join("\n");
-      const cl = await fetch("https://api.anthropic.com/v1/messages", { method: "POST", headers: { "x-api-key": ANTHROPIC, "anthropic-version": "2023-06-01", "Content-Type": "application/json" }, body: JSON.stringify({ model: "claude-sonnet-4-6", max_tokens: 4096, messages: [{ role: "user", content: `Translate these HVAC tutorial lines from Spanish to English. Keep the same numbered format, one line each. Preserve technical terms (superheat, subcooling, compressor, etc.). Natural spoken English. Do NOT add or remove lines.\n\n${numbered}` }] }) });
+      const cl = await fetch("https://api.anthropic.com/v1/messages", { method: "POST", headers: { "x-api-key": ANTHROPIC, "anthropic-version": "2023-06-01", "Content-Type": "application/json" }, body: JSON.stringify({ model: "claude-sonnet-4-6", max_tokens: 4096, messages: [{ role: "user", content: `Translate these HVAC tutorial lines from Spanish to English. Keep the same numbered format, one line each. Preserve technical terms (superheat, subcooling, compressor, etc.). The school/brand is exactly "ACVOLT Tech School" — always write it that way, NEVER "Aceboltech", "Ace Volt", "Acebolt" or similar. Natural spoken English. Do NOT add or remove lines.\n\n${numbered}` }] }) });
       if (!cl.ok) throw new Error("Claude: " + cl.status + " " + (await cl.text()).slice(0, 160));
       const clr = await cl.json();
       const lines = (clr?.content?.[0]?.text || "").split("\n").filter((l: string) => l.trim());
       for (let j = 0; j < batch.length; j++) { const cleaned = (lines[j] || "").replace(/^\d+\.\s*/, "").trim(); tr.push({ start: batch[j].start, end: batch[j].end, text: cleaned || batch[j].text }); }
     }
+
+    // Corrección de marca (belt-and-suspenders): variantes mal oídas → "ACVOLT Tech School".
+    const fixBrand = (t: string) => t
+      .replace(/ace[\s-]?bolt\s?tech(\s?school)?/gi, 'ACVOLT Tech School')
+      .replace(/aceboltech/gi, 'ACVOLT Tech School')
+      .replace(/ace[\s-]?volt\s?tech(\s?school)?/gi, 'ACVOLT Tech School')
+      .replace(/ac[\s-]volt\s?tech(\s?school)?/gi, 'ACVOLT Tech School')
+      .replace(/\bac[\s-]?volt\b/gi, 'ACVOLT');
+    tr.forEach((s) => { s.text = fixBrand(s.text); });
 
     // 3. WebVTT
     let vtt = "WEBVTT\n\n";
