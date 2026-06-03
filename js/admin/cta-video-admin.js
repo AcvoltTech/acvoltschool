@@ -131,6 +131,7 @@
         '<div style="font-size:20px;">' + (v.active ? '🟢' : '⚪') + '</div>' +
         '<div style="flex:1;min-width:0;"><div style="font-size:14px;font-weight:700;color:#0f172a;line-height:1.3;">' + esc(v.title) + '</div>' +
         '<div style="font-size:11px;color:#64748b;margin-top:2px;">' + fmtDate(v.date) + (v.active ? '' : ' · inactivo') + '</div></div>' +
+        '<button id="subsBtn_' + esc(v.id) + '" onclick="window.CTAVideoAdmin._genSubs(\'' + esc(v.id) + '\')" title="Generar subtítulos en inglés" style="padding:7px 10px;background:' + (v.subtitle_url_en ? '#f0fdf4' : '#eff6ff') + ';color:' + (v.subtitle_url_en ? '#166534' : '#1d4ed8') + ';border:1px solid ' + (v.subtitle_url_en ? '#bbf7d0' : '#bfdbfe') + ';border-radius:7px;font-size:12px;font-weight:700;cursor:pointer;">' + (v.subtitle_url_en ? '✅ Subs EN' : '💬 Subs EN') + '</button>' +
         '<button onclick="window.CTAVideoAdmin._edit(\'' + esc(v.id) + '\')" style="padding:7px 10px;background:#eff6ff;color:#2563eb;border:1px solid #bfdbfe;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer;">Editar</button>' +
         '<button onclick="window.CTAVideoAdmin._del(\'' + esc(v.id) + '\')" style="padding:7px 10px;background:#fff;color:#dc2626;border:1px solid #fecaca;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer;">Borrar</button>' +
       '</div>';
@@ -298,6 +299,34 @@
     _del: function (id) {
       if (!window.confirm('¿Borrar esta explicación?')) return;
       post({ action: 'delete_video', id: id }, function (res) { if (res) { STATE.videos = res.items || STATE.videos.filter(function (v) { return v.id !== id; }); rerender(); } });
+    },
+    // Generar subtítulos en inglés para CUALQUIER video de la lista (subs_only, rápido).
+    _genSubs: function (id) {
+      var v = STATE.videos.filter(function (x) { return x.id === id; })[0];
+      var btn = document.getElementById('subsBtn_' + id);
+      if (!v || !v.video) { if (btn) btn.textContent = '⚠️ Sin URL'; return; }
+      if (btn) { btn.disabled = true; btn.textContent = '⏳ Generando…'; }
+      fetch(_sbUrl() + '/functions/v1/translate-video-en', { method: 'POST', headers: { 'Content-Type': 'application/json', 'apikey': _sbKey(), 'Authorization': 'Bearer ' + _sbKey() }, body: JSON.stringify({ video_url: v.video, video_id: id, admin_email: _adminEmail(), subs_only: true }) })
+        .then(function (r) { return r.json(); })
+        .then(function (res) {
+          if (!res || res.status !== 'processing') { if (btn) { btn.disabled = false; btn.textContent = '⚠️ ' + ((res && res.error) ? 'Error' : 'Reintentar'); } return; }
+          var n = 0;
+          (function tick() {
+            n++;
+            fetch(_sbUrl() + '/rest/v1/app_config?select=value&key=eq.explicaciones', { headers: { apikey: _sbKey(), Authorization: 'Bearer ' + _sbKey() } })
+              .then(function (r) { return r.json(); })
+              .then(function (rows) {
+                var arr = []; try { arr = JSON.parse(rows[0].value); } catch (_) {}
+                var vv = arr.filter(function (x) { return x.id === id; })[0] || {};
+                if (vv.en_status === 'ready') { STATE.videos = arr; if (btn) { btn.disabled = false; btn.textContent = '✅ Subs EN'; btn.style.background = '#f0fdf4'; btn.style.color = '#166534'; btn.style.borderColor = '#bbf7d0'; } return; }
+                if (vv.en_status === 'error') { if (btn) { btn.disabled = false; btn.textContent = '⚠️ Error'; } return; }
+                if (n >= 60) { if (btn) { btn.disabled = false; btn.textContent = '⏳ Tarda…'; } return; }
+                setTimeout(tick, 4000);
+              })
+              .catch(function () { if (n < 60) setTimeout(tick, 4000); else if (btn) btn.disabled = false; });
+          })();
+        })
+        .catch(function () { if (btn) { btn.disabled = false; btn.textContent = '⚠️ Conexión'; } });
     },
     _delPet: function (id) {
       if (!window.supabaseClient || !supabaseClient.from) return;
