@@ -67,28 +67,12 @@ serve(async (req) => {
       return json({ ok, mode: 'test', to: test_to, resend: txt.slice(0, 200) });
     }
 
-    // ── Cohorte: usuarios con email válido, no internos, que NUNCA están en email_send_log ──
-    const { data: logRows } = await sb.from('email_send_log').select('email, recipient_email').limit(100000);
-    const seen = new Set<string>();
-    (logRows || []).forEach((r: { email?: string; recipient_email?: string }) => { const e = (r.email || r.recipient_email || '').toLowerCase().trim(); if (e) seen.add(e); });
-
-    const { data: users, error } = await sb.from('users')
-      .select('id, nombre, email')
-      .not('email', 'is', null)
-      .like('email', '%@%')
-      .is('deleted_at', null)
-      .limit(5000);
+    // ── Cohorte: anti-join EN LA BASE (RPC) — usuarios que NUNCA están en email_send_log.
+    // Se calcula en Postgres para NO depender del tope de 1000 filas de PostgREST
+    // (ese tope rompía el dedup si se hacía del lado del cliente). Mario 2026-06-03.
+    const { data: cohortRows, error } = await sb.rpc('welcome_never_emailed_cohort');
     if (error) throw error;
-    const eligible = (users || []).filter((u: { email: string }) => {
-      const e = (u.email || '').toLowerCase().trim();
-      if (!e || seen.has(e)) return false;
-      if (e.endsWith('@maestrohvacr.com') || e.includes('@acvolt')) return false; // internos
-      return true;
-    });
-    // dedupe por email
-    const byEmail = new Map<string, { id: string; nombre: string; email: string }>();
-    eligible.forEach((u: { id: string; nombre: string; email: string }) => { const e = u.email.toLowerCase().trim(); if (!byEmail.has(e)) byEmail.set(e, u); });
-    const cohort = Array.from(byEmail.values());
+    const cohort = (cohortRows || []).map((r: { nombre: string; email: string }) => ({ nombre: r.nombre || '', email: r.email }));
 
     if (dry_run) {
       return json({ ok: true, mode: 'dry_run', cohort: cohort.length, sample: cohort.slice(0, 5).map((u) => u.email) });
