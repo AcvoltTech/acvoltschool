@@ -147,6 +147,20 @@ serve(async (req) => {
       return json({ ok: true, items: arr });
     }
 
+    // Hacer un video el PRIMERO (principal). Marca pin = timestamp; la app ordena
+    // por pin desc, así el video con mejores vistas/likes queda arriba. Mario 2026-06-03.
+    if (action === 'pin_first') {
+      const id = String(body.id || '');
+      const ts = Date.now();
+      let arr = await readArr();
+      arr = arr.map((v) => v.id === id ? { ...v, pin: ts } : v);
+      // reordena para que syncLegacy tome el correcto como principal
+      arr.sort((a, b) => ((b.pin || 0) - (a.pin || 0)) || String(b.date || '').localeCompare(String(a.date || '')));
+      await setKey('explicaciones', arr);
+      await syncLegacy(arr);
+      return json({ ok: true, items: arr });
+    }
+
     // save_video OR legacy single save
     const title = String(body.title || '').trim();
     const video = String(body.video || body.stream_uid || '').trim();
@@ -159,8 +173,10 @@ serve(async (req) => {
     let arr = await readArr();
     let id = String(body.id || '');
     if (!id) id = (action === 'save_video') ? ('v_' + Date.now()) : 'v_main';
-    const item = { id, title, teaser, video, cta_text, active, date, updated_by: admin_email || null, updated_at: now() };
     const idx = arr.findIndex((v) => v.id === id);
+    const prev = idx >= 0 ? arr[idx] : {};
+    // preserva campos existentes (pin, subtitle_url_en, audio_url_en, en_status…) al editar
+    const item = { ...prev, id, title, teaser, video, cta_text, active, date, updated_by: admin_email || null, updated_at: now() };
     if (idx >= 0) arr[idx] = item; else arr.unshift(item);
     await setKey('explicaciones', arr);
     await syncLegacy(arr);
