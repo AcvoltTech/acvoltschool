@@ -58,9 +58,56 @@
         '<button id="ctaSaveBtn" style="flex:2;padding:13px;background:linear-gradient(135deg,#f59e0b,#d97706);color:#fff;border:none;border-radius:10px;font-weight:800;font-size:15px;cursor:pointer;">' + (v.id ? 'Guardar cambios' : 'Publicar explicación') + '</button>' +
         (v.id ? '<button id="ctaCancelBtn" style="flex:1;padding:13px;background:#e2e8f0;color:#334155;border:none;border-radius:10px;font-weight:800;font-size:14px;cursor:pointer;">Cancelar</button>' : '') +
       '</div>' +
+      '<button id="ctaGenEnBtn" onclick="window.ctaGenEnglish()" style="width:100%;margin-top:8px;padding:12px;background:linear-gradient(135deg,#13294a,#1e3a5f);color:#fff;border:none;border-radius:10px;font-weight:800;font-size:14px;cursor:pointer;">🌐 Generar versión en inglés (con tu voz)</button>' +
+      '<div id="ctaEnStatus" style="margin-top:8px;font-size:12.5px;font-weight:700;min-height:16px;color:#475569;">' + (v.en_status === 'ready' ? '✅ Versión en inglés lista.' : '') + '</div>' +
+      '<div id="ctaEnResult" style="' + (v.en_status === 'ready' ? '' : 'display:none;') + 'margin-top:6px;">' + (v.en_status === 'ready' ? _enLinks(v) : '') + '</div>' +
       '<div id="ctaMsg" style="margin-top:10px;font-size:13px;text-align:center;min-height:18px;"></div>' +
     '</div>';
   }
+
+  // ── 🌐 Generar versión en inglés (con la voz de Mario) — aquí mismo en el editor ──
+  function _enLinks(v) {
+    return '<div style="display:flex;gap:8px;flex-wrap:wrap;">' +
+      '<a href="' + esc(v.audio_url_en || '') + '" download="voz-ingles.mp3" style="padding:9px 14px;background:#f0fdf4;color:#166534;border:1px solid #bbf7d0;border-radius:9px;font-weight:800;font-size:13px;text-decoration:none;">⬇️ Audio inglés (.mp3)</a>' +
+      '<a href="' + esc(v.subtitle_url_en || '') + '" download="subtitulos-en.vtt" style="padding:9px 14px;background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe;border-radius:9px;font-weight:800;font-size:13px;text-decoration:none;">⬇️ Subtítulos (.vtt)</a>' +
+      '</div><div style="font-size:11px;color:#64748b;margin-top:8px;line-height:1.5;">💡 Para postear: baja el audio inglés y ponlo sobre tu video en CapCut (silencia el original).</div>';
+  }
+  window.ctaGenEnglish = function () {
+    var url = (document.getElementById('ctaUid') || {}).value || '';
+    var id = (document.getElementById('ctaEditId') || {}).value || '';
+    var st = document.getElementById('ctaEnStatus');
+    var setSt = function (m, c) { if (st) { st.textContent = m; st.style.color = c || '#475569'; } };
+    if (!url) { setSt('Primero sube o pega el video.', '#dc2626'); return; }
+    if (!id) { setSt('⚠️ Dale "Publicar explicación" primero; luego genera el inglés.', '#b45309'); return; }
+    var btn = document.getElementById('ctaGenEnBtn'); if (btn) btn.disabled = true;
+    setSt('⏳ Generando tu voz en inglés… (1-2 min, no cierres esta pestaña)', '#475569');
+    fetch(_sbUrl() + '/functions/v1/translate-video-en', { method: 'POST', headers: { 'Content-Type': 'application/json', 'apikey': _sbKey(), 'Authorization': 'Bearer ' + _sbKey() }, body: JSON.stringify({ video_url: url, video_id: id, admin_email: _adminEmail() }) })
+      .then(function (r) { return r.json(); })
+      .then(function (res) {
+        if (!res || res.status !== 'processing') { setSt((res && res.error) || 'No se pudo arrancar.', '#dc2626'); if (btn) btn.disabled = false; return; }
+        _ctaPollEn(id, st, btn);
+      })
+      .catch(function () { setSt('Error de conexión.', '#dc2626'); if (btn) btn.disabled = false; });
+  };
+  function _ctaPollEn(id, st, btn) {
+    var n = 0;
+    function tick() {
+      n++;
+      fetch(_sbUrl() + '/rest/v1/app_config?select=value&key=eq.explicaciones', { headers: { apikey: _sbKey(), Authorization: 'Bearer ' + _sbKey() } })
+        .then(function (r) { return r.json(); })
+        .then(function (rows) {
+          var arr = []; try { arr = JSON.parse(rows[0].value); } catch (_) {}
+          var v = arr.filter(function (x) { return x.id === id; })[0] || {};
+          if (v.en_status === 'ready') { if (st) { st.textContent = '✅ ¡Lista! Tu voz en inglés + subtítulos generados.'; st.style.color = '#16a34a'; } var rr = document.getElementById('ctaEnResult'); if (rr) { rr.style.display = 'block'; rr.innerHTML = _enLinks(v); } if (btn) btn.disabled = false; return; }
+          if (v.en_status === 'error') { if (st) { st.textContent = '❌ ' + (v.en_error || 'Error'); st.style.color = '#dc2626'; } if (btn) btn.disabled = false; return; }
+          if (n >= 80) { if (st) { st.textContent = 'Está tardando (video grande). Usa uno comprimido ≤80MB, o espera y recarga.'; st.style.color = '#b45309'; } if (btn) btn.disabled = false; return; }
+          setTimeout(tick, 5000);
+        })
+        .catch(function () { if (n < 80) setTimeout(tick, 5000); else if (btn) btn.disabled = false; });
+    }
+    setTimeout(tick, 5000);
+  }
+
   function _field(label, id, val, ph) {
     return '<div style="margin-bottom:12px;"><label style="display:block;font-size:13px;font-weight:700;color:#334155;margin-bottom:4px;">' + esc(label) + '</label>' +
       '<input id="' + id + '" value="' + esc(val || '') + '" placeholder="' + esc(ph) + '" style="width:100%;box-sizing:border-box;padding:10px;border:1px solid #cbd5e1;border-radius:8px;font-size:14px;color:#0f172a;outline:none;"></div>';
