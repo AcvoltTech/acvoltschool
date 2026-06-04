@@ -973,6 +973,28 @@ async function _crmLoadDashboardStats() {
     if (el) el.textContent = (_g.today || 0).toLocaleString();
     el = document.getElementById('statInvitadosAyer');
     if (el) el.textContent = (_g.yesterday || 0).toLocaleString();
+    // Mini-gráfica de descargas/día (dispositivos nuevos, 14 días)
+    try {
+      var dd = data.daily_devices || [];
+      var chart = document.getElementById('dailyDevicesChart');
+      if (chart && dd.length) {
+        var maxN = dd.reduce(function (m, x) { return Math.max(m, x.n || 0); }, 1);
+        var totalN = dd.reduce(function (a, x) { return a + (x.n || 0); }, 0);
+        var peak = dd.reduce(function (a, x) { return (x.n || 0) > (a.n || 0) ? x : a; }, { n: 0, d: '' });
+        chart.innerHTML = dd.map(function (x) {
+          var h = Math.round(((x.n || 0) / maxN) * 70) + 2;
+          var lbl = String(x.d || '').slice(5);
+          var isPeak = (x.n || 0) === maxN && maxN > 1;
+          var bg = isPeak ? 'linear-gradient(180deg,#10b981,#059669)' : 'linear-gradient(180deg,#60a5fa,#3730a3)';
+          return '<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;min-width:0;">' +
+            '<div style="font-size:9px;font-weight:800;color:' + (isPeak ? '#059669' : '#94a3b8') + ';">' + (x.n || 0) + '</div>' +
+            '<div title="' + lbl + ': ' + (x.n || 0) + '" style="width:100%;max-width:26px;height:' + h + 'px;background:' + bg + ';border-radius:4px 4px 0 0;"></div>' +
+            '<div style="font-size:8px;color:#94a3b8;white-space:nowrap;">' + lbl + '</div></div>';
+        }).join('');
+        var sub = document.getElementById('dailyDevicesSub');
+        if (sub) sub.textContent = 'Pico: ' + (peak.n || 0) + ' (' + String(peak.d || '').slice(5) + ') · ' + totalN + ' en 14d';
+      }
+    } catch (_dd) {}
     // Mario 2026-05-29: stats now prefer Stripe LIVE numbers over cached/membership
     // table values (which were inflated — memberships.activa=true had 333 ghost
     // entries vs Stripe's real 178 active subs).

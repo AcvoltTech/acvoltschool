@@ -160,7 +160,7 @@ serve(async (req) => {
       .select('reengagement_sent_at, reengagement_returned_at')
       .not('reengagement_sent_at', 'is', null);
 
-    const [usersRes, certsRes, activeRes, membershipsRes, progressRes, revenueRes, recentPayRes, recentSignupsRes, iapBreakdownRes, reengagementRes, guestRes] = await Promise.all([
+    const [usersRes, certsRes, activeRes, membershipsRes, progressRes, revenueRes, recentPayRes, recentSignupsRes, iapBreakdownRes, reengagementRes, guestRes, dailyRes] = await Promise.all([
       sb.from('users').select('*', { count: 'exact', head: true }),
       sb.from('certificates').select('*', { count: 'exact', head: true }),
       sb.from('users').select('*', { count: 'exact', head: true }).gte('ultimo_acceso', today.toISOString()),
@@ -188,6 +188,8 @@ serve(async (req) => {
       // Mario 2026-06-03: conteo REAL de invitados (no registrados) desde
       // analytics_events.metadata (guest=1, dedup por cid). Antes no se mostraba.
       sb.rpc('dashboard_guest_counts'),
+      // Serie de dispositivos nuevos por día (14 días) para la mini-gráfica.
+      sb.rpc('dashboard_daily_devices'),
     ]);
 
     // Compute average score
@@ -288,8 +290,10 @@ serve(async (req) => {
       iap_breakdown,
       // Reengagement campaign ROI tracking
       reengagement,
-      // Invitados (no registrados): { total_guests, guests_30d, not_registered }
+      // Invitados (no registrados): { total_guests, guests_30d, not_registered, today, yesterday }
       guests: (guestRes && guestRes.data) ? guestRes.data : { total_guests: 0, guests_30d: 0, not_registered: 0 },
+      // Serie diaria de dispositivos nuevos (14 días): [{d,n}]
+      daily_devices: (dailyRes && dailyRes.data) ? dailyRes.data : [],
     };
 
     console.log('[admin-dashboard-stats]', stats);
