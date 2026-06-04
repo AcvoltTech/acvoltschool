@@ -58,18 +58,20 @@ serve(async (req) => {
     if (action === 'engagement') {
       const ids: string[] = (Array.isArray(body.video_ids) ? body.video_ids : []).map((x: unknown) => String(x)).slice(0, 50);
       if (!ids.length) return json({ engagement: {} });
-      const [likesRes, commentsRes, viewsRes] = await Promise.all([
+      // OJO: las VISTAS se cuentan con un RPC (count distinct en Postgres), NO con un
+      // SELECT de todas las filas — PostgREST topa a ~1000 filas y con varios videos
+      // (>1000 vistas en total) los conteos salían en 0/truncados. Misma lección del
+      // email batch (anti-join en BD). Mario 2026-06-03: el de ayer mostraba 0 vistas.
+      const [likesRes, commentsRes, viewsRpc] = await Promise.all([
         sb.from('daily_video_likes').select('video_id, email').in('video_id', ids),
         sb.from('daily_video_comments').select('video_id').in('video_id', ids).eq('is_hidden', false),
-        sb.from('video_views').select('video_id, email').in('video_id', ids),
+        sb.rpc('video_view_counts', { p_ids: ids }),
       ]);
       const eng: Record<string, { likes: number; liked: boolean; comments: number; views: number }> = {};
       for (const id of ids) eng[id] = { likes: 0, liked: false, comments: 0, views: 0 };
       for (const r of (likesRes.data || [])) { const e = eng[r.video_id]; if (e) { e.likes++; if (r.email === anonEmail) e.liked = true; } }
       for (const r of (commentsRes.data || [])) { const e = eng[r.video_id]; if (e) e.comments++; }
-      const seenViewers: Record<string, Set<string>> = {};
-      for (const r of (viewsRes.data || [])) { (seenViewers[r.video_id] = seenViewers[r.video_id] || new Set()).add(r.email); }
-      for (const id of ids) eng[id].views = seenViewers[id] ? seenViewers[id].size : 0;
+      for (const r of (viewsRpc.data || [])) { const e = eng[r.video_id]; if (e) e.views = Number(r.c) || 0; }
       return json({ engagement: eng });
     }
 

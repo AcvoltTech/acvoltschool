@@ -29,13 +29,28 @@ serve(async (req) => {
     const action = body.action;
 
     if (action === 'counts') {
-      const zones = Array.isArray(body.zones) ? body.zones.map((z: unknown) => clean(z, 40)).filter(Boolean).slice(0, 30) : [];
+      const zones = Array.isArray(body.zones) ? body.zones.map((z: unknown) => clean(z, 40)).filter(Boolean).slice(0, 40) : [];
       if (!zones.length) return json({ counts: {} });
-      const { data, error } = await sb.rpc('zone_visit_counts', { p_zones: zones });
-      if (error) return json({ error: error.message }, 500);
+      // screens: { key: screen_id } — para esos, el conteo REAL viene de screen_events
+      // (navegación histórica + viva). Las keys sin screen usan zone_visits (forward).
+      const screens: Record<string, string> = (body.screens && typeof body.screens === 'object') ? body.screens : {};
       const counts: Record<string, number> = {};
       for (const z of zones) counts[z] = 0;
-      for (const r of (data || [])) counts[r.zone_key] = Number(r.c) || 0;
+
+      const screenKeys = zones.filter((z: string) => screens[z]);
+      const modalKeys = zones.filter((z: string) => !screens[z]);
+
+      if (screenKeys.length) {
+        const screenIds = Array.from(new Set(screenKeys.map((z: string) => clean(screens[z], 60))));
+        const { data: sc } = await sb.rpc('screen_visitor_counts', { p_screens: screenIds });
+        const byScreen: Record<string, number> = {};
+        for (const r of (sc || [])) byScreen[r.screen_id] = Number(r.c) || 0;
+        for (const z of screenKeys) counts[z] = byScreen[screens[z]] || 0;
+      }
+      if (modalKeys.length) {
+        const { data: zv } = await sb.rpc('zone_visit_counts', { p_zones: modalKeys });
+        for (const r of (zv || [])) counts[r.zone_key] = Number(r.c) || 0;
+      }
       return json({ counts });
     }
 

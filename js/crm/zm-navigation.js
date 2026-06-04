@@ -1136,6 +1136,7 @@ function initCrmRedesign() {
     if (quickAccess) {
       quickAccess.innerHTML =
         '<button class="crm-quick-btn teal" onclick="showCrmSection(\'tutorialVideos\',document.querySelector(\'[data-crm-section=tutorialVideos]\'))">🎓 HVAC Certification</button>' +
+        '<button class="crm-quick-btn purple" onclick="showCrmSection(\'acvoltSchool\',document.querySelector(\'[data-crm-section=acvoltSchool]\'))">🎬 Videos / Cursos</button>' +
         '<button class="crm-quick-btn red" onclick="showCrmSection(\'streaming\',document.querySelector(\'[data-crm-section=streaming]\'))">📡 Streaming</button>' +
         '<button class="crm-quick-btn blue" onclick="showCrmSection(\'bandeja\',document.querySelector(\'[data-crm-section=bandeja]\'))">📥 Bandeja</button>' +
         '<button class="crm-quick-btn teal" onclick="showCrmSection(\'clases\',document.querySelector(\'[data-crm-section=clases]\'))">📅 Clases</button>' +
@@ -1254,7 +1255,7 @@ function setCrmMode(mode, skipNav) {
   // Mario 2026-05-29: added 'streaming' so Manuel (editor) can run live streams.
   var editorRole = sessionStorage.getItem('admin_role') || currentAdminRole || '';
   if (editorRole === 'editor' && nav) {
-    var allowedSections = ['dashboard', 'bandeja', 'tutorialVideos', 'clases', 'zoomResumenes', 'streaming'];
+    var allowedSections = ['dashboard', 'bandeja', 'tutorialVideos', 'clases', 'zoomResumenes', 'streaming', 'acvoltSchool'];
     var sidebarItems = nav.querySelectorAll('[data-crm-section]');
     sidebarItems.forEach(function(el) {
       var sec = el.getAttribute('data-crm-section');
