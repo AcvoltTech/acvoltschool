@@ -965,6 +965,9 @@ async function _crmLoadDashboardStats() {
     if (el) el.textContent = data.total_certs || 0;
     el = document.getElementById('statActivosHoy');
     if (el) el.textContent = data.active_today || 0;
+    // Mario 2026-06-03: conteo REAL de invitados no registrados (analytics_events).
+    el = document.getElementById('statNoRegistrados');
+    if (el) { var _g = data.guests || {}; el.textContent = (_g.not_registered || 0).toLocaleString(); el.title = (_g.total_guests || 0) + ' invitados totales · ' + (_g.guests_30d || 0) + ' en 30 días'; }
     // Mario 2026-05-29: stats now prefer Stripe LIVE numbers over cached/membership
     // table values (which were inflated — memberships.activa=true had 333 ghost
     // entries vs Stripe's real 178 active subs).

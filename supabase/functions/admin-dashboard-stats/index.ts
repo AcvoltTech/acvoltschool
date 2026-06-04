@@ -160,7 +160,7 @@ serve(async (req) => {
       .select('reengagement_sent_at, reengagement_returned_at')
       .not('reengagement_sent_at', 'is', null);
 
-    const [usersRes, certsRes, activeRes, membershipsRes, progressRes, revenueRes, recentPayRes, recentSignupsRes, iapBreakdownRes, reengagementRes] = await Promise.all([
+    const [usersRes, certsRes, activeRes, membershipsRes, progressRes, revenueRes, recentPayRes, recentSignupsRes, iapBreakdownRes, reengagementRes, guestRes] = await Promise.all([
       sb.from('users').select('*', { count: 'exact', head: true }),
       sb.from('certificates').select('*', { count: 'exact', head: true }),
       sb.from('users').select('*', { count: 'exact', head: true }).gte('ultimo_acceso', today.toISOString()),
@@ -185,6 +185,9 @@ serve(async (req) => {
         .limit(10),
       iapBreakdownPromise,
       reengagementPromise,
+      // Mario 2026-06-03: conteo REAL de invitados (no registrados) desde
+      // analytics_events.metadata (guest=1, dedup por cid). Antes no se mostraba.
+      sb.rpc('dashboard_guest_counts'),
     ]);
 
     // Compute average score
@@ -285,6 +288,8 @@ serve(async (req) => {
       iap_breakdown,
       // Reengagement campaign ROI tracking
       reengagement,
+      // Invitados (no registrados): { total_guests, guests_30d, not_registered }
+      guests: (guestRes && guestRes.data) ? guestRes.data : { total_guests: 0, guests_30d: 0, not_registered: 0 },
     };
 
     console.log('[admin-dashboard-stats]', stats);
