@@ -162,6 +162,7 @@ function buildLiveStreamingHTML() {
           '<button id="lsCamFlipBtn" onclick="lsCamFlip()" style="display:none;background:#6366f1;color:#fff;border:none;padding:8px 12px;border-radius:10px;cursor:pointer;font-size:13px;">🔄</button>' +
           '<span id="lsParticipationStatus" style="display:none;color:#22c55e;font-size:12px;font-weight:600;"></span>' +
           '<button id="lsReactBtn" onclick="lsSendReaction(\'❤️\')" title="Me gusta" style="background:#ec4899;color:#fff;border:none;padding:8px 14px;border-radius:10px;cursor:pointer;font-size:15px;font-weight:600;-webkit-tap-highlight-color:transparent;min-width:44px;min-height:44px;">❤️</button>' +
+          '<button id="lsShareLiveBtn" onclick="_lsShareLiveBtn()" title="Compartir con amigos" style="background:#25D366;color:#fff;border:none;padding:8px 12px;border-radius:10px;cursor:pointer;font-size:13px;font-weight:700;-webkit-tap-highlight-color:transparent;min-width:44px;min-height:44px;">📲 Compartir</button>' +
           '<button id="lsFullscreenBtn" onclick="_lsToggleFullscreen()" style="background:rgba(255,255,255,0.15);border:none;color:#fff;padding:6px 12px;border-radius:8px;font-size:12px;cursor:pointer;margin-left:auto;-webkit-tap-highlight-color:transparent;min-width:44px;min-height:44px;">\u26F6 Completa</button>' +
           '<button id="lsReloadBtn" onclick="lsReloadPlayer()" style="background:#ef4444;color:#fff;border:none;padding:8px 14px;border-radius:10px;cursor:pointer;font-size:13px;font-weight:600;-webkit-tap-highlight-color:transparent;min-width:44px;min-height:44px;">🔄 Recargar</button>' +
           '<button id="lsTbChatBtn" onclick="lsToggleChat()" style="background:#8b5cf6;color:#fff;border:none;padding:8px 14px;border-radius:10px;cursor:pointer;font-size:13px;font-weight:600;-webkit-tap-highlight-color:transparent;min-width:44px;min-height:44px;">💬 Chat</button>' +
@@ -3106,30 +3107,20 @@ function lsSubscribeBreakTimer(streamId) {
   _lsBreakChannel.subscribe();
 }
 
-/* ── Break ended → viral loop: el técnico re-comparte para volver a entrar ── */
+/* ── Break ended — sin gate: siguen viendo directo (Mario 2026-06-05) ── */
 function _lsBreakEnded(streamId) {
-  if (!_lsWasOnBreak) return; // only re-gate people who were actually on break
+  if (!_lsWasOnBreak) return;
   _lsWasOnBreak = false;
-
   var overlay = document.getElementById('lsBreakOverlay');
   if (overlay) overlay.style.display = 'none';
+  // Entrada libre: tras el descanso el técnico sigue viendo, no se re-gatea.
+}
 
-  // Host/admins keep watching — don't gate them
-  if ((typeof isAdminAuthenticated === 'function' && isAdminAuthenticated()) ||
-      (typeof isAdminStudent === 'function' && isAdminStudent())) return;
-
-  // Estudiantes verificados NO re-comparten tras el descanso — siguen viendo directo
-  if (_lsEntryMode === 'student') return;
-
-  // Forget this session's approval so they must share again to come back
-  if (_lsApprovedStreamIds) { try { delete _lsApprovedStreamIds[streamId]; } catch(e) {} }
-
+function _lsBreakEnded_DEAD(streamId) {
   var user = {
     email: localStorage.getItem('tecnico_email') || '',
     nombre: localStorage.getItem('tecnico_nombre') || ''
   };
-
-  // Re-show the share gate over the video (it resets _lsShareCount = 0)
   if (typeof supabaseClient !== 'undefined' && supabaseClient) {
     supabaseClient.from('live_streams').select('id, title, playback_url, class_group, instructor_name').eq('id', streamId).single().then(function(res) {
       _lsShowPreEntryForm(res.data || { id: streamId, title: 'Clase en Directo' }, user);
@@ -3154,6 +3145,32 @@ function lsSubscribeReactions(streamId) {
     _lsFloatReaction(emoji);
   });
   _lsReactionChannel.subscribe();
+}
+
+/* ── Compartir en el en vivo (OPCIONAL, no obligatorio) — Mario 2026-06-05 ── */
+function _lsShareLiveBtn() {
+  var link = _lsShareLink();
+  var msg = _lsShareMessage();
+  if (navigator.share) {
+    navigator.share({ text: msg, url: link }).then(function(){ _lsLogLiveShare(); }).catch(function(){});
+  } else {
+    try { window.open('https://wa.me/?text=' + encodeURIComponent(msg + link), '_blank'); } catch(e) {}
+    _lsLogLiveShare();
+  }
+}
+function _lsLogLiveShare() {
+  try {
+    if (typeof supabaseClient !== 'undefined' && supabaseClient && _lsCurrentStreamId) {
+      supabaseClient.from('stream_shares').insert({
+        stream_id: _lsCurrentStreamId,
+        student_email: (localStorage.getItem('tecnico_email') || '').toLowerCase(),
+        student_name: localStorage.getItem('tecnico_nombre') || '',
+        platform: 'amigo',
+        shared_at: new Date().toISOString()
+      }).then(function(){}).catch(function(){});
+    }
+  } catch(e) {}
+  if (typeof window.showToast === 'function') window.showToast('¡Gracias por compartir! 🙌', 'success');
 }
 
 function lsSendReaction(emoji) {
@@ -3494,9 +3511,12 @@ function _lsDashJoinLive(idx) {
 var _lsEntryMode = 'guest'; // 'student' | 'guest' — controla si re-comparte tras descanso
 
 function _lsShowEntryChoice(stream) {
+  // Entrada LIBRE — solo nombre, sin gate ni verificación que bloquee (Mario 2026-06-05)
   _lsVerifyStream = stream;
+  _lsEntryMode = 'guest';
   var existing = document.getElementById('lsEntryChoice');
   if (existing) existing.remove();
+  var prefill = localStorage.getItem('tecnico_nombre') || '';
   var overlay = document.createElement('div');
   overlay.id = 'lsEntryChoice';
   overlay.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,0.92);display:flex;align-items:center;justify-content:center;padding:20px;';
@@ -3507,27 +3527,48 @@ function _lsShowEntryChoice(stream) {
         '<span style="color:#FF3B30;font-weight:800;font-size:13px;letter-spacing:0.5px;">EN VIVO AHORA</span>' +
       '</div>' +
       '<div style="color:#111111;font-weight:800;font-size:19px;margin-bottom:6px;">' + _lsEsc(stream.title || 'Clase en Directo') + '</div>' +
-      '<div style="color:#111111;font-size:14px;margin-bottom:22px;">¿Cómo vas a entrar?</div>' +
-      '<button onclick="_lsEntryAsStudent()" style="width:100%;padding:16px;background:#FF3B30;color:#fff;border:none;border-radius:14px;font-size:16px;font-weight:800;cursor:pointer;margin-bottom:6px;box-shadow:0 4px 12px rgba(255,59,48,0.3);">🎓 Soy Estudiante</button>' +
-      '<div style="color:#666;font-size:12px;margin-bottom:18px;">Ya estás registrado · entras directo</div>' +
-      '<button onclick="_lsEntryAsGuest()" style="width:100%;padding:16px;background:#FFFFFF;color:#111111;border:2px solid #25D366;border-radius:14px;font-size:16px;font-weight:800;cursor:pointer;margin-bottom:6px;">👋 Soy Invitado</button>' +
-      '<div style="color:#666;font-size:12px;margin-bottom:18px;">Comparte la clase con un amigo y entra gratis</div>' +
+      '<div style="color:#111111;font-size:14px;margin-bottom:16px;">Escribe tu nombre completo para entrar</div>' +
+      '<input id="lsSimpleNameInput" type="text" value="' + _lsEsc(prefill) + '" placeholder="Ej: Juan Pérez García" style="width:100%;box-sizing:border-box;background:#F5F5F7;border:2px solid rgba(0,0,0,0.1);border-radius:12px;padding:14px 16px;color:#111111;font-size:15px;text-align:center;outline:none;margin-bottom:12px;">' +
+      '<div id="lsSimpleErr" style="display:none;color:#FF3B30;font-size:13px;margin-bottom:10px;font-weight:600;"></div>' +
+      '<button onclick="_lsSimpleEnter()" style="width:100%;background:#FF3B30;color:#fff;border:none;border-radius:12px;padding:16px;font-size:17px;font-weight:800;cursor:pointer;margin-bottom:10px;box-shadow:0 4px 15px rgba(255,59,48,0.35);">ENTRAR A LA CLASE</button>' +
       '<button onclick="document.getElementById(\'lsEntryChoice\').remove()" style="background:none;border:none;color:#111111;font-size:14px;cursor:pointer;padding:6px;font-weight:600;">Cancelar</button>' +
     '</div>';
   document.body.appendChild(overlay);
+  var inp = document.getElementById('lsSimpleNameInput');
+  if (inp) { inp.focus(); if (prefill) inp.select(); inp.addEventListener('keydown', function(e) { if (e.key === 'Enter') _lsSimpleEnter(); }); }
 }
 
-function _lsEntryAsStudent() {
-  _lsEntryMode = 'student';
-  var c = document.getElementById('lsEntryChoice'); if (c) c.remove();
-  _lsShowVerifyModal(_lsVerifyStream);
-}
-
-function _lsEntryAsGuest() {
+function _lsSimpleEnter() {
+  var input = document.getElementById('lsSimpleNameInput');
+  var err = document.getElementById('lsSimpleErr');
+  var stream = _lsVerifyStream;
+  if (!input || !stream) return;
+  var nombre = input.value.trim();
+  if (!nombre || nombre.split(/\s+/).length < 2) {
+    if (err) { err.style.display = ''; err.textContent = 'Escribe tu nombre y apellido'; }
+    input.focus();
+    return;
+  }
+  localStorage.setItem('tecnico_nombre', nombre);
+  var user = { email: localStorage.getItem('tecnico_email') || '', nombre: nombre };
   _lsEntryMode = 'guest';
-  var c = document.getElementById('lsEntryChoice'); if (c) c.remove();
-  var user = { email: localStorage.getItem('tecnico_email') || '', nombre: localStorage.getItem('tecnico_nombre') || '' };
-  _lsShowPreEntryForm(_lsVerifyStream, user);
+  var doEnter = function() {
+    var c = document.getElementById('lsEntryChoice'); if (c) c.remove();
+    _lsEnterStreamDirect(stream, user);
+  };
+  // Lookup silencioso (NUNCA bloquea) — identifica estudiantes para el analítico
+  try {
+    usersDataAdmin('admin_find_user_flexible', { value: (user.email || nombre), fields: ['email','nombre'] })
+      .then(function(r) {
+        if (r && r.data && r.data.email) {
+          user.email = r.data.email;
+          if (r.data.nombre) user.nombre = r.data.nombre;
+          _lsEntryMode = 'student';
+          try { localStorage.setItem('tecnico_email', r.data.email); } catch(e) {}
+        }
+        doEnter();
+      }).catch(function() { doEnter(); });
+  } catch(e) { doEnter(); }
 }
 
 /* ── Verify student modal ──────────────────────────────────── */
