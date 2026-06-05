@@ -3095,7 +3095,7 @@ function _lsBreakEnded(streamId) {
     nombre: localStorage.getItem('tecnico_nombre') || ''
   };
 
-  // Re-show the share gate over the video (it resets _lsSharedPlatforms = {})
+  // Re-show the share gate over the video (it resets _lsShareCount = 0)
   if (typeof supabaseClient !== 'undefined' && supabaseClient) {
     supabaseClient.from('live_streams').select('id, title, playback_url, class_group, instructor_name').eq('id', streamId).single().then(function(res) {
       _lsShowPreEntryForm(res.data || { id: streamId, title: 'Clase en Directo' }, user);
@@ -3609,23 +3609,19 @@ function _lsShowPreEntryForm(stream, user) {
         '<div style="color:#111111;font-size:13px;margin-top:4px;">Nombre y apellido como el instructor te conoce</div>' +
       '</div>' +
 
-      // Share-to-unlock gate — host requires sharing on the 3 networks to enter (viral loop)
+      // Share-to-unlock gate — invita a 5 amigos para entrar (viral loop)
       '<div style="text-align:left;margin-bottom:18px;background:#FFF7ED;border:1px solid #FED7AA;border-radius:12px;padding:14px;">' +
-        '<div style="color:#111111;font-size:14px;font-weight:800;margin-bottom:6px;">📢 El host requiere que compartas el en vivo</div>' +
-        '<div style="color:#111111;font-size:13px;margin-bottom:12px;">Comparte la clase en las <b>3 redes</b> para entrar. La clase es gratis 🚀</div>' +
-        '<div id="lsShareBtns" style="display:flex;gap:8px;">' +
-          '<button id="lsShareBtn-tiktok" onclick="_lsPreEntryShare(\'tiktok\')" style="flex:1;padding:12px 4px;background:#111111;color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:800;cursor:pointer;">TikTok</button>' +
-          '<button id="lsShareBtn-facebook" onclick="_lsPreEntryShare(\'facebook\')" style="flex:1;padding:12px 4px;background:#1877F2;color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:800;cursor:pointer;">Facebook</button>' +
-          '<button id="lsShareBtn-whatsapp" onclick="_lsPreEntryShare(\'whatsapp\')" style="flex:1;padding:12px 4px;background:#25D366;color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:800;cursor:pointer;">WhatsApp</button>' +
-        '</div>' +
-        '<div id="lsShareProgress" style="color:#111111;font-size:12px;font-weight:700;margin-top:8px;">Compartidas: 0 de 3</div>' +
+        '<div style="color:#111111;font-size:14px;font-weight:800;margin-bottom:6px;">📢 Invita a 5 amigos para entrar</div>' +
+        '<div style="color:#111111;font-size:13px;margin-bottom:12px;">Mándale la clase a <b>5 amigos</b> (WhatsApp, mensajes, donde quieras). La clase es gratis 🚀</div>' +
+        '<button id="lsInviteBtn" onclick="_lsPreEntryShare()" style="width:100%;padding:14px;background:#25D366;color:#fff;border:none;border-radius:10px;font-size:15px;font-weight:800;cursor:pointer;">📲 Invitar a un amigo</button>' +
+        '<div id="lsShareProgress" style="color:#111111;font-size:13px;font-weight:700;margin-top:10px;text-align:center;">Invitados: 0 de 5</div>' +
       '</div>' +
 
       // Error message
       '<div id="lsPreEntryError" style="display:none;color:#FF3B30;font-size:13px;margin-bottom:12px;font-weight:600;"></div>' +
 
       // Submit (locked until all 3 shares fired) + Salir
-      '<button onclick="_lsPreEntrySubmit()" id="lsPreEntrySubmitBtn" disabled style="width:100%;padding:14px;background:#9CA3AF;color:#fff;border:none;border-radius:12px;font-size:16px;font-weight:800;cursor:not-allowed;margin-bottom:8px;opacity:0.75;">🔒 Comparte en las 3 redes</button>' +
+      '<button onclick="_lsPreEntrySubmit()" id="lsPreEntrySubmitBtn" disabled style="width:100%;padding:14px;background:#9CA3AF;color:#fff;border:none;border-radius:12px;font-size:16px;font-weight:800;cursor:not-allowed;margin-bottom:8px;opacity:0.75;">🔒 Invita a 5 amigos</button>' +
       '<button onclick="_lsPreEntryCancel()" style="width:100%;padding:10px;background:#FFFFFF;border:1px solid rgba(0,0,0,0.12);color:#111111;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;">Salir</button>' +
     '</div>';
 
@@ -3635,12 +3631,12 @@ function _lsShowPreEntryForm(stream, user) {
   overlay._stream = stream;
   overlay._user = user;
   _lsWrPhotoDataUrl = null;
-  _lsSharedPlatforms = {}; // reset share gate every time the form opens (incl. after break)
+  _lsShareCount = 0; // reset share gate every time the form opens (incl. after break)
 }
 
 /* ── Share-to-enter gate (viral loop: comparte en 3 redes para entrar) ── */
-var _lsSharedPlatforms = {};        // {tiktok:true, facebook:true, whatsapp:true}
-var _LS_REQUIRED_SHARES = 3;
+var _lsShareCount = 0;
+var _LS_REQUIRED_SHARES = 5;
 
 function _lsShareLink() {
   return (window.location && window.location.origin) ? window.location.origin : 'https://www.acvoltschool.com';
@@ -3650,46 +3646,21 @@ function _lsShareMessage() {
   return '🔴 Estoy en una clase EN VIVO de HVAC con el Maestro, GRATIS. Métete ahora antes de que termine 👉 ';
 }
 
-function _lsCopyToClipboard(text) {
-  try {
-    if (navigator.clipboard && navigator.clipboard.writeText) { navigator.clipboard.writeText(text); return; }
-  } catch(e) {}
-  try {
-    var ta = document.createElement('textarea');
-    ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
-    document.body.appendChild(ta); ta.focus(); ta.select();
-    document.execCommand('copy'); document.body.removeChild(ta);
-  } catch(e) {}
-}
-
-function _lsPreEntryShare(platform) {
+function _lsPreEntryShare() {
   var link = _lsShareLink();
   var msg = _lsShareMessage();
 
-  // Menú nativo de compartir → abre la app donde el técnico YA está logeado
-  // (TikTok/Facebook/WhatsApp) y SOLO cuenta cuando COMPLETA el share (no por tocar).
+  // Menú nativo → manda la clase a un amigo (WhatsApp/mensajes). Cuenta solo al COMPLETAR.
   if (navigator.share) {
     navigator.share({ text: msg, url: link })
-      .then(function() { _lsMarkPlatformShared(platform); })
-      .catch(function() { /* canceló o no compartió — no cuenta */ });
+      .then(function() { _lsMarkShared(); })
+      .catch(function() { /* canceló — no cuenta */ });
     return;
   }
 
-  // Fallback de escritorio (sin share nativo): intents web por red, cuenta al disparar
-  try {
-    if (platform === 'whatsapp') {
-      window.open('https://wa.me/?text=' + encodeURIComponent(msg + link), '_blank');
-    } else if (platform === 'facebook') {
-      window.open('https://www.facebook.com/sharer/sharer.php?u=' + encodeURIComponent(link) + '&quote=' + encodeURIComponent(msg), '_blank');
-    } else if (platform === 'tiktok') {
-      _lsCopyToClipboard(msg + link);
-      if (typeof window.showToast === 'function') window.showToast('Link copiado — pégalo en tu TikTok', 'success');
-      window.open('https://www.tiktok.com/', '_blank');
-    } else {
-      return;
-    }
-  } catch(e) { console.warn('[LiveStreaming] share', e.message || e); }
-  _lsMarkPlatformShared(platform);
+  // Fallback de escritorio: WhatsApp web
+  try { window.open('https://wa.me/?text=' + encodeURIComponent(msg + link), '_blank'); } catch(e) {}
+  _lsMarkShared();
 }
 
 function _lsLogShare(platform) {
@@ -3709,20 +3680,12 @@ function _lsLogShare(platform) {
   } catch(e) { console.warn('[LiveStreaming] share log', e.message || e); }
 }
 
-function _lsMarkPlatformShared(platform) {
-  var isNew = !_lsSharedPlatforms[platform];
-  _lsSharedPlatforms[platform] = true;
-  if (isNew) _lsLogShare(platform); // log once per platform per form open
-  var btn = document.getElementById('lsShareBtn-' + platform);
-  if (btn) {
-    btn.style.opacity = '0.55';
-    var label = btn.textContent.replace(/^✓\s*/, '');
-    btn.textContent = '✓ ' + label;
-  }
-  var count = Object.keys(_lsSharedPlatforms).length;
+function _lsMarkShared() {
+  _lsShareCount++;
+  _lsLogShare('amigo'); // log each invite for analytics
   var prog = document.getElementById('lsShareProgress');
-  if (prog) prog.textContent = 'Compartidas: ' + count + ' de ' + _LS_REQUIRED_SHARES;
-  if (count >= _LS_REQUIRED_SHARES) _lsUnlockEntry();
+  if (prog) prog.textContent = 'Invitados: ' + Math.min(_lsShareCount, _LS_REQUIRED_SHARES) + ' de ' + _LS_REQUIRED_SHARES;
+  if (_lsShareCount >= _LS_REQUIRED_SHARES) _lsUnlockEntry();
 }
 
 function _lsUnlockEntry() {
@@ -3756,8 +3719,8 @@ function _lsPreEntrySubmit() {
 
   // Gate: must have shared on all 3 networks (viral loop).
   // FUTURE PAYWALL: add membership check here — this is the single entry chokepoint.
-  if (Object.keys(_lsSharedPlatforms).length < _LS_REQUIRED_SHARES) {
-    if (errorEl) { errorEl.style.display = ''; errorEl.textContent = _tc('ls_share_3_networks', 'Comparte en las 3 redes para desbloquear tu entrada'); }
+  if (_lsShareCount < _LS_REQUIRED_SHARES) {
+    if (errorEl) { errorEl.style.display = ''; errorEl.textContent = _tc('ls_share_5_friends', 'Invita a 5 amigos para desbloquear tu entrada'); }
     return;
   }
 
