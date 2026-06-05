@@ -3270,7 +3270,6 @@ async function adminGoLiveBrowser(streamId) {
           '<div style="width:1px;height:24px;background:rgba(255,255,255,0.15);margin:0 4px;"></div>' +
           '<button class="lsa-btn lsa-btn-gray" onclick="_lscShowPreStreamChecklist()" title="Verificar todo antes de transmitir" style="padding:8px 14px;">✓ Checklist</button>' +
           '<button class="lsa-btn lsa-btn-green" id="lsaGoLiveBtn" onclick="lsaStartHmsStream()" style="padding:8px 20px;" disabled>▶ ' + _t('lsa_start_stream','Iniciar Transmisión') + '</button>' +
-          '<button class="lsa-btn" id="lsaBroadcastAlertBtn" onclick="lsaBroadcastLiveAlert()" style="padding:8px 16px;margin-left:8px;background:linear-gradient(135deg,#dc2626,#ef4444);color:#fff;font-weight:900;box-shadow:0 4px 12px rgba(220,38,38,0.4);opacity:0.5;" title="Primero inicia la transmisión — se activa cuando estés EN VIVO">📣 ALERTA A TODOS</button>' +
         '</div>' +
 
         // Control bar (during live)
@@ -3318,6 +3317,9 @@ async function adminGoLiveBrowser(streamId) {
           '<div style="width:1px;height:28px;background:rgba(255,255,255,0.15);margin:0 2px;"></div>' +
           // Viewers
           '<div id="lsaViewerCount" onclick="lsaToggleViewerPanel()" style="color:#94a3b8;font-size:12px;display:flex;align-items:center;gap:4px;cursor:pointer;padding:4px 8px;border-radius:8px;transition:background 0.2s;" onmouseover="this.style.background=\'rgba(14,165,233,0.2)\'" onmouseout="this.style.background=\'none\'" title="Ver lista de espectadores (click para expandir)"><span style="font-size:14px;">👥</span> <span id="lsaViewerNum">0</span></div>' +
+          '<div style="width:1px;height:28px;background:rgba(255,255,255,0.15);margin:0 2px;"></div>' +
+          // ALERTA A TODOS — ahora vive en la barra de EN VIVO (antes estaba en la pre-transmisión y desaparecía al ir en vivo)
+          '<button id="lsaBroadcastAlertBtn" onclick="lsaBroadcastLiveAlert()" class="lsa-btn" style="padding:8px 16px;font-size:13px;background:linear-gradient(135deg,#dc2626,#ef4444);color:#fff;font-weight:900;box-shadow:0 4px 12px rgba(220,38,38,0.4);" title="Notifica a TODOS — ya estás EN VIVO">📣 ALERTA A TODOS</button>' +
           '<div style="width:1px;height:28px;background:rgba(255,255,255,0.15);margin:0 2px;"></div>' +
           // Device switch
           '<button onclick="lsaReleaseForDeviceSwitch()" class="lsa-btn" style="padding:8px 14px;font-size:12px;background:#8b5cf6;color:#fff;" title="Liberar stream para continuar en otro dispositivo">📱 Cambiar Dispositivo</button>' +
