@@ -136,6 +136,7 @@ function buildLiveStreamingHTML() {
           'div#lsPlayerContainer:-webkit-full-screen video{width:100%!important;height:100%!important;object-fit:contain!important;}' +
           'div#lsPlayerContainer:-moz-full-screen{padding-bottom:0!important;width:100vw!important;height:100vh!important;height:100dvh!important;border-radius:0!important;background:#000!important;}' +
           'div#lsPlayerContainer:-moz-full-screen video{width:100%!important;height:100%!important;object-fit:contain!important;}' +
+          '@keyframes lsFloatUp{0%{transform:translateY(0) scale(0.5);opacity:0;}15%{opacity:1;transform:translateY(-12px) scale(1.15);}100%{transform:translateY(-170px) scale(1);opacity:0;}}' +
           '</style>' +
           '<iframe id="lsPlayerIframe" src="" style="position:absolute;inset:0;width:100%;height:100%;border:none;" allow="accelerometer;gyroscope;autoplay;encrypted-media;picture-in-picture;fullscreen" allowfullscreen webkitallowfullscreen></iframe>' +
           // Floating reload button ALWAYS visible on video
@@ -155,6 +156,7 @@ function buildLiveStreamingHTML() {
           '<button id="lsMicToggleBtn" onclick="lsMicToggle()" style="display:none;background:#22c55e;color:#fff;border:none;padding:8px 12px;border-radius:10px;cursor:pointer;font-size:13px;">🎤</button>' +
           '<button id="lsCamFlipBtn" onclick="lsCamFlip()" style="display:none;background:#6366f1;color:#fff;border:none;padding:8px 12px;border-radius:10px;cursor:pointer;font-size:13px;">🔄</button>' +
           '<span id="lsParticipationStatus" style="display:none;color:#22c55e;font-size:12px;font-weight:600;"></span>' +
+          '<button id="lsReactBtn" onclick="lsSendReaction(\'❤️\')" title="Me gusta" style="background:#ec4899;color:#fff;border:none;padding:8px 14px;border-radius:10px;cursor:pointer;font-size:15px;font-weight:600;-webkit-tap-highlight-color:transparent;min-width:44px;min-height:44px;">❤️</button>' +
           '<button id="lsFullscreenBtn" onclick="_lsToggleFullscreen()" style="background:rgba(255,255,255,0.15);border:none;color:#fff;padding:6px 12px;border-radius:8px;font-size:12px;cursor:pointer;margin-left:auto;-webkit-tap-highlight-color:transparent;min-width:44px;min-height:44px;">\u26F6 Completa</button>' +
           '<button id="lsReloadBtn" onclick="lsReloadPlayer()" style="background:#ef4444;color:#fff;border:none;padding:8px 14px;border-radius:10px;cursor:pointer;font-size:13px;font-weight:600;-webkit-tap-highlight-color:transparent;min-width:44px;min-height:44px;">🔄 Recargar</button>' +
           '<button id="lsTbChatBtn" onclick="lsToggleChat()" style="background:#8b5cf6;color:#fff;border:none;padding:8px 14px;border-radius:10px;cursor:pointer;font-size:13px;font-weight:600;-webkit-tap-highlight-color:transparent;min-width:44px;min-height:44px;">💬 Chat</button>' +
@@ -1534,6 +1536,9 @@ function _lsWatchStreamDirect(streamId, playbackUrl) {
   // Join viewer presence (for viewer count)
   lsJoinViewerPresence(streamId);
 
+  // Subscribe to floating reactions (likes)
+  try { lsSubscribeReactions(streamId); } catch(e) { console.warn('[LiveStreaming] reactions', e.message || e); }
+
   // Init participation system (raise hand, break timer)
   try { lsInitParticipation(streamId); } catch(e) { console.error('[LiveStream] lsInitParticipation error:', e); }
 
@@ -2574,6 +2579,7 @@ function lsCleanupParticipation(keepGalleryBtn) {
   if (_lsStudentStream) { _lsStudentStream.getTracks().forEach(function(t) { t.stop(); }); _lsStudentStream = null; }
   if (_lsParticipationChannel) { supabaseClient.removeChannel(_lsParticipationChannel); _lsParticipationChannel = null; }
   if (_lsBreakChannel) { supabaseClient.removeChannel(_lsBreakChannel); _lsBreakChannel = null; }
+  if (_lsReactionChannel) { try { supabaseClient.removeChannel(_lsReactionChannel); } catch(e) { console.warn('[LiveStreaming]', e.message || e); } _lsReactionChannel = null; }
   _lsHandRaised = false;
   _lsParticipating = false;
 }
@@ -3099,6 +3105,54 @@ function _lsBreakEnded(streamId) {
   } else {
     _lsShowPreEntryForm({ id: streamId, title: 'Clase en Directo' }, user);
   }
+}
+
+/* ── Reactions (likes flotantes) ───────────────────────────── */
+var _lsReactionChannel = null;
+var _lsReactionStreamId = null;
+
+function lsSubscribeReactions(streamId) {
+  if (_lsReactionChannel) { try { supabaseClient.removeChannel(_lsReactionChannel); } catch(e) { console.warn('[LiveStreaming]', e.message || e); } _lsReactionChannel = null; }
+  _lsReactionStreamId = streamId;
+  _lsReactionChannel = supabaseClient.channel('reactions-' + streamId);
+  _lsReactionChannel.on('broadcast', { event: 'reaction' }, function(payload) {
+    var emoji = (payload.payload && payload.payload.emoji) || '❤️';
+    _lsFloatReaction(emoji);
+  });
+  _lsReactionChannel.subscribe();
+}
+
+function lsSendReaction(emoji) {
+  emoji = emoji || '❤️';
+  _lsFloatReaction(emoji); // show locally right away
+  // Broadcast to everyone watching
+  try {
+    if (_lsReactionChannel) {
+      _lsReactionChannel.send({ type: 'broadcast', event: 'reaction', payload: { emoji: emoji } });
+    }
+  } catch(e) { console.warn('[LiveStreaming] reaction send', e.message || e); }
+  // Log for CRM analytics (best-effort)
+  try {
+    if (typeof supabaseClient !== 'undefined' && supabaseClient && _lsReactionStreamId) {
+      supabaseClient.from('stream_reactions').insert({
+        stream_id: _lsReactionStreamId,
+        student_email: (localStorage.getItem('tecnico_email') || '').toLowerCase(),
+        emoji: emoji,
+        created_at: new Date().toISOString()
+      }).then(function(){}).catch(function(e){ console.warn('[LiveStreaming] reaction log', e.message || e); });
+    }
+  } catch(e) { console.warn('[LiveStreaming] reaction log', e.message || e); }
+}
+
+function _lsFloatReaction(emoji) {
+  var container = document.getElementById('lsPlayerContainer');
+  if (!container) return;
+  var el = document.createElement('div');
+  el.textContent = emoji;
+  var leftPct = 55 + Math.floor(Math.random() * 35); // 55-90% from left
+  el.style.cssText = 'position:absolute;bottom:12px;left:' + leftPct + '%;z-index:40;font-size:30px;pointer-events:none;will-change:transform,opacity;animation:lsFloatUp 3s ease-out forwards;';
+  container.appendChild(el);
+  setTimeout(function() { if (el.parentNode) el.parentNode.removeChild(el); }, 3000);
 }
 
 /* ── Check if stream belongs to my group ─────────────────────── */

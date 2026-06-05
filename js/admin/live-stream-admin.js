@@ -1143,6 +1143,16 @@ async function lsaShowAttendance(streamId) {
       shares = shareRes.data || [];
     } catch (shErr) { console.warn('[LiveStreamAdmin] shares load:', shErr.message || shErr); }
 
+    // Reactions (likes ❤️) count
+    var reactionCount = 0;
+    try {
+      var reactRes = await supabaseClient
+        .from('stream_reactions')
+        .select('id', { count: 'exact', head: true })
+        .eq('stream_id', streamId);
+      reactionCount = reactRes.count || 0;
+    } catch (rErr) { console.warn('[LiveStreamAdmin] reactions load:', rErr.message || rErr); }
+
     // Aggregate: unique students with their data
     var students = {};
 
@@ -1277,6 +1287,10 @@ async function lsaShowAttendance(streamId) {
     html += '<div style="background:#1e293b;border-radius:10px;padding:10px 16px;text-align:center;flex:1;min-width:80px;">' +
         '<div style="color:#ec4899;font-size:24px;font-weight:800;">' + (shares || []).length + '</div>' +
         '<div style="color:#64748b;font-size:11px;">Compartidas</div>' +
+      '</div>' +
+      '<div style="background:#1e293b;border-radius:10px;padding:10px 16px;text-align:center;flex:1;min-width:80px;">' +
+        '<div style="color:#f43f5e;font-size:24px;font-weight:800;">' + reactionCount + '</div>' +
+        '<div style="color:#64748b;font-size:11px;">Likes ❤️</div>' +
       '</div>' +
     '</div>';
 
