@@ -3513,35 +3513,24 @@ function _lsShowPreEntryForm(stream, user) {
         '<div style="color:#111111;font-size:13px;margin-top:4px;">Nombre y apellido como el instructor te conoce</div>' +
       '</div>' +
 
-      // Photo section
-      '<div style="text-align:left;margin-bottom:20px;">' +
-        '<label style="color:#111111;font-size:14px;font-weight:700;display:block;margin-bottom:6px;">Tu Foto *</label>' +
-        '<div style="display:flex;gap:8px;align-items:center;">' +
-          '<div id="lsPreEntryPhotoPreview" style="width:80px;height:80px;border-radius:12px;background:#F5F5F7;border:2px dashed rgba(0,0,0,0.15);display:flex;align-items:center;justify-content:center;overflow:hidden;flex-shrink:0;">' +
-            '<span style="color:#111111;font-size:28px;">📷</span>' +
-          '</div>' +
-          '<div style="flex:1;">' +
-            '<button onclick="_lsPreEntryTakePhoto()" style="width:100%;padding:10px;background:#007AFF;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;margin-bottom:6px;">📸 Tomar Selfie</button>' +
-            '<button onclick="document.getElementById(\'lsPreEntryFileInput\').click()" style="width:100%;padding:10px;background:#FFFFFF;color:#111111;border:1px solid rgba(0,0,0,0.15);border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;">📁 Subir Foto</button>' +
-            '<input type="file" id="lsPreEntryFileInput" accept="image/*" onchange="_lsPreEntryHandleFile(this)" style="display:none;">' +
-          '</div>' +
+      // Share-to-unlock gate — host requires sharing on the 3 networks to enter (viral loop)
+      '<div style="text-align:left;margin-bottom:18px;background:#FFF7ED;border:1px solid #FED7AA;border-radius:12px;padding:14px;">' +
+        '<div style="color:#111111;font-size:14px;font-weight:800;margin-bottom:6px;">📢 El host requiere que compartas el en vivo</div>' +
+        '<div style="color:#111111;font-size:13px;margin-bottom:12px;">Comparte la clase en las <b>3 redes</b> para entrar. La clase es gratis 🚀</div>' +
+        '<div id="lsShareBtns" style="display:flex;gap:8px;">' +
+          '<button id="lsShareBtn-tiktok" onclick="_lsPreEntryShare(\'tiktok\')" style="flex:1;padding:12px 4px;background:#111111;color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:800;cursor:pointer;">TikTok</button>' +
+          '<button id="lsShareBtn-facebook" onclick="_lsPreEntryShare(\'facebook\')" style="flex:1;padding:12px 4px;background:#1877F2;color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:800;cursor:pointer;">Facebook</button>' +
+          '<button id="lsShareBtn-whatsapp" onclick="_lsPreEntryShare(\'whatsapp\')" style="flex:1;padding:12px 4px;background:#25D366;color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:800;cursor:pointer;">WhatsApp</button>' +
         '</div>' +
-      '</div>' +
-
-      // Hidden video for camera capture
-      '<video id="lsPreEntryCamVideo" autoplay playsinline muted style="display:none;width:200px;height:150px;border-radius:8px;margin:0 auto;"></video>' +
-      '<canvas id="lsPreEntryCamCanvas" style="display:none;"></canvas>' +
-      '<div id="lsPreEntryCamActions" style="display:none;margin-bottom:16px;">' +
-        '<button onclick="_lsPreEntryCapturePhoto()" style="padding:10px 20px;background:#34c759;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;">📸 Capturar</button> ' +
-        '<button onclick="_lsPreEntryCancelCam()" style="padding:10px 20px;background:#FFFFFF;color:#111111;border:1px solid rgba(0,0,0,0.15);border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;">Cancelar</button>' +
+        '<div id="lsShareProgress" style="color:#111111;font-size:12px;font-weight:700;margin-top:8px;">Compartidas: 0 de 3</div>' +
       '</div>' +
 
       // Error message
       '<div id="lsPreEntryError" style="display:none;color:#FF3B30;font-size:13px;margin-bottom:12px;font-weight:600;"></div>' +
 
-      // Submit
-      '<button onclick="_lsPreEntrySubmit()" id="lsPreEntrySubmitBtn" style="width:100%;padding:14px;background:#FF3B30;color:#fff;border:none;border-radius:12px;font-size:16px;font-weight:800;cursor:pointer;margin-bottom:8px;box-shadow:0 4px 12px rgba(255,59,48,0.3);">Solicitar Entrada</button>' +
-      '<button onclick="_lsPreEntryCancel()" style="width:100%;padding:10px;background:#FFFFFF;border:1px solid rgba(0,0,0,0.12);color:#111111;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;">Cancelar</button>' +
+      // Submit (locked until all 3 shares fired) + Salir
+      '<button onclick="_lsPreEntrySubmit()" id="lsPreEntrySubmitBtn" disabled style="width:100%;padding:14px;background:#9CA3AF;color:#fff;border:none;border-radius:12px;font-size:16px;font-weight:800;cursor:not-allowed;margin-bottom:8px;opacity:0.75;">🔒 Comparte en las 3 redes</button>' +
+      '<button onclick="_lsPreEntryCancel()" style="width:100%;padding:10px;background:#FFFFFF;border:1px solid rgba(0,0,0,0.12);color:#111111;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;">Salir</button>' +
     '</div>';
 
   document.body.appendChild(overlay);
@@ -3550,123 +3539,157 @@ function _lsShowPreEntryForm(stream, user) {
   overlay._stream = stream;
   overlay._user = user;
   _lsWrPhotoDataUrl = null;
+  _lsSharedPlatforms = {}; // reset share gate every time the form opens (incl. after break)
 }
 
-function _lsPreEntryTakePhoto() {
-  var video = document.getElementById('lsPreEntryCamVideo');
-  var actions = document.getElementById('lsPreEntryCamActions');
-  if (!video || !actions) return;
+/* ── Share-to-enter gate (viral loop: comparte en 3 redes para entrar) ── */
+var _lsSharedPlatforms = {};        // {tiktok:true, facebook:true, whatsapp:true}
+var _LS_REQUIRED_SHARES = 3;
 
-  navigator.mediaDevices.getUserMedia({ video: { width: 320, height: 240, facingMode: 'user' }, audio: false })
-    .then(function(stream) {
-      video._stream = stream;
-      video.srcObject = stream;
-      video.style.display = 'block';
-      actions.style.display = 'block';
-    })
-    .catch(function(e) {
-      window.MaestroDialog.alert({title: 'Error', message: _tc('ls_camera_access_failed', 'No se pudo acceder a la cámara. Usa "Subir Foto" en su lugar.'), kind: 'error'});
-    });
+function _lsShareLink() {
+  return (window.location && window.location.origin) ? window.location.origin : 'https://www.acvoltschool.com';
 }
 
-function _lsPreEntryCapturePhoto() {
-  var video = document.getElementById('lsPreEntryCamVideo');
-  var canvas = document.getElementById('lsPreEntryCamCanvas');
-  if (!video || !canvas) return;
-
-  canvas.width = 150;
-  canvas.height = 150;
-  var ctx = canvas.getContext('2d');
-  // Center crop to square
-  var size = Math.min(video.videoWidth, video.videoHeight);
-  var sx = (video.videoWidth - size) / 2;
-  var sy = (video.videoHeight - size) / 2;
-  ctx.drawImage(video, sx, sy, size, size, 0, 0, 150, 150);
-
-  _lsWrPhotoDataUrl = canvas.toDataURL('image/jpeg', 0.6);
-
-  // Show preview
-  var preview = document.getElementById('lsPreEntryPhotoPreview');
-  if (preview) preview.innerHTML = '<img src="' + _lsWrPhotoDataUrl + '" style="width:100%;height:100%;object-fit:cover;">';
-
-  // Stop camera
-  _lsPreEntryCancelCam();
+function _lsShareMessage() {
+  return '🔴 Estoy en una clase EN VIVO de HVAC con el Maestro, GRATIS. Métete ahora antes de que termine 👉 ';
 }
 
-function _lsPreEntryCancelCam() {
-  var video = document.getElementById('lsPreEntryCamVideo');
-  var actions = document.getElementById('lsPreEntryCamActions');
-  if (video) {
-    if (video._stream) video._stream.getTracks().forEach(function(t) { t.stop(); });
-    video.srcObject = null;
-    video.style.display = 'none';
+function _lsCopyToClipboard(text) {
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText) { navigator.clipboard.writeText(text); return; }
+  } catch(e) {}
+  try {
+    var ta = document.createElement('textarea');
+    ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.focus(); ta.select();
+    document.execCommand('copy'); document.body.removeChild(ta);
+  } catch(e) {}
+}
+
+function _lsPreEntryShare(platform) {
+  var link = _lsShareLink();
+  var msg = _lsShareMessage();
+  try {
+    if (platform === 'whatsapp') {
+      window.open('https://wa.me/?text=' + encodeURIComponent(msg + link), '_blank');
+    } else if (platform === 'facebook') {
+      window.open('https://www.facebook.com/sharer/sharer.php?u=' + encodeURIComponent(link) + '&quote=' + encodeURIComponent(msg), '_blank');
+    } else if (platform === 'tiktok') {
+      // TikTok has no web share intent — copy the link so they paste it into a video/story/DM
+      _lsCopyToClipboard(msg + link);
+      if (typeof window.showToast === 'function') window.showToast('Link copiado — pégalo en tu TikTok', 'success');
+      window.open('https://www.tiktok.com/', '_blank');
+    } else {
+      return;
+    }
+  } catch(e) { console.warn('[LiveStreaming] share', e.message || e); }
+  _lsMarkPlatformShared(platform);
+}
+
+function _lsLogShare(platform) {
+  try {
+    if (typeof supabaseClient === 'undefined' || !supabaseClient) return;
+    var overlay = document.getElementById('lsPreEntryForm');
+    var stream = overlay && overlay._stream;
+    var user = overlay && overlay._user;
+    if (!stream) return;
+    supabaseClient.from('stream_shares').insert({
+      stream_id: stream.id,
+      student_email: ((user && user.email) || '').toLowerCase(),
+      student_name: (user && user.nombre) || '',
+      platform: platform,
+      shared_at: new Date().toISOString()
+    }).then(function(){}).catch(function(e){ console.warn('[LiveStreaming] share log', e.message || e); });
+  } catch(e) { console.warn('[LiveStreaming] share log', e.message || e); }
+}
+
+function _lsMarkPlatformShared(platform) {
+  var isNew = !_lsSharedPlatforms[platform];
+  _lsSharedPlatforms[platform] = true;
+  if (isNew) _lsLogShare(platform); // log once per platform per form open
+  var btn = document.getElementById('lsShareBtn-' + platform);
+  if (btn) {
+    btn.style.opacity = '0.55';
+    var label = btn.textContent.replace(/^✓\s*/, '');
+    btn.textContent = '✓ ' + label;
   }
-  if (actions) actions.style.display = 'none';
+  var count = Object.keys(_lsSharedPlatforms).length;
+  var prog = document.getElementById('lsShareProgress');
+  if (prog) prog.textContent = 'Compartidas: ' + count + ' de ' + _LS_REQUIRED_SHARES;
+  if (count >= _LS_REQUIRED_SHARES) _lsUnlockEntry();
 }
 
-function _lsPreEntryHandleFile(input) {
-  if (!input.files || !input.files[0]) return;
-  var file = input.files[0];
-  if (file.size > 5 * 1024 * 1024) { window.showToast(_t('ls_photo_too_large', 'La foto debe ser menor a 5 MB'), 'warning'); return; }
-
-  var reader = new FileReader();
-  reader.onload = function(e) {
-    // Resize to 150x150 for efficiency
-    var img = new Image();
-    img.onload = function() {
-      var canvas = document.getElementById('lsPreEntryCamCanvas');
-      if (!canvas) return;
-      canvas.width = 150;
-      canvas.height = 150;
-      var ctx = canvas.getContext('2d');
-      var size = Math.min(img.width, img.height);
-      var sx = (img.width - size) / 2;
-      var sy = (img.height - size) / 2;
-      ctx.drawImage(img, sx, sy, size, size, 0, 0, 150, 150);
-      _lsWrPhotoDataUrl = canvas.toDataURL('image/jpeg', 0.6);
-      var preview = document.getElementById('lsPreEntryPhotoPreview');
-      if (preview) preview.innerHTML = '<img src="' + _lsWrPhotoDataUrl + '" style="width:100%;height:100%;object-fit:cover;">';
-    };
-    img.src = e.target.result;
-  };
-  reader.readAsDataURL(file);
+function _lsUnlockEntry() {
+  var prog = document.getElementById('lsShareProgress');
+  if (prog) { prog.style.color = '#34c759'; prog.textContent = '✅ ¡Listo! Ya puedes entrar a la clase.'; }
+  var btn = document.getElementById('lsPreEntrySubmitBtn');
+  if (btn) {
+    btn.disabled = false;
+    btn.style.background = '#FF3B30';
+    btn.style.cursor = 'pointer';
+    btn.style.opacity = '1';
+    btn.style.boxShadow = '0 4px 12px rgba(255,59,48,0.3)';
+    btn.textContent = 'Entrar a la Clase';
+  }
 }
 
 function _lsPreEntrySubmit() {
   var nameInput = document.getElementById('lsPreEntryName');
   var errorEl = document.getElementById('lsPreEntryError');
   var overlay = document.getElementById('lsPreEntryForm');
-  if (!nameInput || !overlay) return;
+  if (!overlay) return;
 
-  var nombre = nameInput.value.trim();
+  var nombre = nameInput ? nameInput.value.trim() : ((overlay._user && overlay._user.nombre) || '');
 
   // Validate: at least first + last name
   if (!nombre || nombre.split(/\s+/).length < 2) {
     if (errorEl) { errorEl.style.display = ''; errorEl.textContent = _tc('ls_enter_full_name', 'Escribe tu nombre completo (nombre y apellido)'); }
-    nameInput.focus();
+    if (nameInput) nameInput.focus();
     return;
   }
 
-  // Validate: photo required
-  if (!_lsWrPhotoDataUrl) {
-    if (errorEl) { errorEl.style.display = ''; errorEl.textContent = _tc('ls_upload_photo', 'Toma una selfie o sube tu foto para continuar'); }
+  // Gate: must have shared on all 3 networks (viral loop).
+  // FUTURE PAYWALL: add membership check here — this is the single entry chokepoint.
+  if (Object.keys(_lsSharedPlatforms).length < _LS_REQUIRED_SHARES) {
+    if (errorEl) { errorEl.style.display = ''; errorEl.textContent = _tc('ls_share_3_networks', 'Comparte en las 3 redes para desbloquear tu entrada'); }
     return;
   }
 
-  // Update user name
   var stream = overlay._stream;
   var user = overlay._user;
   user.nombre = nombre;
 
-  // Remove form and proceed to actual waiting room
+  // Direct entry — no waiting room (Mario 2026-06-05: 3 shares → entra directo).
+  // Attendance is logged automatically by lsJoinViewerPresence() once the stream opens.
   overlay.remove();
-  _lsActualEnterWaitingRoom(stream, user);
+  _lsEnterStreamDirect(stream, user);
 }
 
 function _lsPreEntryCancel() {
-  _lsPreEntryCancelCam();
   var overlay = document.getElementById('lsPreEntryForm');
   if (overlay) overlay.remove();
+}
+
+/* ── Enter the live stream directly (share verified) ── */
+function _lsEnterStreamDirect(stream, user) {
+  // Mark approved for this session so re-entry within the same segment is instant
+  _lsApprovedStreamIds[stream.id] = true;
+
+  showScreen('liveStreamingScreen');
+  _lsHideImmersiveElements();
+
+  setTimeout(function() {
+    if (typeof supabaseClient !== 'undefined' && supabaseClient) {
+      supabaseClient.from('live_streams').select('playback_url').eq('id', stream.id).single().then(function(res) {
+        var url = (res.data && res.data.playback_url) || stream.playback_url || '';
+        _lsWatchStreamDirect(stream.id, url);
+      }).catch(function() {
+        _lsWatchStreamDirect(stream.id, stream.playback_url || '');
+      });
+    } else {
+      _lsWatchStreamDirect(stream.id, stream.playback_url || '');
+    }
+  }, 300);
 }
 
 function _lsActualEnterWaitingRoom(stream, user) {

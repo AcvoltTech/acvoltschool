@@ -1133,6 +1133,16 @@ async function lsaShowAttendance(streamId) {
       .eq('stream_id', streamId)
       .order('created_at', { ascending: true });
 
+    // Get social shares (viral gate: quién compartió y en qué red)
+    var shares = [];
+    try {
+      var shareRes = await supabaseClient
+        .from('stream_shares')
+        .select('student_email, student_name, platform, shared_at')
+        .eq('stream_id', streamId);
+      shares = shareRes.data || [];
+    } catch (shErr) { console.warn('[LiveStreamAdmin] shares load:', shErr.message || shErr); }
+
     // Aggregate: unique students with their data
     var students = {};
 
@@ -1165,6 +1175,29 @@ async function lsaShowAttendance(streamId) {
         students[key].firstSeen = c.created_at;
       }
     });
+
+    // From shares (who shared, on which networks)
+    (shares || []).forEach(function(sh) {
+      var key = (sh.student_email || '').toLowerCase().trim();
+      if (!key) return;
+      if (!students[key]) {
+        students[key] = { email: key, name: sh.student_name || '', joined: null, left: null, duration: 0, participated: false, source: 'share', visits: 0, msgCount: 0, firstSeen: sh.shared_at };
+      }
+      if (!students[key].sharePlatforms) students[key].sharePlatforms = {};
+      if (sh.platform) students[key].sharePlatforms[sh.platform] = true;
+      if (!students[key].name && sh.student_name) students[key].name = sh.student_name;
+      if (!students[key].firstSeen || (sh.shared_at && new Date(sh.shared_at) < new Date(students[key].firstSeen))) {
+        students[key].firstSeen = sh.shared_at;
+      }
+    });
+
+    // Peak concurrency from attendance overlaps (gente al mismo tiempo)
+    var peakConcurrency = _lsaPeakConcurrency(attendance);
+
+    // Share tallies by network
+    var shareByNet = { tiktok: 0, facebook: 0, whatsapp: 0 };
+    (shares || []).forEach(function(sh) { if (shareByNet[sh.platform] !== undefined) shareByNet[sh.platform]++; });
+    var uniqueSharers = Object.values(students).filter(function(s) { return s.sharePlatforms && Object.keys(s.sharePlatforms).length > 0; }).length;
 
     // Get emails for users lookup
     var emailList = Object.keys(students);
@@ -1202,7 +1235,7 @@ async function lsaShowAttendance(streamId) {
     var hasAttendanceLog = (attendance || []).length > 0;
 
     var html = '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">' +
-      '<span style="color:#0ea5e9;font-weight:700;font-size:14px;">📊 Asistencia</span>' +
+      '<span style="color:#0ea5e9;font-weight:700;font-size:14px;">📊 Analíticos de la Clase</span>' +
       '<button class="lsa-btn lsa-btn-gray" onclick="document.getElementById(\'lsaAttendPanel_' + streamId + '\').remove()" style="font-size:11px;padding:4px 10px;">✕ Cerrar</button>' +
     '</div>';
 
@@ -1234,8 +1267,25 @@ async function lsaShowAttendance(streamId) {
     html += '<div style="background:#1e293b;border-radius:10px;padding:10px 16px;text-align:center;flex:1;min-width:80px;">' +
         '<div style="color:#3b82f6;font-size:24px;font-weight:800;">' + (chatMsgs || []).length + '</div>' +
         '<div style="color:#64748b;font-size:11px;">Mensajes Chat</div>' +
+      '</div>';
+    if (hasAttendanceLog) {
+      html += '<div style="background:#1e293b;border-radius:10px;padding:10px 16px;text-align:center;flex:1;min-width:80px;">' +
+          '<div style="color:#f59e0b;font-size:24px;font-weight:800;">' + peakConcurrency + '</div>' +
+          '<div style="color:#64748b;font-size:11px;">Pico En Vivo</div>' +
+        '</div>';
+    }
+    html += '<div style="background:#1e293b;border-radius:10px;padding:10px 16px;text-align:center;flex:1;min-width:80px;">' +
+        '<div style="color:#ec4899;font-size:24px;font-weight:800;">' + (shares || []).length + '</div>' +
+        '<div style="color:#64748b;font-size:11px;">Compartidas</div>' +
       '</div>' +
     '</div>';
+
+    // Share breakdown by network
+    if ((shares || []).length > 0) {
+      html += '<div style="background:rgba(236,72,153,0.08);border:1px solid rgba(236,72,153,0.25);border-radius:8px;padding:8px 12px;margin-bottom:12px;color:#f9a8d4;font-size:12px;">' +
+        '📢 <strong>' + uniqueSharers + '</strong> compartieron · TikTok <strong>' + shareByNet.tiktok + '</strong> · Facebook <strong>' + shareByNet.facebook + '</strong> · WhatsApp <strong>' + shareByNet.whatsapp + '</strong>' +
+      '</div>';
+    }
 
     if (studentList.length === 0) {
       html += '<div style="text-align:center;padding:16px;color:#64748b;font-size:13px;">' + _t('lsa_no_attendance','No hay registros de asistencia para este stream.') + '</div>';
@@ -1252,6 +1302,7 @@ async function lsaShowAttendance(streamId) {
           '<th style="text-align:left;padding:8px 4px;color:#94a3b8;font-weight:600;min-width:100px;">' + _t('adm_lsa_col_phone', 'Teléfono') + '</th>' +
           '<th style="text-align:center;padding:8px 4px;color:#94a3b8;font-weight:600;width:60px;">Hora</th>' +
           '<th style="text-align:center;padding:8px 4px;color:#94a3b8;font-weight:600;width:50px;">Msgs</th>' +
+          '<th style="text-align:center;padding:8px 4px;color:#94a3b8;font-weight:600;width:90px;">Compartió</th>' +
         '</tr></thead><tbody id="lsaAttendBody_' + streamId + '">';
 
       // Sort by first seen time, then by name
@@ -1273,6 +1324,7 @@ async function lsaShowAttendance(streamId) {
           '<td style="padding:6px 4px;color:#94a3b8;">' + _lsaEsc(st.telefono || '—') + '</td>' +
           '<td style="padding:6px 4px;text-align:center;color:#94a3b8;">' + timeStr + '</td>' +
           '<td style="padding:6px 4px;text-align:center;color:' + (st.msgCount > 0 ? '#22c55e' : '#64748b') + ';font-weight:600;">' + (st.msgCount || 0) + '</td>' +
+          '<td style="padding:6px 4px;text-align:center;font-size:10px;font-weight:700;">' + _lsaShareBadges(st.sharePlatforms) + '</td>' +
         '</tr>';
       }
 
@@ -1286,6 +1338,31 @@ async function lsaShowAttendance(streamId) {
     panel.innerHTML = '<div style="color:#ef4444;font-size:13px;">' + _t('adm_lsa_error_loading_attendance', 'Error cargando asistencia:') + ' ' + _lsaEsc(e.message || String(e)) + '</div>' +
       '<button class="lsa-btn lsa-btn-gray" onclick="document.getElementById(\'lsaAttendPanel_' + streamId + '\').remove()" style="margin-top:8px;font-size:11px;">✕ ' + _t('adm_lsa_close', 'Cerrar') + '</button>';
   }
+}
+
+/* ── Peak concurrency: max overlapping attendees (gente al mismo tiempo) ── */
+function _lsaPeakConcurrency(attendance) {
+  var events = [];
+  (attendance || []).forEach(function(a) {
+    if (!a.joined_at) return;
+    events.push({ t: new Date(a.joined_at).getTime(), d: 1 });
+    if (a.left_at) events.push({ t: new Date(a.left_at).getTime(), d: -1 });
+  });
+  // At equal timestamps, process joins (+1) before leaves (-1) so the peak is captured
+  events.sort(function(x, y) { return (x.t - y.t) || (y.d - x.d); });
+  var cur = 0, peak = 0;
+  events.forEach(function(e) { cur += e.d; if (cur > peak) peak = cur; });
+  return peak;
+}
+
+/* ── Share badges per student (TT / FB / WA) ── */
+function _lsaShareBadges(sp) {
+  sp = sp || {};
+  var parts = [];
+  if (sp.tiktok) parts.push('<span style="color:#e2e8f0;">TT</span>');
+  if (sp.facebook) parts.push('<span style="color:#60a5fa;">FB</span>');
+  if (sp.whatsapp) parts.push('<span style="color:#34d399;">WA</span>');
+  return parts.length ? parts.join(' ') : '<span style="color:#475569;">—</span>';
 }
 
 /* ── Attendance search filter ───────────────────────────────── */
