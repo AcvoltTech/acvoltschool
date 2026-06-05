@@ -4440,12 +4440,32 @@ function _lsaFmtFileSize(bytes) {
 }
 
 /* ── Timer ───────────────────────────────────────────────────── */
+var _lsaSegmentSeconds = 0;    // seconds into the current teaching segment (resets each break)
+var _lsaSegmentMinutes = 50;   // class segment length before a break (Mario: 50 min)
+var _lsaBreakPrompted = false; // avoid re-popping the break dialog within a segment
+var _lsaOnBreak = false;       // pause segment counting while on break
+
 function lsaStartTimer() {
   _lsaTimerSeconds = 0;
+  _lsaSegmentSeconds = 0;
+  _lsaBreakPrompted = false;
+  _lsaOnBreak = false;
   lsaUpdateTimerDisplay();
   _lsaTimer = setInterval(function() {
     _lsaTimerSeconds++;
     lsaUpdateTimerDisplay();
+
+    // Per-segment break scheduler: auto-open the break dialog 5 min before the segment ends
+    if (!_lsaOnBreak) {
+      _lsaSegmentSeconds++;
+      var promptAt = Math.max(60, (_lsaSegmentMinutes - 5) * 60); // 45:00 for a 50-min segment
+      if (!_lsaBreakPrompted && _lsaSegmentSeconds >= promptAt && !document.getElementById('lsaBreakDialog')) {
+        _lsaBreakPrompted = true;
+        if (typeof lsaShowBreakDialog === 'function') {
+          try { lsaShowBreakDialog(); } catch(e) { console.warn('[LiveStreamAdmin] auto-break', e.message || e); }
+        }
+      }
+    }
   }, 1000);
 }
 
@@ -6853,15 +6873,38 @@ var _lsaBreakSeconds = 0;
 var _lsaBreakChannel = null;
 
 function lsaShowBreakDialog() {
-  var mins = prompt('Minutos de descanso (5, 10, 15, etc.):', '5');
+  var old = document.getElementById('lsaBreakDialog');
+  if (old) old.remove();
+  var d = document.createElement('div');
+  d.id = 'lsaBreakDialog';
+  d.style.cssText = 'position:fixed;inset:0;z-index:100000;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;padding:20px;';
+  d.innerHTML = '<div style="background:#1e293b;border-radius:16px;padding:24px;max-width:340px;width:100%;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,0.5);">' +
+    '<div style="color:#fff;font-weight:800;font-size:18px;margin-bottom:6px;">☕ Descanso</div>' +
+    '<div style="color:#94a3b8;font-size:13px;margin-bottom:18px;">¿Cuántos minutos? Al terminar, los técnicos vuelven a compartir para re-entrar a la clase.</div>' +
+    '<div style="display:flex;gap:8px;margin-bottom:12px;">' +
+      '<button onclick="lsaStartBreak(10);document.getElementById(\'lsaBreakDialog\').remove();" style="flex:1;padding:18px 0;background:#0ea5e9;color:#fff;border:none;border-radius:12px;font-size:20px;font-weight:800;cursor:pointer;">10</button>' +
+      '<button onclick="lsaStartBreak(15);document.getElementById(\'lsaBreakDialog\').remove();" style="flex:1;padding:18px 0;background:#0ea5e9;color:#fff;border:none;border-radius:12px;font-size:20px;font-weight:800;cursor:pointer;">15</button>' +
+      '<button onclick="lsaStartBreak(20);document.getElementById(\'lsaBreakDialog\').remove();" style="flex:1;padding:18px 0;background:#0ea5e9;color:#fff;border:none;border-radius:12px;font-size:20px;font-weight:800;cursor:pointer;">20</button>' +
+    '</div>' +
+    '<button onclick="lsaBreakCustom()" style="width:100%;padding:10px;background:#334155;color:#e2e8f0;border:none;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:8px;">Otro número…</button>' +
+    '<button onclick="document.getElementById(\'lsaBreakDialog\').remove();" style="width:100%;padding:10px;background:none;color:#94a3b8;border:1px solid rgba(255,255,255,0.15);border-radius:10px;font-size:13px;cursor:pointer;">Cancelar</button>' +
+  '</div>';
+  document.body.appendChild(d);
+}
+
+function lsaBreakCustom() {
+  var old = document.getElementById('lsaBreakDialog');
+  if (old) old.remove();
+  var mins = prompt('Minutos de descanso (1-60):', '10');
   if (!mins) return;
-  var m = parseInt(mins);
+  var m = parseInt(mins, 10);
   if (isNaN(m) || m <= 0 || m > 60) { alert('Ingresa un número entre 1 y 60'); return; }
   lsaStartBreak(m);
 }
 
 function lsaStartBreak(minutes) {
   _lsaBreakSeconds = minutes * 60;
+  _lsaOnBreak = true; // pause the segment scheduler while on break
 
   // Pause local recording during break
   if (_lsaMediaRecorder && _lsaMediaRecorder.state === 'recording') {
@@ -6909,6 +6952,10 @@ function lsaUpdateBreakDisplay() {
 function lsaCancelBreak() {
   if (_lsaBreakTimer) { clearInterval(_lsaBreakTimer); _lsaBreakTimer = null; }
   _lsaBreakSeconds = 0;
+  // Resume → start a fresh 50-min segment; re-arm the auto break prompt
+  _lsaOnBreak = false;
+  _lsaSegmentSeconds = 0;
+  _lsaBreakPrompted = false;
 
   // Resume local recording after break
   if (_lsaMediaRecorder && _lsaMediaRecorder.state === 'paused') {

@@ -3032,6 +3032,8 @@ function _lsBreakUpdateDisplay() {
   }
 }
 
+var _lsWasOnBreak = false; // true while a break is active, so we can detect the resume edge
+
 function lsSubscribeBreakTimer(streamId) {
   if (_lsBreakChannel) supabaseClient.removeChannel(_lsBreakChannel);
   if (_lsBreakLocalInterval) { clearInterval(_lsBreakLocalInterval); _lsBreakLocalInterval = null; }
@@ -3040,23 +3042,63 @@ function lsSubscribeBreakTimer(streamId) {
   _lsBreakChannel.on('broadcast', { event: 'break_timer' }, function(payload) {
     var seconds = payload.payload ? payload.payload.seconds : 0;
 
-    // Sync local countdown with server value
-    _lsBreakLocalSeconds = seconds;
-    _lsBreakUpdateDisplay();
-
-    if (seconds > 0 && !_lsBreakLocalInterval) {
-      // Start local countdown for smooth display between broadcasts
-      _lsBreakLocalInterval = setInterval(function() {
-        _lsBreakLocalSeconds--;
-        _lsBreakUpdateDisplay();
-        if (_lsBreakLocalSeconds <= 0) {
-          clearInterval(_lsBreakLocalInterval);
-          _lsBreakLocalInterval = null;
-        }
-      }, 1000);
+    if (seconds > 0) {
+      _lsWasOnBreak = true;
+      _lsBreakLocalSeconds = seconds;
+      _lsBreakUpdateDisplay();
+      if (!_lsBreakLocalInterval) {
+        // Start local countdown for smooth display between broadcasts
+        _lsBreakLocalInterval = setInterval(function() {
+          _lsBreakLocalSeconds--;
+          _lsBreakUpdateDisplay();
+          if (_lsBreakLocalSeconds <= 0) {
+            clearInterval(_lsBreakLocalInterval);
+            _lsBreakLocalInterval = null;
+            _lsBreakEnded(streamId);
+          }
+        }, 1000);
+      }
+    } else {
+      // Host signaled break over
+      _lsBreakLocalSeconds = 0;
+      if (_lsBreakLocalInterval) { clearInterval(_lsBreakLocalInterval); _lsBreakLocalInterval = null; }
+      _lsBreakUpdateDisplay();
+      _lsBreakEnded(streamId);
     }
   });
   _lsBreakChannel.subscribe();
+}
+
+/* ── Break ended → viral loop: el técnico re-comparte para volver a entrar ── */
+function _lsBreakEnded(streamId) {
+  if (!_lsWasOnBreak) return; // only re-gate people who were actually on break
+  _lsWasOnBreak = false;
+
+  var overlay = document.getElementById('lsBreakOverlay');
+  if (overlay) overlay.style.display = 'none';
+
+  // Host/admins keep watching — don't gate them
+  if ((typeof isAdminAuthenticated === 'function' && isAdminAuthenticated()) ||
+      (typeof isAdminStudent === 'function' && isAdminStudent())) return;
+
+  // Forget this session's approval so they must share again to come back
+  if (_lsApprovedStreamIds) { try { delete _lsApprovedStreamIds[streamId]; } catch(e) {} }
+
+  var user = {
+    email: localStorage.getItem('tecnico_email') || '',
+    nombre: localStorage.getItem('tecnico_nombre') || ''
+  };
+
+  // Re-show the share gate over the video (it resets _lsSharedPlatforms = {})
+  if (typeof supabaseClient !== 'undefined' && supabaseClient) {
+    supabaseClient.from('live_streams').select('id, title, playback_url, class_group, instructor_name').eq('id', streamId).single().then(function(res) {
+      _lsShowPreEntryForm(res.data || { id: streamId, title: 'Clase en Directo' }, user);
+    }).catch(function() {
+      _lsShowPreEntryForm({ id: streamId, title: 'Clase en Directo' }, user);
+    });
+  } else {
+    _lsShowPreEntryForm({ id: streamId, title: 'Clase en Directo' }, user);
+  }
 }
 
 /* ── Check if stream belongs to my group ─────────────────────── */
