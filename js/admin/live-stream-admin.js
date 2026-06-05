@@ -7330,6 +7330,7 @@ function lsaWrSubscribe(streamId) {
       console.log('[WR-Admin] Students after sync:', count);
       _lsaWrUpdateCount(streamId);
       _lsaWrRenderList(streamId);
+      _lsaWrAutoApprove(streamId);
     })
     .on('presence', { event: 'join' }, function(payload) {
       console.log('[WR-Admin] JOIN event — key:', payload.key, 'data:', JSON.stringify(payload.newPresences));
@@ -7339,7 +7340,7 @@ function lsaWrSubscribe(streamId) {
       }
       _lsaWrUpdateCount(streamId);
       _lsaWrRenderList(streamId);
-      _lsaWrNotifyNew(payload.newPresences ? payload.newPresences[0] : null);
+      _lsaWrAutoApprove(streamId);
     })
     .on('presence', { event: 'leave' }, function(payload) {
       console.log('[WR-Admin] LEAVE event — key:', payload.key);
@@ -7352,6 +7353,17 @@ function lsaWrSubscribe(streamId) {
     });
 
   _lsaWrChannels[streamId] = channel;
+}
+
+/* ── Auto-aprobar sala de espera — entrada libre (Mario 2026-06-05) ──
+   Ya no usamos sala de espera; cualquiera que caiga aquí (versión vieja cacheada)
+   se aprueba solo para que el host NO tenga que aprobar a mano. */
+function _lsaWrAutoApprove(streamId) {
+  var students = _lsaWrStudents[streamId] || {};
+  for (var key in students) {
+    var em = (students[key] && students[key].email) || key;
+    if (em && typeof lsaWrApprove === 'function') { try { lsaWrApprove(streamId, em); } catch(e) {} }
+  }
 }
 
 function _lsaWrUpdateCount(streamId) {

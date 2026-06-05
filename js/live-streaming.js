@@ -162,7 +162,7 @@ function buildLiveStreamingHTML() {
           '<button id="lsCamFlipBtn" onclick="lsCamFlip()" style="display:none;background:#6366f1;color:#fff;border:none;padding:8px 12px;border-radius:10px;cursor:pointer;font-size:13px;">🔄</button>' +
           '<span id="lsParticipationStatus" style="display:none;color:#22c55e;font-size:12px;font-weight:600;"></span>' +
           '<button id="lsReactBtn" onclick="lsSendReaction(\'❤️\')" title="Me gusta" style="background:#ec4899;color:#fff;border:none;padding:8px 14px;border-radius:10px;cursor:pointer;font-size:15px;font-weight:600;-webkit-tap-highlight-color:transparent;min-width:44px;min-height:44px;">❤️</button>' +
-          '<button id="lsShareLiveBtn" onclick="_lsShareLiveBtn()" title="Compartir con amigos" style="background:#25D366;color:#fff;border:none;padding:8px 12px;border-radius:10px;cursor:pointer;font-size:13px;font-weight:700;-webkit-tap-highlight-color:transparent;min-width:44px;min-height:44px;">📲 Compartir</button>' +
+          '<button id="lsShareLiveBtn" onclick="_lsShareLiveBtn()" title="Compartir con amigos" style="background:#25D366;color:#fff;border:none;padding:8px 14px;border-radius:10px;cursor:pointer;font-size:15px;font-weight:600;-webkit-tap-highlight-color:transparent;min-width:44px;min-height:44px;">📲</button>' +
           '<button id="lsFullscreenBtn" onclick="_lsToggleFullscreen()" style="background:rgba(255,255,255,0.15);border:none;color:#fff;padding:6px 12px;border-radius:8px;font-size:12px;cursor:pointer;margin-left:auto;-webkit-tap-highlight-color:transparent;min-width:44px;min-height:44px;">\u26F6 Completa</button>' +
           '<button id="lsReloadBtn" onclick="lsReloadPlayer()" style="background:#ef4444;color:#fff;border:none;padding:8px 14px;border-radius:10px;cursor:pointer;font-size:13px;font-weight:600;-webkit-tap-highlight-color:transparent;min-width:44px;min-height:44px;">🔄 Recargar</button>' +
           '<button id="lsTbChatBtn" onclick="lsToggleChat()" style="background:#8b5cf6;color:#fff;border:none;padding:8px 14px;border-radius:10px;cursor:pointer;font-size:13px;font-weight:600;-webkit-tap-highlight-color:transparent;min-width:44px;min-height:44px;">💬 Chat</button>' +
@@ -196,7 +196,7 @@ function buildLiveStreamingHTML() {
         '</div>' +
         // Slow mode indicator + Q&A bar
         '<div id="lsSlowModeIndicator" style="display:none;text-align:center;padding:3px 0;font-size:11px;color:#b45309;background:rgba(245,158,11,0.12);border-top:1px solid rgba(245,158,11,0.25);"></div>' +
-        '<div style="display:flex;gap:4px;padding:6px 10px;border-top:1px solid rgba(0,0,0,0.06);">' +
+        '<div style="display:none;gap:4px;padding:6px 10px;border-top:1px solid rgba(0,0,0,0.06);">' +
           '<input id="lsQAInput" type="text" placeholder="Hacer pregunta al instructor..." maxlength="300" autocomplete="off" enterkeyhint="send" style="flex:1;background:#F5F5F7;border:1px solid rgba(0,0,0,0.1);border-radius:16px;padding:8px 12px;color:#111111;font-size:15px;outline:none;">' +
           '<button onclick="_lsSubmitQuestion()" style="background:#007AFF;border:none;color:#fff;padding:6px 12px;border-radius:12px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;flex-shrink:0;">Preguntar</button>' +
         '</div>' +
@@ -1428,6 +1428,7 @@ function _lsWatchStreamDirect(streamId, playbackUrl) {
       videoEl.onplaying = _lsHideTapToPlay;
       _lsHlsPlayer.on(Hls.Events.MANIFEST_PARSED, function() {
         videoEl.play().catch(function(e) { console.warn('[LiveStream] HLS autoplay blocked:', e); _lsShowTapToPlay(); });
+        setTimeout(function(){ if (videoEl.paused) _lsShowTapToPlay(); }, 1500); // iOS: play() puede "resolver" sin reproducir
       });
       _lsAttachHlsErrorHandler(_lsHlsPlayer);
       _lsStartLatencyCatchup(videoEl);
@@ -1457,6 +1458,7 @@ function _lsWatchStreamDirect(streamId, playbackUrl) {
       videoEl.addEventListener('error', videoEl._lsErrorHandler);
       videoEl.onplaying = _lsHideTapToPlay;
       videoEl.play().catch(function(e) { console.warn('[LiveStream] Native HLS autoplay blocked:', e); _lsShowTapToPlay(); });
+      setTimeout(function(){ if (videoEl.paused) _lsShowTapToPlay(); }, 1500); // iOS: play() puede "resolver" sin reproducir
     } else {
       console.error('[LiveStream] HLS not supported in this browser');
       _lsChatToast('Tu navegador no soporta HLS. Usa Safari o Chrome.', 'error');
