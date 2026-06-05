@@ -102,12 +102,19 @@
           }
           if (staff) {
             var staffEmail = staff.email || localStorage.getItem('tecnico_email') || '';
-            // Store admin session
-            localStorage.setItem('admin_authenticated', 'true');
-            localStorage.setItem('admin_role', staff.rol || 'master');
-            localStorage.setItem('admin_name', staff.nombre || user);
-            localStorage.setItem('admin_email', staffEmail);
-            localStorage.setItem('admin_login_ts', String(Date.now()));
+            // Store admin session in BOTH localStorage (persists, survives iOS Safari) AND
+            // sessionStorage (many legacy readers still use it). Mario 2026-06-05.
+            var _adminSess = {
+              admin_authenticated: 'true',
+              admin_role: staff.rol || 'master',
+              admin_name: staff.nombre || user,
+              admin_email: staffEmail,
+              admin_login_ts: String(Date.now())
+            };
+            for (var _ak in _adminSess) {
+              try { localStorage.setItem(_ak, _adminSess[_ak]); } catch(e) {}
+              try { sessionStorage.setItem(_ak, _adminSess[_ak]); } catch(e) {}
+            }
             window._adminSession = { email: staffEmail, role: staff.rol || 'master', name: staff.nombre || user, id: staff.id };
             if (staffEmail) localStorage.setItem('tecnico_email', staffEmail);
             // Update last login

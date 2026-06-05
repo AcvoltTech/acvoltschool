@@ -1,3 +1,17 @@
+    // ── Admin session rehydration (BLOCKING fix 2026-06-05) ───────────
+    // Login now writes admin_* to localStorage, but dozens of legacy readers
+    // still use sessionStorage. iOS Safari also wipes sessionStorage on reload.
+    // Copy localStorage → sessionStorage at startup so every reader sees the session.
+    (function() {
+      try {
+        var _ak = ['admin_authenticated','admin_role','admin_name','admin_email','admin_login_ts'];
+        for (var i = 0; i < _ak.length; i++) {
+          var v = localStorage.getItem(_ak[i]);
+          if (v !== null && sessionStorage.getItem(_ak[i]) === null) sessionStorage.setItem(_ak[i], v);
+        }
+      } catch(e) {}
+    })();
+
     // Free native app — currentMembership global stub so all code paths
     // that reference the old membership system resolve to an active state.
     var currentMembership = { activa: true, tipo: 'native_app_free', amount: 0, fecha_inicio: '' };
