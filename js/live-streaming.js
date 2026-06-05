@@ -3879,8 +3879,70 @@ function _lsEnterStreamDirect(stream, user) {
     }
   }, 300);
 
-  // Alto intent: ya está en el en vivo → pídele activar notificaciones para la próxima
+  // Alto intent: pide teléfono (estudiantes sin número → crecer SMS) o activar notificaciones
+  try { _lsMaybePromptPhone(); } catch(e) {}
   try { _lsMaybePromptPush(); } catch(e) { console.warn('[LiveStreaming] push prompt', e.message || e); }
+}
+
+/* ── Pide el teléfono al entrar al en vivo (estudiantes registrados sin número) ── */
+function _lsMaybePromptPhone() {
+  if (sessionStorage.getItem('ls_phone_prompt_seen') === '1') return;
+  if (localStorage.getItem('ls_phone_dismissed') === '1') return;
+  var email = localStorage.getItem('tecnico_email') || '';
+  if (!email || email.indexOf('@') === -1) return; // solo registrados (con correo)
+  if (typeof usersDataSelf !== 'function') return;
+  try {
+    usersDataSelf('get_self', { email: email, fields: ['telefono'] }).then(function(res) {
+      var tel = res && res.data && (res.data.telefono || (res.data[0] && res.data[0].telefono));
+      if (tel && String(tel).replace(/\D/g, '').length >= 7) return; // ya tiene teléfono
+      setTimeout(_lsShowPhonePrompt, 6000);
+    }).catch(function() {});
+  } catch(e) {}
+}
+
+function _lsShowPhonePrompt() {
+  if (document.getElementById('lsPhonePrompt') || document.getElementById('lsPushPrompt')) return;
+  sessionStorage.setItem('ls_phone_prompt_seen', '1');
+  var el = document.createElement('div');
+  el.id = 'lsPhonePrompt';
+  el.style.cssText = 'position:fixed;left:50%;transform:translateX(-50%);bottom:24px;z-index:100000;width:calc(100% - 32px);max-width:420px;background:#FFFFFF;border:1px solid rgba(0,0,0,0.1);border-radius:16px;padding:16px;box-shadow:0 12px 40px rgba(0,0,0,0.35);';
+  el.innerHTML =
+    '<div style="display:flex;align-items:flex-start;gap:12px;">' +
+      '<div style="font-size:30px;flex-shrink:0;">📱</div>' +
+      '<div style="flex:1;min-width:0;">' +
+        '<div style="color:#111;font-weight:800;font-size:14px;margin-bottom:2px;">Déjanos tu WhatsApp</div>' +
+        '<div style="color:#555;font-size:12px;line-height:1.4;">Te avisamos por mensaje cuando el Maestro esté EN VIVO. No te perderás ninguna clase.</div>' +
+      '</div>' +
+    '</div>' +
+    '<input id="lsPhoneInput" type="tel" inputmode="tel" placeholder="Tu número con lada (ej: 6681840193)" style="width:100%;box-sizing:border-box;margin-top:10px;background:#F5F5F7;border:1px solid rgba(0,0,0,0.12);border-radius:10px;padding:11px 12px;color:#111;font-size:15px;outline:none;">' +
+    '<div id="lsPhoneErr" style="display:none;color:#FF3B30;font-size:12px;margin-top:6px;font-weight:600;"></div>' +
+    '<div style="display:flex;gap:8px;margin-top:10px;">' +
+      '<button id="lsPhoneSaveBtn" onclick="_lsSavePhone()" style="flex:1;padding:11px;background:#25D366;color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:800;cursor:pointer;">Guardar</button>' +
+      '<button onclick="localStorage.setItem(\'ls_phone_dismissed\',\'1\');var e=document.getElementById(\'lsPhonePrompt\');if(e)e.remove();" style="padding:11px 14px;background:#F0F0F0;color:#111;border:none;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;">Ahora no</button>' +
+    '</div>';
+  document.body.appendChild(el);
+  var inp = document.getElementById('lsPhoneInput');
+  if (inp) inp.focus();
+}
+
+function _lsSavePhone() {
+  var inp = document.getElementById('lsPhoneInput');
+  var err = document.getElementById('lsPhoneErr');
+  var tel = inp ? inp.value.trim() : '';
+  if (!tel || tel.replace(/\D/g, '').length < 10) {
+    if (err) { err.style.display = ''; err.textContent = 'Escribe un número válido (10 dígitos con lada).'; }
+    return;
+  }
+  var email = localStorage.getItem('tecnico_email') || '';
+  localStorage.setItem('tecnico_telefono', tel);
+  if (email && typeof usersDataSelf === 'function') {
+    try { usersDataSelf('upsert_self', { email: email, data: { telefono: tel } }).then(function(){}).catch(function(){}); } catch(e) {}
+  }
+  var el = document.getElementById('lsPhonePrompt');
+  if (el) {
+    el.innerHTML = '<div style="text-align:center;color:#16a34a;font-weight:800;font-size:14px;padding:4px;">✅ ¡Gracias! Te avisaremos por mensaje.</div>';
+    setTimeout(function() { var x = document.getElementById('lsPhonePrompt'); if (x) x.remove(); }, 2500);
+  }
 }
 
 /* ── Push opt-in prompt — se muestra al entrar al en vivo (alto intent) ── */
@@ -3894,11 +3956,11 @@ function _lsMaybePromptPush() {
     if (Notification.permission === 'granted') { try { window.subscribeToPush(); } catch(e) {} return; } // ya dio permiso → suscribe callado
     if (Notification.permission === 'denied') return; // bloqueado, no se puede re-preguntar
   }
-  setTimeout(_lsShowPushPrompt, 7000); // déjalo asentarse en la clase unos segundos
+  setTimeout(_lsShowPushPrompt, 9000); // después del prompt de teléfono, para no chocar
 }
 
 function _lsShowPushPrompt() {
-  if (document.getElementById('lsPushPrompt')) return;
+  if (document.getElementById('lsPushPrompt') || document.getElementById('lsPhonePrompt')) return;
   if (localStorage.getItem('maestroac_push_subscribed') === 'true') return;
   sessionStorage.setItem('ls_push_prompt_seen', '1');
   var el = document.createElement('div');
