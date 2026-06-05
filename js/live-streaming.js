@@ -2339,14 +2339,16 @@ function lsJoinViewerPresence(streamId) {
       window.addEventListener('beforeunload', window._lsViewerPageCleanup);
     }
 
-    // Log attendance to DB (persistent)
+    // Log attendance to DB (persistent). source='notif' si entró por la notificación (tracking "usó")
     if (email !== 'anonymous') {
+      var _attSource = 'live';
+      try { if (location.href.indexOf('ntf=1') !== -1 || sessionStorage.getItem('ls_from_notif') === '1') { _attSource = 'notif'; sessionStorage.setItem('ls_from_notif', '1'); } } catch(e) {}
       supabaseClient.from('stream_attendance').insert({
         stream_id: streamId,
         student_email: email,
         student_name: name,
         joined_at: new Date().toISOString(),
-        source: 'live'
+        source: _attSource
       }).select('id').single().then(function(res) {
         if (res.data) _lsAttendanceId = res.data.id;
       }).catch(function(e) { console.warn('[LS] Attendance insert error:', e); });
@@ -3804,6 +3806,56 @@ function _lsEnterStreamDirect(stream, user) {
       _lsWatchStreamDirect(stream.id, stream.playback_url || '');
     }
   }, 300);
+
+  // Alto intent: ya está en el en vivo → pídele activar notificaciones para la próxima
+  try { _lsMaybePromptPush(); } catch(e) { console.warn('[LiveStreaming] push prompt', e.message || e); }
+}
+
+/* ── Push opt-in prompt — se muestra al entrar al en vivo (alto intent) ── */
+function _lsMaybePromptPush() {
+  if (localStorage.getItem('maestroac_push_subscribed') === 'true') return; // ya activado
+  if (sessionStorage.getItem('ls_push_prompt_seen') === '1') return;        // ya se mostró hoy
+  var iOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+  var supported = ('serviceWorker' in navigator) && ('PushManager' in window) && !(iOS && !window.navigator.standalone);
+  if (!supported || typeof window.subscribeToPush !== 'function') return;
+  if (typeof Notification !== 'undefined') {
+    if (Notification.permission === 'granted') { try { window.subscribeToPush(); } catch(e) {} return; } // ya dio permiso → suscribe callado
+    if (Notification.permission === 'denied') return; // bloqueado, no se puede re-preguntar
+  }
+  setTimeout(_lsShowPushPrompt, 7000); // déjalo asentarse en la clase unos segundos
+}
+
+function _lsShowPushPrompt() {
+  if (document.getElementById('lsPushPrompt')) return;
+  if (localStorage.getItem('maestroac_push_subscribed') === 'true') return;
+  sessionStorage.setItem('ls_push_prompt_seen', '1');
+  var el = document.createElement('div');
+  el.id = 'lsPushPrompt';
+  el.style.cssText = 'position:fixed;left:50%;transform:translateX(-50%);bottom:24px;z-index:100000;width:calc(100% - 32px);max-width:420px;background:#FFFFFF;border:1px solid rgba(0,0,0,0.1);border-radius:16px;padding:16px;box-shadow:0 12px 40px rgba(0,0,0,0.35);';
+  el.innerHTML =
+    '<div style="display:flex;align-items:flex-start;gap:12px;">' +
+      '<div style="font-size:30px;flex-shrink:0;">🔔</div>' +
+      '<div style="flex:1;min-width:0;">' +
+        '<div style="color:#111;font-weight:800;font-size:14px;margin-bottom:2px;">No te pierdas la próxima clase EN VIVO</div>' +
+        '<div style="color:#555;font-size:12px;line-height:1.4;">Activa las notificaciones y te avisamos justo cuando el Maestro entre en vivo.</div>' +
+      '</div>' +
+    '</div>' +
+    '<div style="display:flex;gap:8px;margin-top:12px;">' +
+      '<button id="lsPushPromptYes" style="flex:1;padding:11px;background:#FF3B30;color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:800;cursor:pointer;">🔔 Activar</button>' +
+      '<button onclick="var e=document.getElementById(\'lsPushPrompt\');if(e)e.remove();" style="padding:11px 14px;background:#F0F0F0;color:#111;border:none;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;">Ahora no</button>' +
+    '</div>';
+  document.body.appendChild(el);
+  var yes = document.getElementById('lsPushPromptYes');
+  if (yes) yes.onclick = function() {
+    yes.disabled = true; yes.textContent = '👆 Toca PERMITIR…';
+    Promise.resolve(window.subscribeToPush()).then(function(ok) {
+      var e = document.getElementById('lsPushPrompt');
+      if (ok && e) {
+        e.innerHTML = '<div style="text-align:center;color:#16a34a;font-weight:800;font-size:14px;padding:4px;">✅ ¡Listo! Te avisaremos cuando esté EN VIVO.</div>';
+        setTimeout(function() { var x = document.getElementById('lsPushPrompt'); if (x) x.remove(); }, 2500);
+      } else if (e) { e.remove(); }
+    }).catch(function() { var e = document.getElementById('lsPushPrompt'); if (e) e.remove(); });
+  };
 }
 
 function _lsActualEnterWaitingRoom(stream, user) {

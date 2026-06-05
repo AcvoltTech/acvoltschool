@@ -2946,7 +2946,7 @@ window.lsaBroadcastLiveAlert = async function() {
         title: titleIn,
         body: bodyIn,
         type: 'clase',
-        url: './index.html#liveStreamingScreen',
+        url: './index.html#liveStreamingScreen?ntf=1',
         admin_email: adminEmail
       })
     }).then(function(r) { return r.json().catch(function(){ return {}; }).then(function(d){ return { ok: r.ok, data: d }; }); });
@@ -2957,7 +2957,7 @@ window.lsaBroadcastLiveAlert = async function() {
       body: JSON.stringify({
         title: titleIn,
         body: bodyIn,
-        url: 'https://maestrohvacr.com/#liveStreamingScreen',
+        url: 'https://maestrohvacr.com/#liveStreamingScreen?ntf=1',
         admin_email: adminEmail
       })
     }).then(function(r) { return r.json().catch(function(){ return {}; }).then(function(d){ return { ok: r.ok, data: d }; }); });

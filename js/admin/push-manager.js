@@ -155,6 +155,9 @@ function _pmRender(shell) {
   h += '<div style="background:linear-gradient(90deg,#22c55e,#16a34a);height:100%;width:' + pct + '%;border-radius:8px;transition:width 0.5s;"></div>';
   h += '</div>';
 
+  // Alcance de la última alerta EN VIVO (recibió / usó) — se llena vía RPC
+  h += '<div id="pmLastAlert" style="margin-bottom:24px;"><div style="color:#94a3b8;font-size:13px;">⏳ Cargando alcance de la última alerta…</div></div>';
+
   // Action buttons
   h += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:28px;">';
 
@@ -194,6 +197,55 @@ function _pmRender(shell) {
 
   // Check daily reminder status
   _pmCheckDailyStatus();
+  // Alcance de la última alerta (recibió/usó)
+  _pmLoadLastAlert();
+}
+
+/* ── Alcance de la última alerta EN VIVO (recibió / usó) ── */
+async function _pmLoadLastAlert() {
+  var box = document.getElementById('pmLastAlert');
+  if (!box) return;
+  try {
+    var sb = _pmSb();
+    if (!sb) return;
+    var res = await sb.rpc('live_alert_stats');
+    var d = (res && res.data) || null;
+    if (!d || !d.last_at) { box.innerHTML = '<div style="background:#1e293b;border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:16px;color:#94a3b8;font-size:13px;">Aún no hay alertas EN VIVO registradas.</div>'; return; }
+    var when = '';
+    try { when = new Date(d.last_at).toLocaleString('es-US', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' }); } catch(e) { when = String(d.last_at); }
+    var pushDeliv = Number(d.push_sent || 0);
+    var pushFail = Number(d.push_failed || 0);
+    var noSub = Number(d.push_no_sub || 0);
+    var emailC = Number(d.email || 0);
+    var smsS = Number(d.sms_sent || 0);
+    var smsF = Number(d.sms_failed || 0);
+    var used = Number(d.used || 0);
+    function card(color, big, label) {
+      return '<div style="flex:1;min-width:110px;text-align:center;background:#0f172a;border:1px solid rgba(255,255,255,0.06);border-radius:10px;padding:12px;">' +
+        '<div style="font-size:24px;font-weight:800;color:' + color + ';">' + big + '</div>' +
+        '<div style="font-size:11px;color:#94a3b8;margin-top:2px;">' + label + '</div></div>';
+    }
+    box.innerHTML =
+      '<div style="background:#1e293b;border:1px solid rgba(14,165,233,0.3);border-radius:14px;padding:16px;">' +
+        '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:6px;">' +
+          '<span style="color:#0ea5e9;font-weight:800;font-size:15px;">📊 Alcance de la última alerta</span>' +
+          '<span style="color:#94a3b8;font-size:12px;">' + when + '</span>' +
+        '</div>' +
+        '<div style="display:flex;gap:10px;flex-wrap:wrap;">' +
+          card('#22c55e', pushDeliv.toLocaleString(), '🔔 Push entregado') +
+          card('#ef4444', pushFail.toLocaleString(), '🔔 Push falló') +
+          card('#3b82f6', emailC.toLocaleString(), '📧 Email') +
+          card('#10b981', smsS.toLocaleString(), '💬 SMS enviado') +
+          card('#f59e0b', used.toLocaleString(), '👆 Entraron por la alerta') +
+        '</div>' +
+        '<div style="margin-top:10px;color:#64748b;font-size:11px;">' +
+          'Sin push activo (no les llegó push): <b style="color:#cbd5e1;">' + noSub.toLocaleString() + '</b>' +
+          (smsF ? ' · SMS fallidos: <b style="color:#cbd5e1;">' + smsF.toLocaleString() + '</b>' : '') +
+        '</div>' +
+      '</div>';
+  } catch(e) {
+    box.innerHTML = '<div style="background:#1e293b;border:1px solid rgba(239,68,68,0.3);border-radius:12px;padding:14px;color:#fca5a5;font-size:12px;">No se pudo cargar el alcance: ' + (e.message || e) + '</div>';
+  }
 }
 
 /* ── Render student rows ─────────────────────────────── */
