@@ -2909,6 +2909,63 @@ async function _lsaHmsAuthToken() {
    Triggered by the red "📣 ALERTA A TODOS" button in the admin live studio.
    Calls send-push-notification with recipient_emails=['__all__'], which the
    Edge Function expands to every active subscription. Admin-auth gated. */
+/* ── SMS solo a estudiantes registrados (Mario 2026-06-05) ── */
+async function _lsaSmsCall(extra) {
+  var sbUrl = typeof SUPABASE_URL !== 'undefined' ? SUPABASE_URL : 'https://htklsowiyjwsjnacnvnr.supabase.co';
+  var sbKey = typeof SUPABASE_KEY !== 'undefined' ? SUPABASE_KEY : '';
+  var adminEmail = localStorage.getItem('tecnico_email') || localStorage.getItem('maestroac_email') || '';
+  var authTok = await _lsaHmsAuthToken();
+  var payload = Object.assign({ admin_email: adminEmail }, extra || {});
+  return fetch(sbUrl + '/functions/v1/sms-students', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + authTok, 'apikey': sbKey },
+    body: JSON.stringify(payload)
+  }).then(function(r) { return r.json().catch(function(){ return {}; }); });
+}
+
+window.lsaSmsStudents = async function() {
+  var origin = (window.location && window.location.origin) ? window.location.origin : 'https://www.acvoltschool.com';
+  var link = origin + '/#liveStreamingScreen';
+  var count = '—';
+  try { var dr = await _lsaSmsCall({ dry_run: true }); if (dr && dr.target != null) count = dr.target; } catch(e) {}
+  var costo = (typeof count === 'number') ? ('~$' + (count * 0.0085).toFixed(2) + ' USD') : '';
+  var defaultMsg = '🔴 EN VIVO AHORA: Clase de HVAC GRATIS con el Maestro. Entra: ' + link + ' STOP=baja';
+  var old = document.getElementById('lsaSmsModal'); if (old) old.remove();
+  var d = document.createElement('div'); d.id = 'lsaSmsModal';
+  d.style.cssText = 'position:fixed;inset:0;z-index:100001;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;padding:20px;';
+  d.innerHTML = '<div style="background:#1e293b;border-radius:16px;padding:22px;max-width:470px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,0.55);">' +
+      '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">' +
+        '<span style="color:#fff;font-weight:800;font-size:17px;">📱 SMS a Estudiantes</span>' +
+        '<button onclick="document.getElementById(\'lsaSmsModal\').remove()" style="background:none;border:none;color:#94a3b8;font-size:22px;cursor:pointer;line-height:1;">✕</button>' +
+      '</div>' +
+      '<div style="color:#94a3b8;font-size:12px;margin-bottom:8px;">Solo a tus <b style="color:#22c55e;">' + count + '</b> estudiantes registrados con teléfono. ' + costo + '</div>' +
+      '<textarea id="lsaSmsBody" style="width:100%;box-sizing:border-box;height:110px;background:#0f172a;border:1px solid rgba(255,255,255,0.12);border-radius:10px;padding:10px;color:#e2e8f0;font-size:13px;line-height:1.5;">' + defaultMsg + '</textarea>' +
+      '<div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;">' +
+        '<button onclick="lsaSmsTest()" style="flex:1;min-width:155px;padding:12px;background:#3b82f6;color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:800;cursor:pointer;">📲 Probar con mi número</button>' +
+        '<button onclick="lsaSmsSendAll(' + (typeof count === 'number' ? count : 0) + ')" style="flex:1;min-width:155px;padding:12px;background:#16a34a;color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:800;cursor:pointer;">📤 Mandar a TODOS</button>' +
+      '</div>' +
+      '<div id="lsaSmsStatus" style="color:#94a3b8;font-size:12px;margin-top:10px;min-height:16px;"></div>' +
+    '</div>';
+  document.body.appendChild(d);
+};
+
+window.lsaSmsTest = async function() {
+  var phone = prompt('Tu número para la prueba (con lada, ej: 6681840193):', '');
+  if (!phone) return;
+  var body = (document.getElementById('lsaSmsBody') || {}).value || '';
+  var st = document.getElementById('lsaSmsStatus'); if (st) st.textContent = '⏳ Enviando prueba...';
+  var res = await _lsaSmsCall({ test_phone: phone, body: body }).catch(function(e){ return { error: e.message }; });
+  if (st) st.textContent = (res && res.sent) ? ('✅ Prueba enviada a ' + res.phone) : ('❌ Error: ' + ((res && res.error) || 'falló'));
+};
+
+window.lsaSmsSendAll = async function(count) {
+  if (!confirm('¿Mandar SMS a tus ' + count + ' estudiantes registrados? Es SMS real (cuesta dinero).')) return;
+  var body = (document.getElementById('lsaSmsBody') || {}).value || '';
+  var st = document.getElementById('lsaSmsStatus'); if (st) st.textContent = '⏳ Enviando a ' + count + ' estudiantes...';
+  var res = await _lsaSmsCall({ body: body }).catch(function(e){ return { error: e.message }; });
+  if (st) st.textContent = (res && res.started) ? ('✅ Enviando a ' + res.target + ' estudiantes (en background). Revisa el analítico.') : ('❌ Error: ' + ((res && res.error) || 'falló'));
+};
+
 /* ── Compartir en MIS redes — post listo + enlace al en vivo (Mario 2026-06-05) ── */
 window.lsaShowSocialShare = function() {
   var origin = (window.location && window.location.origin) ? window.location.origin : 'https://www.acvoltschool.com';
@@ -3360,6 +3417,8 @@ async function adminGoLiveBrowser(streamId) {
           '<button id="lsaBroadcastAlertBtn" onclick="lsaBroadcastLiveAlert()" class="lsa-btn" style="padding:8px 16px;font-size:13px;background:linear-gradient(135deg,#dc2626,#ef4444);color:#fff;font-weight:900;box-shadow:0 4px 12px rgba(220,38,38,0.4);" title="Notifica a TODOS — ya estás EN VIVO">📣 ALERTA A TODOS</button>' +
           // Compartir en MIS redes (post listo + enlace al en vivo)
           '<button id="lsaSocialShareBtn" onclick="lsaShowSocialShare()" class="lsa-btn" style="padding:8px 16px;font-size:13px;background:linear-gradient(135deg,#16a34a,#22c55e);color:#fff;font-weight:900;box-shadow:0 4px 12px rgba(22,163,74,0.4);" title="Compartir en tus redes con post listo">📲 Mis Redes</button>' +
+          // SMS solo a estudiantes registrados
+          '<button id="lsaSmsStudentsBtn" onclick="lsaSmsStudents()" class="lsa-btn" style="padding:8px 16px;font-size:13px;background:linear-gradient(135deg,#7c3aed,#8b5cf6);color:#fff;font-weight:900;box-shadow:0 4px 12px rgba(124,58,237,0.4);" title="SMS solo a tus estudiantes registrados">📱 SMS Estudiantes</button>' +
           '<div style="width:1px;height:28px;background:rgba(255,255,255,0.15);margin:0 2px;"></div>' +
           // Device switch
           '<button onclick="lsaReleaseForDeviceSwitch()" class="lsa-btn" style="padding:8px 14px;font-size:12px;background:#8b5cf6;color:#fff;" title="Liberar stream para continuar en otro dispositivo">📱 Cambiar Dispositivo</button>' +
