@@ -489,6 +489,28 @@ function _lscInitQA(streamId) {
   });
 
   _lscQAChannel.subscribe();
+
+  // Load persisted unanswered questions so the host sees them even if the panel/console
+  // opened AFTER the student asked (broadcasts are not retained). Mario 2026-06-05.
+  try {
+    supabaseClient.from('stream_questions')
+      .select('*').eq('stream_id', streamId).eq('answered', false)
+      .order('created_at', { ascending: false })
+      .then(function(res) {
+        if (!res.data || !res.data.length) return;
+        res.data.forEach(function(q) {
+          if (!_lscQuestions.some(function(x) { return x.id === q.id; })) {
+            _lscQuestions.push({
+              id: q.id, email: q.student_email || '', name: q.student_name || _t('adm_lsc_student_default', 'Estudiante'),
+              question: q.question, answered: false, timestamp: new Date(q.created_at).getTime()
+            });
+          }
+        });
+        _lscQuestions.sort(function(a, b) { return b.timestamp - a.timestamp; });
+        _lscRenderQAPanel();
+        _lscUpdateQABadge();
+      }).catch(function() {});
+  } catch(e) { console.warn('[LiveStreamConsole] qa load', e.message || e); }
 }
 
 function _lscCleanupQA() {
@@ -511,6 +533,8 @@ function _lscMarkAnswered(qId) {
   if (_lscQAChannel) {
     _lscQAChannel.send({ type: 'broadcast', event: 'question_answered', payload: { questionId: qId } });
   }
+  // Persist so it doesn't reappear when the panel reloads from DB
+  try { supabaseClient.from('stream_questions').update({ answered: true }).eq('id', qId).then(function(){}).catch(function(){}); } catch(e) {}
   _lscRenderQAPanel();
   _lscUpdateQABadge();
 }

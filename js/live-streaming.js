@@ -4259,18 +4259,30 @@ function _lsSubmitQuestion() {
 
   var question = input.value.trim();
   input.value = '';
+  var streamId = _lsCurrentStreamId;
 
-  var ch = supabaseClient.channel('qa-' + _lsCurrentStreamId);
-  ch.subscribe(function(status) {
-    if (status === 'SUBSCRIBED') {
-      ch.send({
-        type: 'broadcast',
-        event: 'new_question',
-        payload: { id: 'q-' + Date.now(), email: email, name: name, question: question }
-      });
-      setTimeout(function() { supabaseClient.removeChannel(ch); }, 1000);
-    }
-  });
+  function _broadcastQ(qid) {
+    var ch = supabaseClient.channel('qa-' + streamId);
+    ch.subscribe(function(status) {
+      if (status === 'SUBSCRIBED') {
+        ch.send({
+          type: 'broadcast',
+          event: 'new_question',
+          payload: { id: qid, email: email, name: name, question: question }
+        });
+        setTimeout(function() { supabaseClient.removeChannel(ch); }, 1000);
+      }
+    });
+  }
+
+  // Persist first (host la ve aunque abra el panel después), luego broadcast con el MISMO id
+  try {
+    supabaseClient.from('stream_questions').insert({
+      stream_id: streamId, student_email: email, student_name: name, question: question, answered: false, created_at: new Date().toISOString()
+    }).select('id').single().then(function(res) {
+      _broadcastQ((res.data && res.data.id) || ('q-' + Date.now()));
+    }).catch(function() { _broadcastQ('q-' + Date.now()); });
+  } catch(e) { _broadcastQ('q-' + Date.now()); }
 
   if (typeof _lsChatToast === 'function') _lsChatToast('Pregunta enviada al instructor', 'success');
 }
