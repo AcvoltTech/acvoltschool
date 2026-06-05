@@ -742,7 +742,7 @@ function watchStream(streamId, playbackUrl) {
     .eq('id', streamId).single().then(function(res) {
       if (res.data) {
         _lsVerifyStream = res.data;
-        _lsShowVerifyModal(res.data);
+        _lsShowEntryChoice(res.data);
       }
     }).catch(function(e) { console.warn('[LiveStream] Error loading stream info for verify:', e); });
 }
@@ -3087,6 +3087,9 @@ function _lsBreakEnded(streamId) {
   if ((typeof isAdminAuthenticated === 'function' && isAdminAuthenticated()) ||
       (typeof isAdminStudent === 'function' && isAdminStudent())) return;
 
+  // Estudiantes verificados NO re-comparten tras el descanso — siguen viendo directo
+  if (_lsEntryMode === 'student') return;
+
   // Forget this session's approval so they must share again to come back
   if (_lsApprovedStreamIds) { try { delete _lsApprovedStreamIds[streamId]; } catch(e) {} }
 
@@ -3453,7 +3456,47 @@ function _lsDashJoinLive(idx) {
   var stream = _lsDashLiveStreams[idx];
   if (!stream) return;
   _lsVerifyStream = stream;
-  _lsShowVerifyModal(stream);
+  _lsShowEntryChoice(stream);
+}
+
+/* ── Entry choice: Estudiante (verifica) vs Invitado (comparte) ── */
+var _lsEntryMode = 'guest'; // 'student' | 'guest' — controla si re-comparte tras descanso
+
+function _lsShowEntryChoice(stream) {
+  _lsVerifyStream = stream;
+  var existing = document.getElementById('lsEntryChoice');
+  if (existing) existing.remove();
+  var overlay = document.createElement('div');
+  overlay.id = 'lsEntryChoice';
+  overlay.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,0.92);display:flex;align-items:center;justify-content:center;padding:20px;';
+  overlay.innerHTML =
+    '<div style="text-align:center;max-width:400px;width:100%;background:#FFFFFF;border-radius:20px;padding:28px 24px;border:1px solid rgba(0,0,0,0.08);box-shadow:0 20px 60px rgba(0,0,0,0.25);">' +
+      '<div style="display:inline-flex;align-items:center;gap:8px;background:rgba(255,59,48,0.1);border:1px solid rgba(255,59,48,0.3);border-radius:20px;padding:6px 16px;margin-bottom:16px;">' +
+        '<div style="width:8px;height:8px;background:#FF3B30;border-radius:50%;animation:lsa-pulse 1s infinite;"></div>' +
+        '<span style="color:#FF3B30;font-weight:800;font-size:13px;letter-spacing:0.5px;">EN VIVO AHORA</span>' +
+      '</div>' +
+      '<div style="color:#111111;font-weight:800;font-size:19px;margin-bottom:6px;">' + _lsEsc(stream.title || 'Clase en Directo') + '</div>' +
+      '<div style="color:#111111;font-size:14px;margin-bottom:22px;">¿Cómo vas a entrar?</div>' +
+      '<button onclick="_lsEntryAsStudent()" style="width:100%;padding:16px;background:#FF3B30;color:#fff;border:none;border-radius:14px;font-size:16px;font-weight:800;cursor:pointer;margin-bottom:6px;box-shadow:0 4px 12px rgba(255,59,48,0.3);">🎓 Soy Estudiante</button>' +
+      '<div style="color:#666;font-size:12px;margin-bottom:18px;">Ya estás registrado · entras directo</div>' +
+      '<button onclick="_lsEntryAsGuest()" style="width:100%;padding:16px;background:#FFFFFF;color:#111111;border:2px solid #25D366;border-radius:14px;font-size:16px;font-weight:800;cursor:pointer;margin-bottom:6px;">👋 Soy Invitado</button>' +
+      '<div style="color:#666;font-size:12px;margin-bottom:18px;">Comparte la clase con un amigo y entra gratis</div>' +
+      '<button onclick="document.getElementById(\'lsEntryChoice\').remove()" style="background:none;border:none;color:#111111;font-size:14px;cursor:pointer;padding:6px;font-weight:600;">Cancelar</button>' +
+    '</div>';
+  document.body.appendChild(overlay);
+}
+
+function _lsEntryAsStudent() {
+  _lsEntryMode = 'student';
+  var c = document.getElementById('lsEntryChoice'); if (c) c.remove();
+  _lsShowVerifyModal(_lsVerifyStream);
+}
+
+function _lsEntryAsGuest() {
+  _lsEntryMode = 'guest';
+  var c = document.getElementById('lsEntryChoice'); if (c) c.remove();
+  var user = { email: localStorage.getItem('tecnico_email') || '', nombre: localStorage.getItem('tecnico_nombre') || '' };
+  _lsShowPreEntryForm(_lsVerifyStream, user);
 }
 
 /* ── Verify student modal ──────────────────────────────────── */
@@ -3556,7 +3599,9 @@ async function _lsDoVerify() {
     var modal = document.getElementById('lsVerifyModal');
     if (modal) modal.remove();
 
-    _lsEnterWaitingRoom(stream, user);
+    // Estudiante verificado → entra DIRECTO (sin compartir)
+    _lsEntryMode = 'student';
+    _lsEnterStreamDirect(stream, user);
 
   } catch(e) {
     console.error('[LiveStream] Verify error:', e);
