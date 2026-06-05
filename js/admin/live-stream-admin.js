@@ -2911,6 +2911,17 @@ async function _lsaHmsAuthToken() {
    Edge Function expands to every active subscription. Admin-auth gated. */
 window.lsaBroadcastLiveAlert = async function() {
   var btn = document.getElementById('lsaBroadcastAlertBtn');
+
+  // GUARD: solo alertar cuando YA estás EN VIVO (HLS corriendo). Si alertas antes,
+  // la gente entra y no te ve en vivo. Mario 2026-06-05.
+  if (!_lsaIsLive) {
+    var _msg = 'Primero dale "Iniciar Transmisión" y espera unos segundos a estar EN VIVO. Si alertas antes, los técnicos entran y no te ven en vivo.';
+    if (typeof window.MaestroDialog !== 'undefined' && window.MaestroDialog.alert) {
+      window.MaestroDialog.alert({ title: '⏳ Aún no estás en vivo', message: _msg, kind: 'warning' });
+    } else { alert(_msg); }
+    return;
+  }
+
   var titleIn = prompt('Título del alerta (aparecerá en la notificación):', '🔴 CLASE EN VIVO — Maestro Mario');
   if (!titleIn) return;
   var bodyIn = prompt('Mensaje (1-2 líneas):', 'Estamos EN VIVO ahora mismo. Toca para unirte.');
@@ -3259,7 +3270,7 @@ async function adminGoLiveBrowser(streamId) {
           '<div style="width:1px;height:24px;background:rgba(255,255,255,0.15);margin:0 4px;"></div>' +
           '<button class="lsa-btn lsa-btn-gray" onclick="_lscShowPreStreamChecklist()" title="Verificar todo antes de transmitir" style="padding:8px 14px;">✓ Checklist</button>' +
           '<button class="lsa-btn lsa-btn-green" id="lsaGoLiveBtn" onclick="lsaStartHmsStream()" style="padding:8px 20px;" disabled>▶ ' + _t('lsa_start_stream','Iniciar Transmisión') + '</button>' +
-          '<button class="lsa-btn" id="lsaBroadcastAlertBtn" onclick="lsaBroadcastLiveAlert()" style="padding:8px 16px;margin-left:8px;background:linear-gradient(135deg,#dc2626,#ef4444);color:#fff;font-weight:900;box-shadow:0 4px 12px rgba(220,38,38,0.4);" title="Notifica a TODOS los usuarios suscritos al push">📣 ALERTA A TODOS</button>' +
+          '<button class="lsa-btn" id="lsaBroadcastAlertBtn" onclick="lsaBroadcastLiveAlert()" style="padding:8px 16px;margin-left:8px;background:linear-gradient(135deg,#dc2626,#ef4444);color:#fff;font-weight:900;box-shadow:0 4px 12px rgba(220,38,38,0.4);opacity:0.5;" title="Primero inicia la transmisión — se activa cuando estés EN VIVO">📣 ALERTA A TODOS</button>' +
         '</div>' +
 
         // Control bar (during live)
@@ -5356,6 +5367,8 @@ async function lsaStartHmsStream() {
 
     // Switch to live UI
     _lsaIsLive = true;
+    // Ya en vivo → enciende el botón de ALERTA A TODOS (estaba atenuado)
+    try { var _alertBtn = document.getElementById('lsaBroadcastAlertBtn'); if (_alertBtn) { _alertBtn.style.opacity = '1'; _alertBtn.title = 'Notifica a TODOS — ya estás EN VIVO'; } } catch(e) {}
     sessionStorage.setItem('lsa_active_stream', _lsaBrowserStreamId);
     _lsaHideReturnBtn();
     window._lsaBeforeUnload = function(e) { e.preventDefault(); e.returnValue = ''; };
