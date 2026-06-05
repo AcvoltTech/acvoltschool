@@ -2909,6 +2909,44 @@ async function _lsaHmsAuthToken() {
    Triggered by the red "📣 ALERTA A TODOS" button in the admin live studio.
    Calls send-push-notification with recipient_emails=['__all__'], which the
    Edge Function expands to every active subscription. Admin-auth gated. */
+/* ── Compartir en MIS redes — post listo + enlace al en vivo (Mario 2026-06-05) ── */
+window.lsaShowSocialShare = function() {
+  var origin = (window.location && window.location.origin) ? window.location.origin : 'https://www.acvoltschool.com';
+  var link = origin + '/#liveStreamingScreen';
+  var post = '🔴 ¡ESTOY EN VIVO AHORA! 🔴\n\n' +
+    'Clase de HVAC en directo y GRATIS con el Maestro. Resolvemos dudas reales del campo, en vivo.\n\n' +
+    '👉 Éntrale aquí: ' + link + '\n\n' +
+    'No te quedes afuera, técnico. 🔧⚡\n#HVAC #Refrigeracion #MaestroHVACR';
+  var old = document.getElementById('lsaSocialShare'); if (old) old.remove();
+  var d = document.createElement('div');
+  d.id = 'lsaSocialShare';
+  d.style.cssText = 'position:fixed;inset:0;z-index:100001;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;padding:20px;';
+  d.innerHTML = '<div style="background:#1e293b;border-radius:16px;padding:22px;max-width:480px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,0.55);">' +
+      '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">' +
+        '<span style="color:#fff;font-weight:800;font-size:17px;">📲 Compartir en tus redes</span>' +
+        '<button onclick="document.getElementById(\'lsaSocialShare\').remove()" style="background:none;border:none;color:#94a3b8;font-size:22px;cursor:pointer;line-height:1;">✕</button>' +
+      '</div>' +
+      '<div style="color:#94a3b8;font-size:12px;margin-bottom:8px;">Copia este post y pégalo en tus Historias / Facebook / TikTok:</div>' +
+      '<textarea id="lsaSocialPost" style="width:100%;box-sizing:border-box;height:170px;background:#0f172a;border:1px solid rgba(255,255,255,0.12);border-radius:10px;padding:12px;color:#e2e8f0;font-size:13px;line-height:1.5;resize:vertical;">' + post + '</textarea>' +
+      '<div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;">' +
+        '<button onclick="lsaCopySocialPost()" style="flex:1;min-width:150px;padding:13px;background:#22c55e;color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:800;cursor:pointer;">📋 Copiar post</button>' +
+        '<button onclick="window.open(\'https://www.facebook.com/sharer/sharer.php?u=\' + encodeURIComponent(\'' + link + '\'), \'_blank\')" style="flex:1;min-width:150px;padding:13px;background:#1877F2;color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:800;cursor:pointer;">Abrir Facebook</button>' +
+      '</div>' +
+      '<div style="color:#64748b;font-size:11px;margin-top:10px;">El enlace lleva directo al en vivo en el navegador (sin descargar app). Para Historias/TikTok: copia el post y pégalo allá.</div>' +
+    '</div>';
+  document.body.appendChild(d);
+};
+window.lsaCopySocialPost = function() {
+  var ta = document.getElementById('lsaSocialPost');
+  if (!ta) return;
+  try { ta.select(); ta.setSelectionRange(0, 99999); } catch(e) {}
+  var done = function() { if (typeof _lsaRecToast === 'function') _lsaRecToast('✅ Post copiado — pégalo en tus redes'); };
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText) { navigator.clipboard.writeText(ta.value).then(done).catch(function(){ try { document.execCommand('copy'); done(); } catch(e){} }); return; }
+  } catch(e) {}
+  try { document.execCommand('copy'); done(); } catch(e) {}
+};
+
 window.lsaBroadcastLiveAlert = async function() {
   var btn = document.getElementById('lsaBroadcastAlertBtn');
 
@@ -3320,6 +3358,8 @@ async function adminGoLiveBrowser(streamId) {
           '<div style="width:1px;height:28px;background:rgba(255,255,255,0.15);margin:0 2px;"></div>' +
           // ALERTA A TODOS — ahora vive en la barra de EN VIVO (antes estaba en la pre-transmisión y desaparecía al ir en vivo)
           '<button id="lsaBroadcastAlertBtn" onclick="lsaBroadcastLiveAlert()" class="lsa-btn" style="padding:8px 16px;font-size:13px;background:linear-gradient(135deg,#dc2626,#ef4444);color:#fff;font-weight:900;box-shadow:0 4px 12px rgba(220,38,38,0.4);" title="Notifica a TODOS — ya estás EN VIVO">📣 ALERTA A TODOS</button>' +
+          // Compartir en MIS redes (post listo + enlace al en vivo)
+          '<button id="lsaSocialShareBtn" onclick="lsaShowSocialShare()" class="lsa-btn" style="padding:8px 16px;font-size:13px;background:linear-gradient(135deg,#16a34a,#22c55e);color:#fff;font-weight:900;box-shadow:0 4px 12px rgba(22,163,74,0.4);" title="Compartir en tus redes con post listo">📲 Mis Redes</button>' +
           '<div style="width:1px;height:28px;background:rgba(255,255,255,0.15);margin:0 2px;"></div>' +
           // Device switch
           '<button onclick="lsaReleaseForDeviceSwitch()" class="lsa-btn" style="padding:8px 14px;font-size:12px;background:#8b5cf6;color:#fff;" title="Liberar stream para continuar en otro dispositivo">📱 Cambiar Dispositivo</button>' +
