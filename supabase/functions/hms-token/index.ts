@@ -141,8 +141,8 @@ serve(async (req) => {
         return jsonResponse({ error: 'room_id required (no default configured)' }, 400);
       }
 
-      // Token TTL: 4 hours for broadcasters, 6 hours for viewers (was 24h)
-      const tokenTTL = privilegedRoles.includes(role) ? 14400 : 21600;
+      // Token TTL: 6 hours for broadcasters (clase de 4h + colchón de setup/overrun), 6 horas viewers. Mario 2026-06-05.
+      const tokenTTL = privilegedRoles.includes(role) ? 21600 : 21600;
 
       const now = Math.floor(Date.now() / 1000);
       const payload = {

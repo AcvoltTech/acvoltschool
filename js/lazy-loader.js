@@ -3,7 +3,7 @@
 window.MaestroLoader = {
   _loaded: {},
   _loading: {},
-  _v: 'v411',
+  _v: 'v412',
 
   _bust: function(url) {
     var sep = url.indexOf('?') === -1 ? '?' : '&';

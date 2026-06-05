@@ -103,11 +103,11 @@
           if (staff) {
             var staffEmail = staff.email || localStorage.getItem('tecnico_email') || '';
             // Store admin session
-            sessionStorage.setItem('admin_authenticated', 'true');
-            sessionStorage.setItem('admin_role', staff.rol || 'master');
-            sessionStorage.setItem('admin_name', staff.nombre || user);
-            sessionStorage.setItem('admin_email', staffEmail);
-            sessionStorage.setItem('admin_login_ts', String(Date.now()));
+            localStorage.setItem('admin_authenticated', 'true');
+            localStorage.setItem('admin_role', staff.rol || 'master');
+            localStorage.setItem('admin_name', staff.nombre || user);
+            localStorage.setItem('admin_email', staffEmail);
+            localStorage.setItem('admin_login_ts', String(Date.now()));
             window._adminSession = { email: staffEmail, role: staff.rol || 'master', name: staff.nombre || user, id: staff.id };
             if (staffEmail) localStorage.setItem('tecnico_email', staffEmail);
             // Update last login
@@ -124,11 +124,11 @@
 
     // Restore admin session from sessionStorage on page load
     (function _restoreAdminSession() {
-      if (sessionStorage.getItem('admin_authenticated') === 'true') {
+      if (localStorage.getItem('admin_authenticated') === 'true') {
         window._adminSession = {
-          email: sessionStorage.getItem('admin_email') || '',
-          role: sessionStorage.getItem('admin_role') || 'master',
-          name: sessionStorage.getItem('admin_name') || 'Admin'
+          email: localStorage.getItem('admin_email') || '',
+          role: localStorage.getItem('admin_role') || 'master',
+          name: localStorage.getItem('admin_name') || 'Admin'
         };
       }
     })();
@@ -137,7 +137,7 @@
     if (typeof isAdminAuthenticated !== 'function') {
       window.isAdminAuthenticated = function isAdminAuthenticated() {
         if (window._adminSession && window._adminSession.email) return true;
-        if (sessionStorage.getItem('admin_authenticated') === 'true') return true;
+        if (localStorage.getItem('admin_authenticated') === 'true') return true;
         try {
           if (typeof supabaseClient !== 'undefined' && supabaseClient && supabaseClient.auth) {
             var s = supabaseClient.auth._session;

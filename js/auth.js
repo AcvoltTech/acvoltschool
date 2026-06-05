@@ -1309,6 +1309,12 @@
       sessionStorage.removeItem('admin_authenticated');
       sessionStorage.removeItem('admin_role');
       sessionStorage.removeItem('admin_name');
+      // Admin session ahora persiste en localStorage (iOS Safari borra sessionStorage). Mario 2026-06-05.
+      localStorage.removeItem('admin_authenticated');
+      localStorage.removeItem('admin_role');
+      localStorage.removeItem('admin_name');
+      localStorage.removeItem('admin_email');
+      localStorage.removeItem('admin_login_ts');
       currentUser = null;
       supabaseUserId = null;
       membershipAuthenticated = false;
