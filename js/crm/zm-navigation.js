@@ -940,6 +940,47 @@ function showCrmSection(sectionId, clickedItem) {
   if (_adminAIChat.panelOpen) _updateAdminAIPresets();
 }
 
+// Última clase en vivo — analíticos en el dashboard (consulta directa, RLS read abierto)
+async function _crmLoadLastLiveClass() {
+  try {
+    if (typeof supabaseClient === 'undefined' || !supabaseClient) return;
+    var sres = await supabaseClient.from('live_streams').select('id, title, status, created_at').order('created_at', { ascending: false }).limit(1);
+    var stream = (sres.data && sres.data[0]) || null;
+    var card = document.getElementById('lastLiveClassCard');
+    if (!stream) { if (card) card.style.display = 'none'; return; }
+    if (card) card.style.display = '';
+    var sid = stream.id;
+
+    var att = (await supabaseClient.from('stream_attendance').select('student_email, joined_at, left_at').eq('stream_id', sid)).data || [];
+    var uniq = {};
+    att.forEach(function(a) { if (a.student_email) uniq[a.student_email.toLowerCase()] = true; });
+    var attendCount = Object.keys(uniq).length;
+    // Peak concurrency from joined/left overlaps
+    var events = [];
+    att.forEach(function(a) { if (!a.joined_at) return; events.push({ t: new Date(a.joined_at).getTime(), d: 1 }); if (a.left_at) events.push({ t: new Date(a.left_at).getTime(), d: -1 }); });
+    events.sort(function(x, y) { return (x.t - y.t) || (y.d - x.d); });
+    var cur = 0, peak = 0; events.forEach(function(e) { cur += e.d; if (cur > peak) peak = cur; });
+
+    var commentsC = (await supabaseClient.from('stream_chat_messages').select('id', { count: 'exact', head: true }).eq('stream_id', sid)).count || 0;
+    var shares = (await supabaseClient.from('stream_shares').select('platform').eq('stream_id', sid)).data || [];
+    var likesC = (await supabaseClient.from('stream_reactions').select('id', { count: 'exact', head: true }).eq('stream_id', sid)).count || 0;
+
+    var byNet = { tiktok: 0, facebook: 0, whatsapp: 0 };
+    shares.forEach(function(s) { if (byNet[s.platform] !== undefined) byNet[s.platform]++; });
+
+    function _set(id, v) { var e = document.getElementById(id); if (e) e.textContent = v; }
+    _set('llcAttendance', attendCount);
+    _set('llcPeak', peak);
+    _set('llcComments', commentsC);
+    _set('llcShares', shares.length);
+    _set('llcLikes', likesC);
+    var sub = document.getElementById('lastLiveClassSub');
+    if (sub) sub.textContent = (stream.title || 'Clase') + ' · ' + (stream.status === 'live' ? '🟢 EN VIVO ahora' : 'Finalizada');
+    var bd = document.getElementById('llcShareBreakdown');
+    if (bd) bd.innerHTML = shares.length ? ('📢 TikTok <b>' + byNet.tiktok + '</b> · Facebook <b>' + byNet.facebook + '</b> · WhatsApp <b>' + byNet.whatsapp + '</b>') : '';
+  } catch (e) { console.warn('[CRM] last live class', e.message || e); }
+}
+
 // Dashboard stats via edge function (uses service role key to bypass RLS)
 async function _crmLoadDashboardStats() {
   var adminEmail = sessionStorage.getItem('admin_email') || localStorage.getItem('tecnico_email') || '';
@@ -995,6 +1036,8 @@ async function _crmLoadDashboardStats() {
         if (sub) sub.textContent = 'Pico: ' + (peak.n || 0) + ' (' + String(peak.d || '').slice(5) + ') · ' + totalN + ' en 14d';
       }
     } catch (_dd) {}
+    // Analíticos de la última clase en vivo (fire-and-forget)
+    try { _crmLoadLastLiveClass(); } catch (_llc) {}
     // Mario 2026-05-29: stats now prefer Stripe LIVE numbers over cached/membership
     // table values (which were inflated — memberships.activa=true had 333 ghost
     // entries vs Stripe's real 178 active subs).
