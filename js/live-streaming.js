@@ -3665,13 +3665,23 @@ function _lsCopyToClipboard(text) {
 function _lsPreEntryShare(platform) {
   var link = _lsShareLink();
   var msg = _lsShareMessage();
+
+  // Menú nativo de compartir → abre la app donde el técnico YA está logeado
+  // (TikTok/Facebook/WhatsApp) y SOLO cuenta cuando COMPLETA el share (no por tocar).
+  if (navigator.share) {
+    navigator.share({ text: msg, url: link })
+      .then(function() { _lsMarkPlatformShared(platform); })
+      .catch(function() { /* canceló o no compartió — no cuenta */ });
+    return;
+  }
+
+  // Fallback de escritorio (sin share nativo): intents web por red, cuenta al disparar
   try {
     if (platform === 'whatsapp') {
       window.open('https://wa.me/?text=' + encodeURIComponent(msg + link), '_blank');
     } else if (platform === 'facebook') {
       window.open('https://www.facebook.com/sharer/sharer.php?u=' + encodeURIComponent(link) + '&quote=' + encodeURIComponent(msg), '_blank');
     } else if (platform === 'tiktok') {
-      // TikTok has no web share intent — copy the link so they paste it into a video/story/DM
       _lsCopyToClipboard(msg + link);
       if (typeof window.showToast === 'function') window.showToast('Link copiado — pégalo en tu TikTok', 'success');
       window.open('https://www.tiktok.com/', '_blank');
