@@ -147,6 +147,11 @@ function buildLiveStreamingHTML() {
             '<div style="color:#fbbf24;font-size:16px;font-weight:700;">DESCANSO</div>' +
             '<div id="lsBreakTimer" style="color:#fff;font-size:56px;font-weight:700;font-family:monospace;margin-top:8px;">05:00</div>' +
           '</div>' +
+          // Tap-to-play overlay (iOS bloquea autoplay — reproduce inline sin tapar el chat)
+          '<div id="lsTapToPlay" onclick="_lsTapToPlay()" style="display:none;position:absolute;inset:0;z-index:30;background:rgba(0,0,0,0.55);flex-direction:column;align-items:center;justify-content:center;cursor:pointer;-webkit-tap-highlight-color:transparent;">' +
+            '<div style="width:78px;height:78px;border-radius:50%;background:rgba(255,59,48,0.96);display:flex;align-items:center;justify-content:center;font-size:34px;color:#fff;box-shadow:0 6px 20px rgba(0,0,0,0.5);">▶</div>' +
+            '<div style="color:#fff;font-weight:800;font-size:15px;margin-top:14px;text-shadow:0 1px 3px rgba(0,0,0,0.6);">Toca para ver EN VIVO</div>' +
+          '</div>' +
         '</div>' +
         // Controls below video: raise hand + reload player
         '<div id="lsPlayerToolsBar" style="display:flex;align-items:center;gap:8px;padding:6px 0;flex-wrap:wrap;">' +
@@ -882,12 +887,34 @@ function _lsToggleFullscreen() {
     setTimeout(lockLandscape, 300);
   }
 }
-// Tap video to toggle fullscreen (mobile UX)
+// Tap video: si está PAUSADO → reproduce INLINE (gesto iOS, chat visible). Si ya reproduce → fullscreen.
 document.addEventListener('click', function(e) {
   if (e.target && e.target.id === 'lsPlayerVideo' && e.target.style.display !== 'none') {
-    _lsToggleFullscreen();
+    var v = e.target;
+    if (v.paused) {
+      v.muted = true;
+      v.play().then(function(){ var o = document.getElementById('lsTapToPlay'); if (o) o.style.display = 'none'; }).catch(function(){});
+    } else {
+      _lsToggleFullscreen();
+    }
   }
 });
+
+/* ── Tap-to-play overlay (iOS bloquea autoplay) — reproduce INLINE sin tapar el chat ── */
+function _lsTapToPlay() {
+  var v = document.getElementById('lsPlayerVideo');
+  if (!v) return;
+  v.muted = true;
+  v.play().then(function(){ var o = document.getElementById('lsTapToPlay'); if (o) o.style.display = 'none'; }).catch(function(){});
+}
+function _lsShowTapToPlay() {
+  var o = document.getElementById('lsTapToPlay');
+  if (o) o.style.display = 'flex';
+}
+function _lsHideTapToPlay() {
+  var o = document.getElementById('lsTapToPlay');
+  if (o) o.style.display = 'none';
+}
 function _lsUpdateFullscreenBtn() {
   var btn = document.getElementById('lsFullscreenBtn');
   if (btn) {
@@ -1397,8 +1424,9 @@ function _lsWatchStreamDirect(streamId, playbackUrl) {
       _lsHlsPlayer = new Hls(_LS_HLS_LIVE_CONFIG);
       _lsHlsPlayer.loadSource(url);
       _lsHlsPlayer.attachMedia(videoEl);
+      videoEl.onplaying = _lsHideTapToPlay;
       _lsHlsPlayer.on(Hls.Events.MANIFEST_PARSED, function() {
-        videoEl.play().catch(function(e) { console.warn('[LiveStream] HLS autoplay blocked:', e); });
+        videoEl.play().catch(function(e) { console.warn('[LiveStream] HLS autoplay blocked:', e); _lsShowTapToPlay(); });
       });
       _lsAttachHlsErrorHandler(_lsHlsPlayer);
       _lsStartLatencyCatchup(videoEl);
@@ -1426,7 +1454,8 @@ function _lsWatchStreamDirect(streamId, playbackUrl) {
         }
       };
       videoEl.addEventListener('error', videoEl._lsErrorHandler);
-      videoEl.play().catch(function(e) { console.warn('[LiveStream] Native HLS autoplay blocked:', e); });
+      videoEl.onplaying = _lsHideTapToPlay;
+      videoEl.play().catch(function(e) { console.warn('[LiveStream] Native HLS autoplay blocked:', e); _lsShowTapToPlay(); });
     } else {
       console.error('[LiveStream] HLS not supported in this browser');
       _lsChatToast('Tu navegador no soporta HLS. Usa Safari o Chrome.', 'error');
