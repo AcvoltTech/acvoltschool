@@ -3609,19 +3609,19 @@ function _lsShowPreEntryForm(stream, user) {
         '<div style="color:#111111;font-size:13px;margin-top:4px;">Nombre y apellido como el instructor te conoce</div>' +
       '</div>' +
 
-      // Share-to-unlock gate — invita a 5 amigos para entrar (viral loop)
+      // Share-to-unlock gate — comparte con tus amigos para entrar (1 share, viral loop)
       '<div style="text-align:left;margin-bottom:18px;background:#FFF7ED;border:1px solid #FED7AA;border-radius:12px;padding:14px;">' +
-        '<div style="color:#111111;font-size:14px;font-weight:800;margin-bottom:6px;">📢 Invita a 5 amigos para entrar</div>' +
-        '<div style="color:#111111;font-size:13px;margin-bottom:12px;">Mándale la clase a <b>5 amigos</b> (WhatsApp, mensajes, donde quieras). La clase es gratis 🚀</div>' +
-        '<button id="lsInviteBtn" onclick="_lsPreEntryShare()" style="width:100%;padding:14px;background:#25D366;color:#fff;border:none;border-radius:10px;font-size:15px;font-weight:800;cursor:pointer;">📲 Invitar a un amigo</button>' +
-        '<div id="lsShareProgress" style="color:#111111;font-size:13px;font-weight:700;margin-top:10px;text-align:center;">Invitados: 0 de 5</div>' +
+        '<div style="color:#111111;font-size:14px;font-weight:800;margin-bottom:6px;">📢 Mándale la clase a 5 amigos</div>' +
+        '<div style="color:#111111;font-size:13px;margin-bottom:12px;">Compártela con tus amigos (WhatsApp, mensajes, donde quieras) y entras. La clase es gratis 🚀</div>' +
+        '<button id="lsInviteBtn" onclick="_lsPreEntryShare()" style="width:100%;padding:14px;background:#25D366;color:#fff;border:none;border-radius:10px;font-size:15px;font-weight:800;cursor:pointer;">📲 Compartir con mis amigos</button>' +
+        '<div id="lsShareProgress" style="color:#34c759;font-size:13px;font-weight:700;margin-top:10px;text-align:center;"></div>' +
       '</div>' +
 
       // Error message
       '<div id="lsPreEntryError" style="display:none;color:#FF3B30;font-size:13px;margin-bottom:12px;font-weight:600;"></div>' +
 
       // Submit (locked until all 3 shares fired) + Salir
-      '<button onclick="_lsPreEntrySubmit()" id="lsPreEntrySubmitBtn" disabled style="width:100%;padding:14px;background:#9CA3AF;color:#fff;border:none;border-radius:12px;font-size:16px;font-weight:800;cursor:not-allowed;margin-bottom:8px;opacity:0.75;">🔒 Invita a 5 amigos</button>' +
+      '<button onclick="_lsPreEntrySubmit()" id="lsPreEntrySubmitBtn" disabled style="width:100%;padding:14px;background:#9CA3AF;color:#fff;border:none;border-radius:12px;font-size:16px;font-weight:800;cursor:not-allowed;margin-bottom:8px;opacity:0.75;">🔒 Comparte para entrar</button>' +
       '<button onclick="_lsPreEntryCancel()" style="width:100%;padding:10px;background:#FFFFFF;border:1px solid rgba(0,0,0,0.12);color:#111111;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;">Salir</button>' +
     '</div>';
 
@@ -3636,7 +3636,7 @@ function _lsShowPreEntryForm(stream, user) {
 
 /* ── Share-to-enter gate (viral loop: comparte en 3 redes para entrar) ── */
 var _lsShareCount = 0;
-var _LS_REQUIRED_SHARES = 5;
+var _LS_REQUIRED_SHARES = 1;
 
 function _lsShareLink() {
   return (window.location && window.location.origin) ? window.location.origin : 'https://www.acvoltschool.com';
