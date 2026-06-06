@@ -790,6 +790,9 @@ function _ascEditLesson(id) {
       '<div class="asc-modal-body">' +
         '<label>' + _t('adm_as_title_label', 'T\u00EDtulo') + '</label>' +
         '<input id="asc-ed-title" type="text" value="' + _ascAttr(lesson.title || '') + '">' +
+        '<button type="button" id="asc-transcribe-btn" onclick="_ascTranscribe()" style="margin:6px 0 8px;padding:8px 14px;background:#f59e0b;color:#000;border:none;border-radius:8px;font-weight:700;font-size:13px;cursor:pointer;">\uD83C\uDF99\uFE0F ' + _t('adm_as_transcribe_btn', 'Transcribir con IA (para titular)') + '</button>' +
+        '<div id="asc-transcribe-status" style="display:none;font-size:12px;margin-bottom:6px;"></div>' +
+        '<textarea id="asc-transcript" readonly placeholder="' + _t('adm_as_transcript_ph', 'La transcripci\u00F3n aparecer\u00E1 aqu\u00ED \u2014 \u00FAsala para escribir un buen t\u00EDtulo arriba.') + '" style="width:100%;min-height:120px;font-size:12.5px;line-height:1.5;display:none;margin-bottom:8px;"></textarea>' +
         '<label>' + _t('adm_as_description', 'Descripci\u00F3n') + '</label>' +
         '<textarea id="asc-ed-desc">' + _asEsc(lesson.description || '') + '</textarea>' +
         '<label>Stream UID</label>' +
@@ -828,6 +831,34 @@ function _ascEditLesson(id) {
     '</div>';
 
   document.body.appendChild(overlay);
+}
+
+/* ── Transcribir el video con IA (Deepgram) para ayudar a titular ──── */
+async function _ascTranscribe() {
+  var uid = ((document.getElementById('asc-ed-stream') || {}).value || '').trim();
+  var st = document.getElementById('asc-transcribe-status');
+  var ta = document.getElementById('asc-transcript');
+  var btn = document.getElementById('asc-transcribe-btn');
+  function status(msg, color) { if (st) { st.style.display = 'block'; st.style.color = color || '#64748b'; st.textContent = msg; } }
+  if (!uid) { status('Esta lección no tiene video (Stream UID).', '#dc2626'); return; }
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Procesando...'; }
+  status('🤖 Preparando y transcribiendo el video con IA… (puede tardar 1–2 min)', '#3b82f6');
+  try {
+    var url = (window.SUPABASE_URL || 'https://htklsowiyjwsjnacnvnr.supabase.co') + '/functions/v1/transcribe-video';
+    var key = (typeof SUPABASE_KEY !== 'undefined' ? SUPABASE_KEY : (window.SUPABASE_KEY || ''));
+    var email = '';
+    try { email = sessionStorage.getItem('admin_email') || localStorage.getItem('tecnico_email') || ''; } catch (_) {}
+    var r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + key, 'apikey': key, 'x-admin-email': email }, body: JSON.stringify({ stream_uid: uid, language: 'es' }) });
+    var d = await r.json().catch(function () { return {}; });
+    if (!r.ok || d.error) throw new Error(d.error || ('HTTP ' + r.status));
+    var text = (d.text || '').trim();
+    if (!text) throw new Error('La transcripción salió vacía.');
+    if (ta) { ta.style.display = 'block'; ta.value = text; }
+    status('✅ Transcripción lista (' + text.split(/\s+/).length + ' palabras). Léela y escribe un buen título arriba.', '#16a34a');
+  } catch (e) {
+    status('Error: ' + ((e && e.message) || e), '#dc2626');
+  }
+  if (btn) { btn.disabled = false; btn.textContent = '🎙️ Transcribir con IA (para titular)'; }
 }
 
 /* ── Save lesson ──────────────────────────────────────────────── */

@@ -83,13 +83,43 @@ serve(async (req) => {
 
     if (contentType.includes('application/json')) {
       // Mode 1: JSON with video_url — Deepgram fetches the video server-side (fastest)
+      // Mode 1b (Mario 2026-06-06): JSON with stream_uid (Cloudflare Stream, los 427
+      // videos del Course Editor) — activamos la descarga MP4 vía la API de Cloudflare,
+      // esperamos a que esté lista y la pasamos a Deepgram.
       const body = await req.json();
-      const videoUrl = body.video_url;
+      let videoUrl = body.video_url;
       language = body.language || 'es';
       dgParams.set('language', language);
 
+      if (!videoUrl && body.stream_uid) {
+        const acct = Deno.env.get('CF_ACCOUNT_ID');
+        const token = Deno.env.get('CF_API_TOKEN');
+        if (!acct || !token) return jsonResponse({ error: 'Cloudflare no configurado (CF_ACCOUNT_ID/CF_API_TOKEN)' }, 500);
+        const uid = String(body.stream_uid).trim();
+        const base = `https://api.cloudflare.com/client/v4/accounts/${acct}/stream/${uid}/downloads`;
+        const cfHeaders = { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' };
+        try {
+          let r = await fetch(base, { method: 'POST', headers: cfHeaders });
+          let j = await r.json();
+          let dl = j?.result?.default;
+          for (let i = 0; i < 25 && (!dl || dl.status !== 'ready'); i++) {
+            await new Promise((res) => setTimeout(res, 3000));
+            r = await fetch(base, { method: 'GET', headers: cfHeaders });
+            j = await r.json();
+            dl = j?.result?.default;
+          }
+          if (!dl || !dl.url || dl.status !== 'ready') {
+            return jsonResponse({ error: 'No se pudo preparar el MP4 del video en Cloudflare (intenta de nuevo en un minuto).' }, 502);
+          }
+          videoUrl = dl.url;
+          console.log('Cloudflare MP4 listo para', uid, '→', videoUrl);
+        } catch (e) {
+          return jsonResponse({ error: 'Error preparando el video en Cloudflare: ' + ((e as Error).message || e) }, 502);
+        }
+      }
+
       if (!videoUrl) {
-        return jsonResponse({ error: 'video_url is required' }, 400);
+        return jsonResponse({ error: 'video_url o stream_uid requerido' }, 400);
       }
 
       console.log('Sending URL to Deepgram:', videoUrl);

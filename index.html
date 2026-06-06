@@ -218,7 +218,7 @@
   }catch(_e){}
 })();
 
-var APP_VERSION = 'v6.31-editor-acvoltschool';
+var APP_VERSION = 'v6.32-transcribe-course-editor';
 (function(){
   var stored = localStorage.getItem('maestroac_app_version');
   if(stored && stored !== APP_VERSION){
@@ -286,7 +286,7 @@ var APP_VERSION = 'v6.31-editor-acvoltschool';
 // ── FORCE CACHE PURGE — nuke old caches so students don't have to reinstall ──
 // Runs once per cache version. Deletes stale caches quietly without reload loops.
 (function(){
-  var CURRENT_CACHE = 'maestrohvacr-v198';
+  var CURRENT_CACHE = 'maestrohvacr-v199';
   var PURGE_KEY = 'maestro_cache_purged_v';
   if(typeof caches==='undefined') return;
   if(localStorage.getItem(PURGE_KEY)===CURRENT_CACHE) return;
