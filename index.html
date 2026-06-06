@@ -218,7 +218,7 @@
   }catch(_e){}
 })();
 
-var APP_VERSION = 'v6.23-cert-name-signature';
+var APP_VERSION = 'v6.24-cert-server-sync';
 (function(){
   var stored = localStorage.getItem('maestroac_app_version');
   if(stored && stored !== APP_VERSION){
@@ -249,7 +249,7 @@ var APP_VERSION = 'v6.23-cert-name-signature';
 // ── FORCE CACHE PURGE — nuke old caches so students don't have to reinstall ──
 // Runs once per cache version. Deletes stale caches quietly without reload loops.
 (function(){
-  var CURRENT_CACHE = 'maestrohvacr-v190';
+  var CURRENT_CACHE = 'maestrohvacr-v191';
   var PURGE_KEY = 'maestro_cache_purged_v';
   if(typeof caches==='undefined') return;
   if(localStorage.getItem(PURGE_KEY)===CURRENT_CACHE) return;

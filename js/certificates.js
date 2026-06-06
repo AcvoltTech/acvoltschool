@@ -842,6 +842,14 @@
       if (!container) return;
       container.innerHTML = '';
 
+      // Sincroniza con el servidor una vez por sesión: sube los del teléfono
+      // (respaldo) y baja los del servidor → reaparecen y quedan seguros. Al
+      // terminar re-renderiza. Mario 2026-06-05 (sync rota desde marzo por RLS).
+      if (!window._certSyncDone && typeof window.maestroSyncCerts === 'function') {
+        window._certSyncDone = true;
+        window.maestroSyncCerts().then(function () { try { renderCertificates(); } catch (_) {} });
+      }
+
       if (certificates.length === 0) {
         container.innerHTML = '<div class="no-certificates"><div class="no-certificates-icon">🎓</div><p class="no-certificates-text">' + _tc('cert_no_certs', 'Aún no tienes certificados.') + '<br><br>' + _tc('cert_complete_quizzes', 'Completa los quizzes con un 80% o más para obtener tu certificado de cada nivel.') + '</p></div>';
         return;

@@ -179,22 +179,68 @@
       } catch (e) { console.error('Supabase save progress error:', e); }
     }
 
+    // Guarda el cert vía edge function save-certificate (service role, salta RLS).
+    // El RLS lockdown de marzo bloqueó las escrituras directas del cliente a
+    // `certificates`, así que desde marzo los certs NO se respaldaban. Mario 2026-06-05.
+    function _certEdgeEmail() {
+      try { return (typeof currentUser !== 'undefined' && currentUser && currentUser.email) || localStorage.getItem('tecnico_email') || ''; } catch (_) { return ''; }
+    }
+    function _certEdgeKey() { return (typeof SUPABASE_KEY !== 'undefined' ? SUPABASE_KEY : (window.SUPABASE_KEY || '')); }
+    function _certEdgeUrl() { return (window.SUPABASE_URL || (typeof SUPABASE_URL !== 'undefined' ? SUPABASE_URL : 'https://htklsowiyjwsjnacnvnr.supabase.co')) + '/functions/v1/save-certificate'; }
+
     async function supabaseSaveCertificate(cert) {
-      if (!supabaseClient || !isOnline || !supabaseUserId) return;
       try {
-        var nivel = cert.nivel || cert.level || cert.levelId;
-        await supabaseClient.from('certificates').upsert({
-          user_id: supabaseUserId,
-          nivel: nivel,
-          score: cert.score || 0,
-          total_questions: cert.totalQuestions || cert.total_questions || 0,
-          porcentaje: cert.percentage || cert.porcentaje || cert.score || 0,
-          certificate_number: cert.certificateNumber || cert.certificateId || null,
-          fecha_obtenido: cert.dateRaw || cert.date || new Date().toISOString()
-        }, { onConflict: 'user_id,nivel', ignoreDuplicates: false });
-        console.log('[Cert] Saved to Supabase:', nivel);
+        var email = _certEdgeEmail();
+        if (!email || !cert) return;
+        var key = _certEdgeKey();
+        var res = await fetch(_certEdgeUrl(), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'apikey': key, 'Authorization': 'Bearer ' + key },
+          body: JSON.stringify({ action: 'save', email: email, certs: [cert] })
+        });
+        if (res.ok) console.log('[Cert] Saved to Supabase (edge):', cert.nivel || cert.level || cert.levelId);
       } catch (e) { console.error('Supabase save certificate error:', e); }
     }
+
+    // Sincroniza los certificados con el servidor: SUBE los del teléfono (respaldo)
+    // y BAJA los del servidor, fusionando en localStorage (aditivo, nunca borra).
+    // Así reaparecen y quedan respaldados. Idempotente. Mario 2026-06-05.
+    window.maestroSyncCerts = async function () {
+      try {
+        var email = _certEdgeEmail();
+        if (!email) return;
+        var key = _certEdgeKey(), url = _certEdgeUrl();
+        var local = [];
+        try { local = JSON.parse(localStorage.getItem('tecnico_certificates') || '[]'); } catch (_) { local = []; }
+        // 1) Subir los locales (respaldo).
+        if (local.length) {
+          await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', 'apikey': key, 'Authorization': 'Bearer ' + key },
+            body: JSON.stringify({ action: 'save', email: email, certs: local }) }).catch(function () {});
+        }
+        // 2) Bajar los del servidor.
+        var r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', 'apikey': key, 'Authorization': 'Bearer ' + key },
+          body: JSON.stringify({ action: 'list', email: email }) });
+        var data = await r.json().catch(function () { return {}; });
+        var server = (data && data.certificates) || [];
+        if (!server.length) return;
+        // 3) Fusionar (aditivo: agrega los del servidor que no estén local).
+        var have = {};
+        local.forEach(function (c) { have[c.nivel || c.level || c.levelId] = true; });
+        var added = 0;
+        server.forEach(function (c) {
+          if (!have[c.nivel]) {
+            local.push({ level: c.nivel, nivel: c.nivel, score: c.score, totalQuestions: c.total_questions, percentage: c.porcentaje, certificateNumber: c.certificate_number, certificateId: c.certificate_number, date: c.fecha_obtenido, dateRaw: c.fecha_obtenido });
+            added++;
+          }
+        });
+        if (added) {
+          localStorage.setItem('tecnico_certificates', JSON.stringify(local));
+          localStorage.setItem('tecnico_certificates_backup', JSON.stringify(local));
+          if (typeof certificates !== 'undefined') certificates = local;
+          if (typeof renderLevels === 'function') { try { renderLevels(); } catch (_) {} }
+        }
+      } catch (e) { console.warn('[Cert] sync error:', e && e.message); }
+    };
 
     async function supabaseSaveQuizAttempt(attemptData) {
       if (!supabaseClient || !isOnline || !supabaseUserId) return;
