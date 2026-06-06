@@ -977,7 +977,101 @@
       }, 1500);
     }
 
+    // ── Nombre real para el certificado (port del fix de la app) ──────────
+    // Estudiantes de acvoltschool.com con username/correo numérico imprimían su
+    // NÚMERO de usuario en vez del nombre. Resolvemos: nombre real → server →
+    // formulario. Mario 2026-06-05 (Jose Manuel Doroteo, Jose Manuel Bouchot).
+    function _isRealName(s) {
+      if (!s) return false;
+      s = String(s).trim();
+      if (!s || /@/.test(s)) return false;
+      var letters = (s.match(/[A-Za-zÁÉÍÓÚÑÜáéíóúñü]/g) || []).length;
+      var digits = (s.match(/\d/g) || []).length;
+      if (letters < 2) return false;      // números puros / "0001"
+      if (digits > letters) return false; // códigos id como "USR-9999"
+      return true;
+    }
+    function _certEmail() {
+      try { return (typeof currentUser !== 'undefined' && currentUser && currentUser.email) || localStorage.getItem('tecnico_email') || ''; } catch (_) { return ''; }
+    }
+    function _certRealName() {
+      var n = '';
+      try { var tu = JSON.parse(localStorage.getItem('tecnico_user') || '{}'); n = (tu.nombre || '').trim(); } catch (_) {}
+      if (!_isRealName(n)) return '';
+      return n;
+    }
+    function _resolveCertName(rawName, cb) {
+      if (_isRealName(rawName)) return cb(rawName);
+      var localN = '';
+      try { var tu = JSON.parse(localStorage.getItem('tecnico_user') || '{}'); localN = tu.nombre || ''; } catch (_) {}
+      if (_isRealName(localN)) return cb(localN);
+      var email = _certEmail();
+      if (!email || !/@/.test(email) || typeof supabaseClient === 'undefined' || !supabaseClient || !supabaseClient.from) { return cb(''); }
+      try {
+        supabaseClient.from('users').select('nombre').eq('email', email).limit(1).then(function (res) {
+          var rows = res && res.data;
+          var n = (rows && rows[0] && rows[0].nombre) ? rows[0].nombre : '';
+          if (_isRealName(n)) {
+            try { var tu2 = JSON.parse(localStorage.getItem('tecnico_user') || '{}'); tu2.nombre = n; localStorage.setItem('tecnico_user', JSON.stringify(tu2)); } catch (_) {}
+            cb(n);
+          } else { cb(''); }
+        }, function () { cb(''); });
+      } catch (_) { cb(''); }
+    }
+    var _certReqOnComplete = null;
+    function _openCertRequestForm(onComplete) {
+      _certReqOnComplete = onComplete || null;
+      var ex = document.getElementById('certReqOverlay'); if (ex) ex.remove();
+      var prefill = _certRealName();
+      var ov = document.createElement('div');
+      ov.id = 'certReqOverlay';
+      ov.style.cssText = 'position:fixed;inset:0;z-index:2147483646;background:rgba(8,11,20,0.96);display:flex;align-items:flex-start;justify-content:center;padding:16px;overflow:auto;-webkit-overflow-scrolling:touch;';
+      var h = '<div style="background:#fff;color:#0f172a;max-width:460px;width:100%;border-radius:16px;padding:20px;margin:auto;box-shadow:0 20px 60px rgba(0,0,0,0.5);">';
+      h += '<div style="font-size:19px;font-weight:900;margin-bottom:4px;">📋 Tu nombre para el certificado</div>';
+      h += '<div style="font-size:12.5px;color:#64748b;margin-bottom:16px;line-height:1.5;">Escribe tu <b>nombre y apellido completos</b> tal como quieres que aparezcan en el certificado.</div>';
+      h += '<input id="certReqName" type="text" value="' + _escHtml(prefill) + '" placeholder="Ej. Juan Pérez García" autocomplete="name" style="width:100%;box-sizing:border-box;margin:0 0 12px;padding:13px;border:1.5px solid #cbd5e1;border-radius:10px;font-size:16px;font-weight:700;color:#0f172a;outline:none;">';
+      h += '<button onclick="window.submitCertRequest()" style="width:100%;padding:14px;background:linear-gradient(135deg,#22c55e,#16a34a);color:#fff;border:none;border-radius:12px;font-size:15px;font-weight:800;cursor:pointer;">Guardar y continuar →</button>';
+      h += '<div id="certReqErr" style="color:#dc2626;font-size:12px;font-weight:700;margin-top:8px;min-height:14px;text-align:center;"></div>';
+      h += '<button onclick="(function(){var o=document.getElementById(\'certReqOverlay\');if(o)o.remove();})()" style="width:100%;margin-top:8px;padding:10px;background:none;border:none;color:#94a3b8;font-size:13px;font-weight:700;cursor:pointer;">Cancelar</button>';
+      h += '</div>';
+      ov.innerHTML = h;
+      document.body.appendChild(ov);
+      try { var inp = document.getElementById('certReqName'); if (inp) inp.focus(); } catch (_) {}
+    }
+    window.submitCertRequest = function () {
+      var nameEl = document.getElementById('certReqName');
+      var errEl = document.getElementById('certReqErr');
+      var name = ((nameEl && nameEl.value) || '').trim().replace(/\s+/g, ' ');
+      if (name.length < 3 || /@/.test(name) || name.indexOf(' ') === -1) {
+        if (errEl) errEl.textContent = 'Escribe tu nombre y apellido completos.';
+        return;
+      }
+      try { var tu = JSON.parse(localStorage.getItem('tecnico_user') || '{}'); tu.nombre = name; localStorage.setItem('tecnico_user', JSON.stringify(tu)); } catch (_) {}
+      try { if (typeof currentUser !== 'undefined' && currentUser) currentUser.nombre = name; } catch (_) {}
+      var em = _certEmail();
+      if (em && typeof supabaseClient !== 'undefined' && supabaseClient && supabaseClient.from) {
+        try { supabaseClient.from('users').update({ nombre: name }).eq('email', em).then(function () {}, function () {}); } catch (_) {}
+      }
+      var o = document.getElementById('certReqOverlay'); if (o) o.remove();
+      var cb = _certReqOnComplete; _certReqOnComplete = null;
+      if (typeof cb === 'function') cb();
+    };
+
+    // Gate: garantiza un nombre real antes de imprimir; si no hay, pide el form.
     function executeCertPrint(levelId, levelName, levelIcon, userName, score, date, certId) {
+      _resolveCertName(userName, function (finalName) {
+        var nameOut = _isRealName(finalName) ? finalName : _certRealName();
+        if (!_isRealName(nameOut)) {
+          _openCertRequestForm(function () {
+            executeCertPrint(levelId, levelName, levelIcon, _certRealName() || userName, score, date, certId);
+          });
+          return;
+        }
+        _doCertPrint(levelId, levelName, levelIcon, nameOut, score, date, certId);
+      });
+    }
+
+    function _doCertPrint(levelId, levelName, levelIcon, userName, score, date, certId) {
       // Calculate expiry date (2 years from issue)
       const dateStr = String(date || '');
       const dateParts = dateStr.split(' de ');
@@ -1018,14 +1112,43 @@
       // Show and print
       const printDiv = document.getElementById('printableCertificate');
       if (!printDiv) { console.warn('[Cert] printableCertificate element missing'); return; }
-      printDiv.style.display = 'block';
 
-      setTimeout(() => {
-        try { window.print(); } catch(e) { console.warn('[Cert] print failed:', e); }
+      // Estampa la firma del Director (guardada en app_config.director_signature
+      // desde el CRM) ANTES de imprimir. Mario 2026-06-05: "yo ya lo firmé".
+      _fetchDirectorSignature(function (sig) {
+        var img = document.getElementById('certSignatureImg');
+        var disc = document.getElementById('certDisclaimer');
+        if (img) { if (sig) { img.src = sig; img.style.display = 'block'; } else { img.style.display = 'none'; } }
+        if (disc) {
+          if (sig) {
+            disc.textContent = 'Certificado válido con la firma del Director. Verifica su autenticidad por el folio (ID) en maestrohvacr.com/verify.';
+            disc.style.color = '#475569'; disc.style.fontWeight = '600';
+          } else {
+            disc.textContent = '⚠️ ESTE CERTIFICADO NO ES VÁLIDO hasta que el Director lo firme.';
+            disc.style.color = '#dc2626'; disc.style.fontWeight = '800';
+          }
+        }
+        printDiv.style.display = 'block';
         setTimeout(() => {
-          printDiv.style.display = 'none';
-        }, 500);
-      }, 300);
+          try { window.print(); } catch (e) { console.warn('[Cert] print failed:', e); }
+          setTimeout(() => { printDiv.style.display = 'none'; }, 500);
+        }, 300);
+      });
+    }
+
+    // Lee la firma del Director (cacheada) desde app_config. La firma se CAPTURA en
+    // el CRM (admin-certs.js → dirSigSaveCrm); la app/web solo la LEEN.
+    var _certSignatureCache = null;
+    function _fetchDirectorSignature(cb) {
+      if (_certSignatureCache !== null) return cb(_certSignatureCache || null);
+      if (typeof supabaseClient === 'undefined' || !supabaseClient || !supabaseClient.from) return cb(null);
+      try {
+        supabaseClient.from('app_config').select('value').eq('key', 'director_signature').maybeSingle().then(function (res) {
+          var v = (res && res.data && res.data.value) ? res.data.value : '';
+          _certSignatureCache = v || '';
+          cb(_certSignatureCache || null);
+        }, function () { cb(null); });
+      } catch (_) { cb(null); }
     }
 
     // Patch certOficialesScreen title

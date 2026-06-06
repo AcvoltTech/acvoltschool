@@ -72,7 +72,11 @@ async function fcmSend(projectId: string, accessToken: string, token: string, ti
       notification: { title, body },
       data: { url, type: 'clase' },
       android: { priority: 'high', notification: { sound: 'default' } },
-      apns: { headers: { 'apns-priority': '10' }, payload: { aps: { sound: 'default' } } },
+      apns: {
+        headers: { 'apns-priority': '10' },
+        // alert EXPLÍCITO + interruption-level time-sensitive (atraviesa Focus mode — una clase EN VIVO es urgente)
+        payload: { aps: { alert: { title, body }, sound: 'default', badge: 1, 'interruption-level': 'time-sensitive' } },
+      },
     },
   };
   try {

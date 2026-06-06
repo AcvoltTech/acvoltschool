@@ -218,7 +218,7 @@
   }catch(_e){}
 })();
 
-var APP_VERSION = 'v6.22-admin-localstorage';
+var APP_VERSION = 'v6.23-cert-name-signature';
 (function(){
   var stored = localStorage.getItem('maestroac_app_version');
   if(stored && stored !== APP_VERSION){
@@ -249,7 +249,7 @@ var APP_VERSION = 'v6.22-admin-localstorage';
 // ── FORCE CACHE PURGE — nuke old caches so students don't have to reinstall ──
 // Runs once per cache version. Deletes stale caches quietly without reload loops.
 (function(){
-  var CURRENT_CACHE = 'maestrohvacr-v189';
+  var CURRENT_CACHE = 'maestrohvacr-v190';
   var PURGE_KEY = 'maestro_cache_purged_v';
   if(typeof caches==='undefined') return;
   if(localStorage.getItem(PURGE_KEY)===CURRENT_CACHE) return;
@@ -7279,6 +7279,7 @@ if (typeof window._addTranslations === 'function') {
       
       <div class="cert-footer">
         <div class="cert-signature">
+          <img id="certSignatureImg" alt="" style="display:none;max-width:180px;max-height:70px;object-fit:contain;margin:0 auto 2px;" />
           <div class="cert-signature-line"></div>
           <div class="cert-signature-name">Mario Flores Corona</div>
           <div class="cert-signature-title">Master Instructor / Director</div>
@@ -7289,7 +7290,9 @@ if (typeof window._addTranslations === 'function') {
           <div class="cert-id-text">Verificar en: maestrohvacr.com</div>
         </div>
       </div>
-      
+
+      <div id="certDisclaimer" style="text-align:center;font-size:10px;color:#475569;margin:8px 20px 0;line-height:1.4;"></div>
+
       <div class="cert-seal">
         <div class="cert-seal-text">ACVOLT<br>CERTIFIED<br>TECH</div>
       </div>
