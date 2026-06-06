@@ -993,9 +993,12 @@
       if (!s) return false;
       s = String(s).trim();
       if (!s || /@/.test(s)) return false;
+      // Debe ser nombre + apellido (con espacio). Un token de una palabra como
+      // "lozanojuanmartinez74" es el USERNAME/correo, NO nombre real. Mario 2026-06-05.
+      if (s.indexOf(' ') === -1) return false;
       var letters = (s.match(/[A-Za-zÁÉÍÓÚÑÜáéíóúñü]/g) || []).length;
       var digits = (s.match(/\d/g) || []).length;
-      if (letters < 2) return false;      // números puros / "0001"
+      if (letters < 3) return false;      // números puros / "0001"
       if (digits > letters) return false; // códigos id como "USR-9999"
       return true;
     }
