@@ -3066,10 +3066,17 @@ window.lsaBroadcastLiveAlert = async function() {
       })
     }).then(function(r) { return r.json().catch(function(){ return {}; }).then(function(d){ return { ok: r.ok, data: d }; }); });
 
-    var results = await Promise.all([pushP, emailP, smsP]);
+    var fcmP = fetch(sbUrl + '/functions/v1/fcm-push', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + authTok, 'apikey': sbKey },
+      body: JSON.stringify({ title: titleIn, body: bodyIn, url: './index.html#liveStreamingScreen?ntf=1', admin_email: adminEmail })
+    }).then(function(r) { return r.json().catch(function(){ return {}; }).then(function(d){ return { ok: r.ok, data: d }; }); });
+
+    var results = await Promise.all([pushP, emailP, smsP, fcmP]);
     var pushRes = results[0];
     var emailRes = results[1];
     var smsRes = results[2];
+    var fcmRes = results[3];
 
     // ── Persistent progress panel ──
     _lsaEnsureProgressPanel();
@@ -3078,15 +3085,16 @@ window.lsaBroadcastLiveAlert = async function() {
 
     // Store last params for retry
     window._lsaLastAlertParams = { titleIn: titleIn, bodyIn: bodyIn, adminEmail: adminEmail };
-    window._lsaLastResults = { push: pushRes, email: emailRes, sms: smsRes };
+    window._lsaLastResults = { push: pushRes, email: emailRes, sms: smsRes, fcm: fcmRes };
 
     // Update spans
-    _lsaUpdateProgressSpans(pushRes, emailRes, smsRes);
+    _lsaUpdateProgressSpans(pushRes, emailRes, smsRes, fcmRes);
 
     // Show retry button if any failures
     var hasFails = (!pushRes.ok || (pushRes.data.failed || 0) > 0) ||
                    (!emailRes.ok || (emailRes.data.failed || 0) > 0) ||
-                   (!smsRes.ok || (smsRes.data.failed || 0) > 0);
+                   (!smsRes.ok || (smsRes.data.failed || 0) > 0) ||
+                   (!fcmRes.ok);
     var retryBtn = document.getElementById('lsaAlertRetryBtn');
     if (retryBtn) retryBtn.style.display = hasFails ? 'inline-block' : 'none';
 
@@ -3109,6 +3117,7 @@ function _lsaEnsureProgressPanel() {
     '<span id="lsaAlertPush">\u{1F4F1} Push: --</span>' +
     '<span id="lsaAlertEmail">\u{1F4E7} Email: --</span>' +
     '<span id="lsaAlertSms">\u{1F4AC} SMS: --</span>' +
+    '<span id="lsaAlertApp">\u{1F4F2} App: --</span>' +
     '<button id="lsaAlertRetryBtn" onclick="window._lsaRetryFailed()" style="background:#f59e0b;color:#0f172a;border:none;border-radius:6px;padding:6px 14px;font-weight:700;cursor:pointer;display:none;">\u{1F504} REINTENTAR FALLIDOS</button>' +
     '<button onclick="document.getElementById(\'lsaAlertProgress\').style.display=\'none\'" style="background:none;border:none;color:#94a3b8;font-size:18px;cursor:pointer;margin-left:auto;">\u2716</button>' +
     '</div>';
@@ -3116,10 +3125,20 @@ function _lsaEnsureProgressPanel() {
 }
 
 /* ── Progress Panel: update display spans ─────────────────────── */
-function _lsaUpdateProgressSpans(pushRes, emailRes, smsRes) {
+function _lsaUpdateProgressSpans(pushRes, emailRes, smsRes, fcmRes) {
   var pushSpan = document.getElementById('lsaAlertPush');
   var emailSpan = document.getElementById('lsaAlertEmail');
   var smsSpan = document.getElementById('lsaAlertSms');
+  var appSpan = document.getElementById('lsaAlertApp');
+  if (appSpan && fcmRes) {
+    if (fcmRes.ok && fcmRes.data && fcmRes.data.started) {
+      appSpan.textContent = '\u{1F4F2} App: ' + (fcmRes.data.target || 0) + ' en background \u{23F3}';
+      appSpan.style.color = '#facc15';
+    } else {
+      appSpan.textContent = fcmRes.ok ? '\u{1F4F2} App: ' + ((fcmRes.data && fcmRes.data.target) || 0) : '\u{1F4F2} App: ERROR';
+      appSpan.style.color = fcmRes.ok ? '#4ade80' : '#f87171';
+    }
+  }
 
   if (pushSpan) {
     pushSpan.textContent = pushRes.ok
