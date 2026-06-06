@@ -1259,8 +1259,11 @@ function initCrmRedesign() {
     if (modeAdmin) modeAdmin.style.display = 'none';
   }
 
-  // Load admin stats directly from Supabase (bypasses complex dependency chain)
-  _crmLoadDashboardStats();
+  // Load admin stats directly from Supabase (bypasses complex dependency chain).
+  // Mario 2026-06-06: el editor/tecnico_video NO tienen permiso para finanzas/admin-data
+  // /users-data/admin-payments → daban 403 en consola y asustaban. Solo master/
+  // student_success cargan stats; el editor entra directo a su trabajo (videos).
+  if (role === 'master' || role === 'student_success') { _crmLoadDashboardStats(); }
 }
 
 // Hook into showScreen to activate redesign

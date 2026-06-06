@@ -218,7 +218,7 @@
   }catch(_e){}
 })();
 
-var APP_VERSION = 'v6.28-editor-curso-videos';
+var APP_VERSION = 'v6.29-stale-guard-editor';
 (function(){
   var stored = localStorage.getItem('maestroac_app_version');
   if(stored && stored !== APP_VERSION){
@@ -246,10 +246,47 @@ var APP_VERSION = 'v6.28-editor-curso-videos';
   localStorage.setItem('maestroac_app_version', APP_VERSION);
 })();
 
+// ── STALE HTML GUARD ──────────────────────────────────────────────────
+// Mario 2026-06-06: el web se quedaba pegado en versiones viejas (Manuel/estudiantes
+// veían cb viejo aunque ya estaba deployado). El navegador cachea index.html y el
+// chequeo de APP_VERSION local no lo detecta. Pegamos al server con cache-bust,
+// comparamos el APP_VERSION deployado vs el nuestro; si difiere, recargamos con un
+// query nuevo que el navegador trata como URL nueva. (Portado del app.)
+(function(){
+  if(sessionStorage.getItem('_stale_html_bust_done')){
+    sessionStorage.removeItem('_stale_html_bust_done');
+    return;
+  }
+  try{
+    fetch('/?_v=' + Date.now(), { cache: 'reload', credentials: 'omit' })
+      .then(function(r){ return r.ok ? r.text() : ''; })
+      .then(function(html){
+        if(!html) return;
+        var m = html.match(/var\s+APP_VERSION\s*=\s*['"]([^'"]+)['"]/);
+        if(!m) return;
+        var deployed = m[1];
+        if(deployed && deployed !== APP_VERSION){
+          try {
+            var bar = document.createElement('div');
+            bar.id = '_maestroUpdateToast';
+            bar.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;background:linear-gradient(135deg,#1d6936,#0f3b1f);color:#fff;padding:12px 16px;font-size:13px;font-weight:700;text-align:center;box-shadow:0 4px 16px rgba(0,0,0,0.3);font-family:-apple-system,BlinkMacSystemFont,sans-serif;';
+            bar.textContent = 'Actualizando a la versión más reciente…';
+            (document.body || document.documentElement).appendChild(bar);
+          } catch(_e) {}
+          sessionStorage.setItem('_stale_html_bust_done','1');
+          var u = new URL(location.href);
+          u.searchParams.set('_v', deployed);
+          setTimeout(function() { location.replace(u.toString()); }, 600);
+        }
+      })
+      .catch(function(){ /* offline — keep what we have */ });
+  } catch(_) {}
+})();
+
 // ── FORCE CACHE PURGE — nuke old caches so students don't have to reinstall ──
 // Runs once per cache version. Deletes stale caches quietly without reload loops.
 (function(){
-  var CURRENT_CACHE = 'maestrohvacr-v195';
+  var CURRENT_CACHE = 'maestrohvacr-v196';
   var PURGE_KEY = 'maestro_cache_purged_v';
   if(typeof caches==='undefined') return;
   if(localStorage.getItem(PURGE_KEY)===CURRENT_CACHE) return;
