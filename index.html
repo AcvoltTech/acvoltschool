@@ -218,7 +218,7 @@
   }catch(_e){}
 })();
 
-var APP_VERSION = 'v6.27-editor-videos-fix';
+var APP_VERSION = 'v6.28-editor-curso-videos';
 (function(){
   var stored = localStorage.getItem('maestroac_app_version');
   if(stored && stored !== APP_VERSION){
@@ -249,7 +249,7 @@ var APP_VERSION = 'v6.27-editor-videos-fix';
 // ── FORCE CACHE PURGE — nuke old caches so students don't have to reinstall ──
 // Runs once per cache version. Deletes stale caches quietly without reload loops.
 (function(){
-  var CURRENT_CACHE = 'maestrohvacr-v194';
+  var CURRENT_CACHE = 'maestrohvacr-v195';
   var PURGE_KEY = 'maestro_cache_purged_v';
   if(typeof caches==='undefined') return;
   if(localStorage.getItem(PURGE_KEY)===CURRENT_CACHE) return;
@@ -1827,7 +1827,7 @@ function closeMarioV2(){document.getElementById('marioV2Overlay').style.display=
           <button onclick="document.getElementById('adminWeeklyEmails').scrollIntoView({behavior:'smooth'})" class="admin-nav-btn" data-i18n="adm_nav_emails">📧 Emails</button>
           <button onclick="document.getElementById('adminAnalytics').scrollIntoView({behavior:'smooth'})" class="admin-nav-btn" data-i18n="adm_nav_analytics">📊 Analytics</button>
           <button onclick="document.getElementById('adminCertificados').scrollIntoView({behavior:'smooth'})" class="admin-nav-btn" data-i18n="adm_nav_certificados">🏆 Certificados</button>
-          <button onclick="document.getElementById('adminCursoVideos').scrollIntoView({behavior:'smooth'}); if(window.loadCursoVideosAdmin) loadCursoVideosAdmin();" class="admin-nav-btn">📹 Videos Curso</button>
+          <button onclick="window.openCursoVideosAdmin()" class="admin-nav-btn">📹 Videos Curso</button>
           <button onclick="document.getElementById('adminTraducirVideo').scrollIntoView({behavior:'smooth'}); if(window.loadTraducirVideo) loadTraducirVideo();" class="admin-nav-btn">🌐 Traducir Video</button>
           <button onclick="document.getElementById('adminInactivityAlerts').scrollIntoView({behavior:'smooth'})" class="admin-nav-btn" data-i18n="adm_nav_alertas">⚠️ Alertas</button>
         </div>
@@ -3046,12 +3046,28 @@ function closeMarioV2(){document.getElementById('marioV2Overlay').style.display=
           <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:12px;">
             <input id="cvAdminSearch" oninput="cvFilter()" placeholder="🔎 Buscar por título…" style="flex:1;min-width:180px;padding:9px 12px;border:1px solid #e2e8f0;border-radius:9px;font-size:13px;">
             <label style="font-size:12px;color:#475569;font-weight:700;display:flex;align-items:center;gap:6px;cursor:pointer;"><input type="checkbox" id="cvAdminOnlyUnassigned" onchange="cvFilter()"> Solo sin asignar</label>
-            <button onclick="loadCursoVideosAdmin()" style="padding:9px 12px;background:#f1f5f9;color:#475569;border:1px solid #e2e8f0;border-radius:9px;font-weight:700;font-size:12px;cursor:pointer;">🔄 Recargar</button>
+            <button onclick="window.openCursoVideosAdmin()" style="padding:9px 12px;background:#f1f5f9;color:#475569;border:1px solid #e2e8f0;border-radius:9px;font-weight:700;font-size:12px;cursor:pointer;">🔄 Recargar</button>
             <button id="cvSaveBtn" onclick="cvSaveCursoVideos()" style="padding:9px 16px;background:#13294a;color:#fff;border:none;border-radius:9px;font-weight:800;font-size:13px;cursor:pointer;">💾 Guardar cambios</button>
           </div>
           <div id="cvSaveMsg" style="font-size:12px;font-weight:700;margin-bottom:8px;min-height:14px;"></div>
           <div id="cvAdminList" style="max-height:560px;overflow-y:auto;border:1px solid #eef2f7;border-radius:10px;">Pulsa "📹 Videos Curso" arriba para cargar.</div>
         </div>
+        <script>
+          // Abre la zona de "Videos del Curso" (acvolt_lessons + tutorial_videos, ~450).
+          // El script js/admin/curso-videos-admin.js no se cargaba en el CRM, así que el
+          // botón no hacía nada. Lazy-load + abrir + render. Mario 2026-06-06 (Manuel editor).
+          window.openCursoVideosAdmin = function () {
+            var d = document.getElementById('adminCursoVideos');
+            if (d) { d.style.display = ''; try { d.scrollIntoView({ behavior: 'smooth' }); } catch (_) {} }
+            if (window.loadCursoVideosAdmin) { try { loadCursoVideosAdmin(); } catch (e) { console.error('[CursoVideos]', e); } }
+            else if (window.MaestroLoader) {
+              MaestroLoader.load(['js/admin/curso-videos-admin.js']).then(function () {
+                if (window.loadCursoVideosAdmin) { try { loadCursoVideosAdmin(); } catch (e) { console.error('[CursoVideos]', e); } }
+                else { console.error('[CursoVideos] loadCursoVideosAdmin undefined after load'); }
+              });
+            }
+          };
+        </script>
 
         <div class="admin-section admin-grid-full" id="adminCertificados" style="background:#ffffff;border:1px solid #e2e8f0;box-shadow:0 1px 3px rgba(0,0,0,0.06);">
           <div class="admin-section-header">

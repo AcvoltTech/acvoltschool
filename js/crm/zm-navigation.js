@@ -1220,7 +1220,7 @@ function initCrmRedesign() {
     if (quickAccess) {
       quickAccess.innerHTML =
         '<button class="crm-quick-btn teal" onclick="showCrmSection(\'tutorialVideos\',document.querySelector(\'[data-crm-section=tutorialVideos]\'))">🎓 HVAC Certification</button>' +
-        '<button class="crm-quick-btn purple" onclick="showCrmSection(\'acvoltSchool\',document.querySelector(\'[data-crm-section=acvoltSchool]\'))">🎬 Videos / Cursos</button>' +
+        '<button class="crm-quick-btn purple" onclick="if(window.openCursoVideosAdmin)window.openCursoVideosAdmin()">🎬 Videos del Curso (450)</button>' +
         '<button class="crm-quick-btn red" onclick="showCrmSection(\'streaming\',document.querySelector(\'[data-crm-section=streaming]\'))">📡 Streaming</button>' +
         '<button class="crm-quick-btn blue" onclick="showCrmSection(\'bandeja\',document.querySelector(\'[data-crm-section=bandeja]\'))">📥 Bandeja</button>' +
         '<button class="crm-quick-btn teal" onclick="showCrmSection(\'clases\',document.querySelector(\'[data-crm-section=clases]\'))">📅 Clases</button>' +
@@ -1228,7 +1228,7 @@ function initCrmRedesign() {
     }
     // Hide admin section panels on dashboard that editor shouldn't see
     // Mario 2026-05-29: added adminStreamingSection so editor can use streaming.
-    var editorAllowed = ['adminBandejaSection', 'adminStreamingSection'];
+    var editorAllowed = ['adminBandejaSection', 'adminStreamingSection', 'adminCursoVideos'];
     document.querySelectorAll('.admin-section.admin-grid-full').forEach(function(sec) {
       if (editorAllowed.indexOf(sec.id) === -1) sec.style.display = 'none';
     });
