@@ -836,7 +836,14 @@ function showCrmSection(sectionId, clickedItem) {
         });
       } else { console.error('[Streaming] No MaestroLoader available'); }
     }
-    if (sectionId === 'tutorialVideos') { tvLoadVideos(); }
+    if (sectionId === 'tutorialVideos') {
+      // Mario 2026-06-06: el editor (Manuel) no podía abrir "Maestro HVACR Videos".
+      // tvLoadVideos vive en js/admin/tutorial-videos.js, que NO se cargaba en el CRM
+      // (solo por el path de la app). Lazy-load antes de llamarlo, como streaming/cta.
+      if (typeof tvLoadVideos === 'function') { try { tvLoadVideos(); } catch (e) { console.error('[TutorialVideos] render error:', e); } }
+      else if (window.MaestroLoader) { MaestroLoader.load(['js/admin/tutorial-videos.js']).then(function () { if (typeof tvLoadVideos === 'function') { try { tvLoadVideos(); } catch (e) { console.error('[TutorialVideos] render error after load:', e); } } else { console.error('[TutorialVideos] tvLoadVideos undefined after load'); } }); }
+      else { console.error('[TutorialVideos] No MaestroLoader available'); }
+    }
     if (sectionId === 'ctaVideo') {
       if (window.CTAVideoAdmin) { try { CTAVideoAdmin.render(); } catch(e) { console.warn('[CTAVideoAdmin] render error:', e); } }
       else if (window.MaestroLoader) { MaestroLoader.load(['js/admin/cta-video-admin.js']).then(function(){ if (window.CTAVideoAdmin) { try { CTAVideoAdmin.render(); } catch(e) { console.warn('[CTAVideoAdmin] render error:', e); } } }); }
