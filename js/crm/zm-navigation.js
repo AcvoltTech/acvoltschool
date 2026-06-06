@@ -1162,6 +1162,38 @@ async function _crmLoadDashboardStats() {
 // Initialize CRM redesign when admin panel loads
 var _origShowScreen = (typeof showScreen === 'function') ? showScreen : null;
 
+// Abre la zona de "Videos del Curso" (~450: acvolt_lessons + tutorial_videos) en un
+// OVERLAY de pantalla completa. Mario 2026-06-06: el editor (Manuel) tocaba el botón
+// y "no respondía" — el panel embebido del dashboard no se le veía y/o la función
+// inline no estaba lista. Definida AQUÍ (zm-navigation siempre corre en el CRM) para
+// que SIEMPRE exista, y robusta a la visibilidad del dashboard.
+window.openCursoVideosAdmin = function () {
+  var d = document.getElementById('adminCursoVideos');
+  if (!d) { try { alert('No se encontró el panel de videos del curso. Recarga (Ctrl+Shift+R).'); } catch (_) {} return; }
+  var ov = document.getElementById('_cursoVideosOverlay');
+  if (!ov) {
+    ov = document.createElement('div');
+    ov.id = '_cursoVideosOverlay';
+    ov.style.cssText = 'position:fixed;inset:0;z-index:99998;background:#f4f6f9;overflow:auto;padding:14px;-webkit-overflow-scrolling:touch;';
+    var bar = document.createElement('div');
+    bar.style.cssText = 'position:sticky;top:0;display:flex;justify-content:space-between;align-items:center;background:#0f2342;color:#fff;padding:10px 14px;border-radius:10px;margin-bottom:12px;z-index:1;';
+    bar.innerHTML = '<span style="font-weight:800;font-size:15px;">🎬 Videos del Curso — Editor</span>';
+    var close = document.createElement('button');
+    close.textContent = '✕ Cerrar';
+    close.style.cssText = 'background:#ef4444;color:#fff;border:none;border-radius:8px;padding:8px 14px;font-weight:800;cursor:pointer;-webkit-tap-highlight-color:transparent;';
+    close.onclick = function () { try { d.style.display = 'none'; document.body.appendChild(d); } catch (_) {} ov.remove(); };
+    bar.appendChild(close);
+    ov.appendChild(bar);
+    document.body.appendChild(ov);
+  }
+  d.style.display = '';
+  ov.appendChild(d);
+  var go = function () { if (window.loadCursoVideosAdmin) { try { loadCursoVideosAdmin(); } catch (e) { console.error('[CursoVideos]', e); } } else { console.error('[CursoVideos] loadCursoVideosAdmin undefined'); } };
+  if (window.loadCursoVideosAdmin) go();
+  else if (window.MaestroLoader) MaestroLoader.load(['js/admin/curso-videos-admin.js']).then(go);
+  else { try { alert('No se pudo cargar el editor de videos. Revisa tu conexión.'); } catch (_) {} }
+};
+
 function initCrmRedesign() {
   var adminScreen = document.getElementById('adminDashboardScreen');
   if (adminScreen) {
