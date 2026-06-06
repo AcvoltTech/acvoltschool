@@ -1812,6 +1812,7 @@ function showScreen(screenId) {
           'js/admin/soporte-admin.js',
           'js/admin/game-analytics.js',
           'js/admin/desafio-admin.js',
+          'js/admin/desafio-certs-admin.js',
           'js/admin/live-stream-admin.js',
           'js/admin/live-stream-console.js',
           'js/admin/acvolt-school-admin.js',

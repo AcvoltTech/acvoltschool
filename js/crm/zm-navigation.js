@@ -812,7 +812,7 @@ function showCrmSection(sectionId, clickedItem) {
     p.classList.remove('crm-visible');
   });
 
-  if (sectionId === 'staffAdmin' || sectionId === 'gatekeeper' || sectionId === 'deviceViewer' || sectionId === 'tutorialVideos' || sectionId === 'soporteAdmin' || sectionId === 'streaming' || sectionId === 'desafioAdmin' || sectionId === 'acvoltSchool' || sectionId === 'apiBilling' || sectionId === 'errorMonitor' || sectionId === 'systemHealth' || sectionId === 'webVitals' || sectionId === 'citas' || sectionId === 'chatAdmin' || sectionId === 'userMonitor' || sectionId === 'pushManager' || sectionId === 'ctaVideo') {
+  if (sectionId === 'staffAdmin' || sectionId === 'gatekeeper' || sectionId === 'deviceViewer' || sectionId === 'tutorialVideos' || sectionId === 'soporteAdmin' || sectionId === 'streaming' || sectionId === 'desafioAdmin' || sectionId === 'desafioCerts' || sectionId === 'acvoltSchool' || sectionId === 'apiBilling' || sectionId === 'errorMonitor' || sectionId === 'systemHealth' || sectionId === 'webVitals' || sectionId === 'citas' || sectionId === 'chatAdmin' || sectionId === 'userMonitor' || sectionId === 'pushManager' || sectionId === 'ctaVideo') {
     var placeholder = document.getElementById('crm-section-' + sectionId);
     if (placeholder) placeholder.classList.add('crm-visible');
     // Hide main dashboard content
@@ -843,6 +843,10 @@ function showCrmSection(sectionId, clickedItem) {
     }
     if (sectionId === 'soporteAdmin') { try { initSoporteAdmin(); } catch(e) { console.log('Soporte Admin not loaded:', e); } }
     if (sectionId === 'desafioAdmin') { try { loadDesafioAdmin(); } catch(e) { console.log('Desafio not loaded:', e); } }
+    if (sectionId === 'desafioCerts') {
+      if (typeof loadDesafioCertsAdmin === 'function') { loadDesafioCertsAdmin(); }
+      else if (window.MaestroLoader) { MaestroLoader.load(['js/admin/desafio-certs-admin.js']).then(function() { if (typeof loadDesafioCertsAdmin === 'function') loadDesafioCertsAdmin(); }); }
+    }
     if (sectionId === 'acvoltSchool') { try { loadAcvoltSchoolAdmin(); } catch(e) { console.log('AcvoltSchool not loaded:', e); } }
     if (sectionId === 'apiBilling') { try { renderApiBillingDashboard(); } catch(e) { console.log('API Billing not loaded:', e); } }
     if (sectionId === 'errorMonitor') { try { loadErrorMonitor(); } catch(e) { console.log('Error Monitor not loaded:', e); } }

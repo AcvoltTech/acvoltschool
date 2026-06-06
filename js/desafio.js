@@ -96,6 +96,27 @@
     _t('ds_wrong_6','El error es parte del aprendizaje')
   ];
 
+  // --- Helper: get student name with DB fallback ---
+  async function _dsGetUserName() {
+    try {
+      var u = JSON.parse(localStorage.getItem('tecnico_user') || '{}');
+      if (u.nombre) return u.nombre;
+    } catch(e) {}
+    try {
+      var email = localStorage.getItem('tecnico_email') || '';
+      if (email && typeof usersDataSelf === 'function') {
+        var res = await usersDataSelf('get_self', { email: email });
+        if (res.data && res.data.nombre) {
+          var cached = JSON.parse(localStorage.getItem('tecnico_user') || '{}');
+          cached.nombre = res.data.nombre;
+          localStorage.setItem('tecnico_user', JSON.stringify(cached));
+          return res.data.nombre;
+        }
+      }
+    } catch(e) {}
+    return 'Técnico HVAC';
+  }
+
   var MILESTONE_MESSAGES = {
     25:  _td('ds_milestone_25', '¡Ya llevas un cuarto, buen ritmo!'),
     50:  _td('ds_milestone_50', '¡Mitad del camino, sigue así!'),
@@ -1383,16 +1404,12 @@
   };
 
   // --- RESULTS & CELEBRATION ---
-  function _dsShowResults(pct, passed, certId, corridaComplete, total, elapsed) {
+  async function _dsShowResults(pct, passed, certId, corridaComplete, total, elapsed) {
     var screen = document.getElementById('desafioQuizScreen');
     if (!screen) return;
 
     var corridaName = CORRIDAS[_dsCorrida - 1].nombre;
-    var userName = 'Técnico HVAC';
-    try {
-      var u = JSON.parse(localStorage.getItem('tecnico_user') || '{}');
-      if (u.nombre) userName = u.nombre;
-    } catch(e) { console.warn('[Desafio]', e.message || e); }
+    var userName = await _dsGetUserName();
 
     var html = '<div class="ds-results">';
 
@@ -1900,12 +1917,8 @@
       return a.corrida !== b.corrida ? a.corrida - b.corrida : a.nivel - b.nivel;
     });
 
-    // Get user name
-    var userName = 'Técnico HVAC';
-    try {
-      var u = JSON.parse(localStorage.getItem('tecnico_user') || '{}');
-      if (u.nombre) userName = u.nombre;
-    } catch(e) { console.warn('[Desafio]', e.message || e); }
+    // Get user name (with DB fallback)
+    var userName = await _dsGetUserName();
 
     var _meses = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
     var _nivelIds = ['principiante','intermedio','avanzado','elite','platino'];
