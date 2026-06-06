@@ -770,7 +770,11 @@ function showCrmSection(sectionId, clickedItem) {
   // Role-based section guard
   var _guardRole = sessionStorage.getItem('admin_role') || (typeof currentAdminRole !== 'undefined' ? currentAdminRole : '');
   if (_guardRole === 'editor') {
-    var _editorAllowed = ['dashboard', 'bandeja', 'tutorialVideos', 'clases', 'zoomResumenes', 'streaming'];
+    // Mario 2026-06-06: 'acvoltSchool' = "Maestro HVACR Videos" (Course Editor: 17
+    // cursos / 427 lecciones / 394 videos mapeados) — la zona REAL donde Manuel edita
+    // los videos del curso. Faltaba aquí → el guard la bloqueaba ("el botón no
+    // responde"). Es contenido/videos, NO finanzas.
+    var _editorAllowed = ['dashboard', 'bandeja', 'tutorialVideos', 'acvoltSchool', 'clases', 'zoomResumenes', 'streaming'];
     if (_editorAllowed.indexOf(sectionId) === -1) {
       console.warn('[CRM] Editor blocked from section: ' + sectionId);
       return;
@@ -854,7 +858,12 @@ function showCrmSection(sectionId, clickedItem) {
       if (typeof loadDesafioCertsAdmin === 'function') { loadDesafioCertsAdmin(); }
       else if (window.MaestroLoader) { MaestroLoader.load(['js/admin/desafio-certs-admin.js']).then(function() { if (typeof loadDesafioCertsAdmin === 'function') loadDesafioCertsAdmin(); }); }
     }
-    if (sectionId === 'acvoltSchool') { try { loadAcvoltSchoolAdmin(); } catch(e) { console.log('AcvoltSchool not loaded:', e); } }
+    if (sectionId === 'acvoltSchool') {
+      // Mario 2026-06-06: asegurar que el script cargue (el editor no lo tenía) →
+      // "Maestro HVACR Videos" / Course Editor abre con sus 427 lecciones.
+      if (typeof loadAcvoltSchoolAdmin === 'function') { try { loadAcvoltSchoolAdmin(); } catch(e) { console.error('[AcvoltSchool]', e); } }
+      else if (window.MaestroLoader) { MaestroLoader.load(['js/admin/acvolt-school-admin.js']).then(function() { if (typeof loadAcvoltSchoolAdmin === 'function') { try { loadAcvoltSchoolAdmin(); } catch(e) { console.error('[AcvoltSchool]', e); } } else { console.error('[AcvoltSchool] loadAcvoltSchoolAdmin undefined after load'); } }); }
+    }
     if (sectionId === 'apiBilling') { try { renderApiBillingDashboard(); } catch(e) { console.log('API Billing not loaded:', e); } }
     if (sectionId === 'errorMonitor') { try { loadErrorMonitor(); } catch(e) { console.log('Error Monitor not loaded:', e); } }
     if (sectionId === 'systemHealth') {
@@ -1252,7 +1261,7 @@ function initCrmRedesign() {
     if (quickAccess) {
       quickAccess.innerHTML =
         '<button class="crm-quick-btn teal" onclick="showCrmSection(\'tutorialVideos\',document.querySelector(\'[data-crm-section=tutorialVideos]\'))">🎓 HVAC Certification</button>' +
-        '<button class="crm-quick-btn purple" onclick="if(window.openCursoVideosAdmin)window.openCursoVideosAdmin()">🎬 Videos del Curso (450)</button>' +
+        '<button class="crm-quick-btn purple" onclick="showCrmSection(\'acvoltSchool\',document.querySelector(\'[data-crm-section=acvoltSchool]\'))">🎬 Maestro HVACR Videos</button>' +
         '<button class="crm-quick-btn red" onclick="showCrmSection(\'streaming\',document.querySelector(\'[data-crm-section=streaming]\'))">📡 Streaming</button>' +
         '<button class="crm-quick-btn blue" onclick="showCrmSection(\'bandeja\',document.querySelector(\'[data-crm-section=bandeja]\'))">📥 Bandeja</button>' +
         '<button class="crm-quick-btn teal" onclick="showCrmSection(\'clases\',document.querySelector(\'[data-crm-section=clases]\'))">📅 Clases</button>' +
