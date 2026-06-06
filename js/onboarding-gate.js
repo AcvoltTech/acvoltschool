@@ -72,6 +72,13 @@
   // MAIN GATE CHECK
   // ============================
   window.checkOnboardingGate = function(callback) {
+    // KILL-SWITCH (Mario 2026-06-05): el gate de perfil (nombre/email/teléfono/
+    // ciudad/estado) es para la APP, NO para acvoltschool.com. En el web bloqueaba
+    // a TODOS los estudiantes (no tienen ciudad/estado) → "nadie puede entrar".
+    // Desactivado en el web: siempre deja pasar. Quita cualquier modal ya abierto.
+    try { var _m = document.getElementById(MODAL_ID); if (_m) _m.remove(); } catch (_) {}
+    if (callback) callback();
+    return false;
     // Admin bypasses gate
     if (_isAdmin()) { if (callback) callback(); return false; }
     // iOS App Store: skip gate — Apple reviewers shouldn't be blocked by profile form
