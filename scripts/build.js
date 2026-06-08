@@ -144,7 +144,6 @@ const LAZY_JS_ROOT = [
   'js/contractor-zone/templates.js',
   'js/contractor-zone/contractor-zone.js',
   'js/jornal-pro.js',
-  'js/chaka-tips.js',
   'js/study-together.js',
   'js/study-activity.js',
   'js/ble-manager.js',

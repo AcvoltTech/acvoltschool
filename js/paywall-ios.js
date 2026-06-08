@@ -77,7 +77,7 @@
       'Maestro Mario AI — diagnóstico con foto de placa',
       '400+ videos tutoriales premium',
       'Clases en vivo exclusivas + Bolsa de Trabajo HVACR',
-      'Maestro Invoices CRM + Chaka Tips',
+      'Maestro Invoices CRM',
       'Desafío Maestro — modo completo sin límite de preguntas'
     ];
   }

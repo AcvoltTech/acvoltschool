@@ -99,17 +99,20 @@ serve(async (req) => {
         const base = `https://api.cloudflare.com/client/v4/accounts/${acct}/stream/${uid}/downloads`;
         const cfHeaders = { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' };
         try {
+          // POST activa la generación del MP4 (sigue en segundo plano aunque
+          // retornemos). Luego sondeamos hasta que status='ready'.
           let r = await fetch(base, { method: 'POST', headers: cfHeaders });
           let j = await r.json();
           let dl = j?.result?.default;
-          for (let i = 0; i < 25 && (!dl || dl.status !== 'ready'); i++) {
+          for (let i = 0; i < 38 && (!dl || dl.status !== 'ready'); i++) {
             await new Promise((res) => setTimeout(res, 3000));
             r = await fetch(base, { method: 'GET', headers: cfHeaders });
             j = await r.json();
             dl = j?.result?.default;
           }
           if (!dl || !dl.url || dl.status !== 'ready') {
-            return jsonResponse({ error: 'No se pudo preparar el MP4 del video en Cloudflare (intenta de nuevo en un minuto).' }, 502);
+            var pct = (dl && typeof dl.percentComplete === 'number') ? Math.round(dl.percentComplete) : 0;
+            return jsonResponse({ error: 'El video se está preparando en Cloudflare (' + pct + '%). Vuelve a darle "Transcribir" en ~1 minuto y ya estará listo.' }, 202);
           }
           videoUrl = dl.url;
           console.log('Cloudflare MP4 listo para', uid, '→', videoUrl);

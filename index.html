@@ -218,7 +218,7 @@
   }catch(_e){}
 })();
 
-var APP_VERSION = 'v6.32-transcribe-course-editor';
+var APP_VERSION = 'v6.33-chaka-tips-removed';
 (function(){
   var stored = localStorage.getItem('maestroac_app_version');
   if(stored && stored !== APP_VERSION){
@@ -855,7 +855,6 @@ function closeMarioV2(){document.getElementById('marioV2Overlay').style.display=
       <div class="card" data-nav="heatingScreen" style="cursor:pointer;"><div class="card-inner"><div class="card-ic ic-commercial-heat" style="background:linear-gradient(145deg,rgba(249,115,22,0.25),rgba(234,88,12,0.12));overflow:hidden;padding:0;"><img src="commercial-heat-diag-icon.png?v=3" alt="Commercial Heat Diagnostics" style="width:100%;height:100%;object-fit:cover;border-radius:inherit;" /></div><div class="card-title" data-i18n="html_calefaccion_tool">Commercial Heat Diagnostics</div><div class="card-subtitle" data-i18n="html_calefaccion_tool_sub">Heat Pump · VRF · Water Heater · SH/SC</div></div></div>
       <div class="card" data-nav="anemometerHvacScreen"><div class="card-inner"><div class="card-ic ic-tab-testing" style="background:linear-gradient(145deg,rgba(56,189,248,0.25),rgba(14,165,233,0.12));overflow:hidden;padding:0;"><img src="tab-testing-icon.png?v=3" alt="TAB Testing" style="width:100%;height:100%;object-fit:cover;border-radius:inherit;" /></div><div class="card-title" data-i18n="html_anemometro_hvac">TAB Testing</div><div class="card-subtitle">Air Balancing &middot; CFM &middot; Traverse &middot; &Delta;T</div></div></div>
       <div class="card" data-nav="commercialHvacScreen" style="cursor:pointer;"><div class="card-inner"><div class="card-ic ic-chiller-tower" style="background:linear-gradient(145deg,rgba(20,184,166,0.25),rgba(6,182,212,0.12));overflow:hidden;padding:0;"><img src="chiller-tower-icon.png?v=3" alt="Chiller & Cooling Tower" style="width:100%;height:100%;object-fit:cover;border-radius:inherit;" /></div><div class="card-title" data-i18n="html_commercial_hvac">Chiller & Cooling Tower</div><div class="card-subtitle" data-i18n="html_commercial_hvac_sub">Chillers &middot; Torres &middot; AHU &middot; IAQ &middot; Ventilaci&oacute;n</div></div></div>
-      <div class="card" onclick="if(typeof openChakaTips==='function'){openChakaTips();}else if(window.MaestroLoader){window.MaestroLoader.load('js/chaka-tips.js').then(function(){if(typeof openChakaTips==='function')openChakaTips();});}" style="cursor:pointer;background:linear-gradient(135deg,#991B1B 0%,#DC2626 55%,#F97316 100%);border:2px solid #FB923C;box-shadow:0 6px 20px rgba(220,38,38,0.45);"><div class="card-inner"><div class="card-ic" style="background:linear-gradient(145deg,rgba(255,237,213,0.35),rgba(251,146,60,0.2));display:flex;align-items:center;justify-content:center;font-size:38px;line-height:1;">&#128161;</div><div class="card-title" data-i18n="html_chaka_tips" style="color:#FFFFFF;">Chaka Tips</div><div class="card-subtitle" data-i18n="html_chaka_tips_sub" style="color:#FFEDD5;">Troubleshooting del maestro &middot; 37 tips</div></div></div>
     </div>
 
     <!-- Zona de Contratistas — navy + gold solid banner (matches Invoices/Classes pattern) -->
@@ -4508,7 +4507,6 @@ function closeMarioV2(){document.getElementById('marioV2Overlay').style.display=
     <div class="screen" id="partsFinderScreen"></div>
 
     <!-- ==================== CHAKA TIPS SCREEN ==================== -->
-    <div class="screen" id="chakaTipsScreen"></div>
 
     <!-- ==================== BLUETOOTH HVAC TOOLS SCREEN ==================== -->
     <div class="screen premium-screen" id="bluetoothToolsScreen">

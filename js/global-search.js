@@ -125,7 +125,6 @@ var GLOBAL_SEARCH_INDEX = [
   { t:'Amigos / Red', kw:'amigos friends tecnicos social comunidad network', s:'friendsScreen', i:'👥' },
   { t:'Chat Técnicos', kw:'chat mensajes tecnicos dm conversacion', s:'techChatScreen', i:'💬' },
   { t:'Feed HVAC Noticias', kw:'feed noticias news rss achr acr mundo hvacr', s:'hvacFeedScreen', i:'📰' },
-  { t:'Chaka Tips', kw:'chaka tips consejos truco recomendacion', s:'chakaTipsScreen', i:'💡' },
   { t:'Soporte Técnico', kw:'soporte ayuda help support problema bug error reportar', s:'soporteTecnicoScreen', i:'🆘' },
   { t:'Sugerencias', kw:'sugerencias feedback opinion idea mejora', s:'sugerenciasScreen', i:'💭' },
   { t:'Contactar Mario', kw:'contactar mario maestro profesor instructor preguntar', s:'soporteTecnicoScreen', i:'👨‍🏫' },

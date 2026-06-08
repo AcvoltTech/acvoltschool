@@ -85,7 +85,6 @@
       membresiasScreen: ['js/membresias.js'],
       referidosScreen: ['js/admin/ambassadors.js'],
       zoomClassesScreen: ['js/crm/zoom-recordings.js', 'js/crm/zm-navigation.js'],
-      chakaTipsScreen: ['js/chaka-tips.js'],
       attendanceScreen: ['js/admin/class-schedule.js'],
       miPerfilScreen: ['js/student-grades.js', 'js/student-upload.js', 'js/student-exams.js'],
       adminLoginScreen: ['js/admin/hash-passwords.js', 'js/admin/student-success.js'],
@@ -1891,7 +1890,6 @@ function showScreen(screenId) {
           if (screenId === 'ductDesignerScreen' && typeof window.initDuctDesigner === 'function') { window.initDuctDesigner(); }
           if (screenId === 'maestroBenderScreen' && typeof window.initMaestroBender === 'function') { window.initMaestroBender(); }
           if (screenId === 'maestroProScreen' && typeof window.initMaestroPro === 'function') { window.initMaestroPro(); }
-          if (screenId === 'chakaTipsScreen' && typeof window.initChakaTips === 'function') { window.initChakaTips(); }
           if (screenId === 'contractorZoneScreen' && typeof window.initContractorZone === 'function') { window.initContractorZone(); }
           if (screenId === 'jornalProScreen' && typeof window.initJornalPro === 'function') { window.initJornalPro(); }
           if (screenId === 'preDepartureScreen' && typeof window.initPreDepartureChecklist === 'function') { window.initPreDepartureChecklist(window._pdcInstallMode ? 'install' : window._pdcStockMode ? 'stock' : window._pdcOnsiteMode ? 'onsite' : window._pdcToolsOnly ? 'tools' : 'full'); }
