@@ -792,7 +792,8 @@ function _ascEditLesson(id) {
         '<input id="asc-ed-title" type="text" value="' + _ascAttr(lesson.title || '') + '">' +
         '<button type="button" id="asc-transcribe-btn" onclick="_ascTranscribe()" style="margin:6px 0 8px;padding:8px 14px;background:#f59e0b;color:#000;border:none;border-radius:8px;font-weight:700;font-size:13px;cursor:pointer;">\uD83C\uDF99\uFE0F ' + _t('adm_as_transcribe_btn', 'Transcribir con IA (para titular)') + '</button>' +
         '<div id="asc-transcribe-status" style="display:none;font-size:12px;margin-bottom:6px;"></div>' +
-        '<textarea id="asc-transcript" readonly placeholder="' + _t('adm_as_transcript_ph', 'La transcripci\u00F3n aparecer\u00E1 aqu\u00ED \u2014 \u00FAsala para escribir un buen t\u00EDtulo arriba.') + '" style="width:100%;min-height:120px;font-size:12.5px;line-height:1.5;display:none;margin-bottom:8px;"></textarea>' +
+        '<label>' + _t('adm_as_transcript_label', 'Transcripci\u00F3n del video (IA)') + '</label>' +
+        '<textarea id="asc-transcript" placeholder="' + _t('adm_as_transcript_ph', 'Dale a \u201CTranscribir con IA\u201D y la transcripci\u00F3n aparecer\u00E1 aqu\u00ED \u2014 \u00FAsala para el t\u00EDtulo y la descripci\u00F3n.') + '" style="width:100%;min-height:120px;font-size:12.5px;line-height:1.5;margin-bottom:8px;">' + _asEsc(lesson.transcript || '') + '</textarea>' +
         '<label>' + _t('adm_as_description', 'Descripci\u00F3n') + '</label>' +
         '<textarea id="asc-ed-desc">' + _asEsc(lesson.description || '') + '</textarea>' +
         '<label>Stream UID</label>' +
