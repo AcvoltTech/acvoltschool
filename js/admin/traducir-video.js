@@ -64,7 +64,7 @@
       setStatus('② Mandando al motor (transcribe → traduce → tu voz en inglés)…', '#475569');
       var b64 = await blobToB64(wav);
       var job_id = 'tv_' + Date.now();
-      var r = await fetch(SB_URL + '/functions/v1/translate-audio-en', { method: 'POST', headers: { 'Content-Type': 'application/json', apikey: SB_KEY(), Authorization: 'Bearer ' + SB_KEY() }, body: JSON.stringify({ audio_b64: b64, audio_mime: 'audio/wav', job_id: job_id, admin_email: adminEmail() }) });
+      var r = await fetch(SB_URL + '/functions/v1/translate-audio-en', { method: 'POST', headers: { 'Content-Type': 'application/json', apikey: SB_KEY(), Authorization: 'Bearer ' + SB_KEY() }, body: JSON.stringify({ audio_b64: b64, audio_mime: 'audio/wav', job_id: job_id, admin_email: adminEmail(), name: (_file && _file.name) || '' }) });
       var jr = await r.json();
       if (!jr || jr.status !== 'processing') throw new Error((jr && jr.error) || 'No arrancó el motor.');
       // polling
@@ -124,5 +124,67 @@
   };
   window.tvStopEnglish = function () { var vid = document.getElementById('tvVideo'); var aud = document.getElementById('tvEnAudio'); try { vid.pause(); aud.pause(); } catch (_) {} };
 
-  window.loadTraducirVideo = function () { setStatus('Elige un video en español y dale "Traducir a inglés".', '#475569'); };
+  window.loadTraducirVideo = function () {
+    setStatus('Elige un video en español y dale "Traducir a inglés".', '#475569');
+    _renderPastJobs();
+    // Al terminar una traducción nueva, refresca la lista para que ya aparezca guardada.
+  };
+
+  // ── "Mis traducciones guardadas" (FIX 2026-06-24): los jobs YA viven en el
+  // servidor (app_config.tae_jobs, audio+subtítulos reusables). El bug era que
+  // esta pantalla nunca los cargaba → a Manuel "se le borraba" el trabajo al
+  // salir y volver. Aquí los listamos para que persistan a la vista. ──
+  var _pastJobs = {};
+  function _pastContainer() {
+    var c = document.getElementById('tvPastList');
+    if (c) return c;
+    var anchor = document.getElementById('tvStatus') || document.getElementById('tvVideo') || document.getElementById('tvDownloads');
+    if (!anchor || !anchor.parentNode) return null;
+    c = document.createElement('div'); c.id = 'tvPastList'; c.style.cssText = 'margin-top:18px;';
+    anchor.parentNode.appendChild(c);
+    return c;
+  }
+  function _renderPastJobs() {
+    var c = _pastContainer(); if (!c) return;
+    c.innerHTML = '<div style="font-size:12px;color:#94a3b8;">Cargando tus traducciones…</div>';
+    fetch(SB_URL + '/rest/v1/app_config?select=value&key=eq.tae_jobs', { headers: { apikey: SB_KEY(), Authorization: 'Bearer ' + SB_KEY() } })
+      .then(function (r) { return r.json(); })
+      .then(function (rows) {
+        var jobs = {}; try { jobs = JSON.parse(rows[0].value); } catch (_) {}
+        _pastJobs = jobs;
+        var list = Object.keys(jobs).map(function (k) { var j = jobs[k] || {}; j._id = k; return j; })
+          .filter(function (j) { return j.status === 'ready' && j.audio_url_en; })
+          .sort(function (a, b) { return (b.ts || 0) - (a.ts || 0); });
+        if (!list.length) { c.innerHTML = '<div style="font-size:12.5px;color:#64748b;">Aún no tienes traducciones guardadas. Las que generes quedan aquí para reusar y descargar.</div>'; return; }
+        var h = '<div style="font-size:13px;font-weight:800;color:#0f2342;margin-bottom:9px;">🗂️ Mis traducciones guardadas (' + list.length + ')</div>';
+        list.forEach(function (j) {
+          var d = j.ts ? new Date(j.ts) : null;
+          var when = d ? d.toLocaleString('es-MX', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '';
+          var label = j.name ? esc(j.name) : (j.text_en ? esc(String(j.text_en).slice(0, 55)) + '…' : 'Traducción');
+          h += '<div style="background:#fff;border:1px solid #e2e8f0;border-radius:11px;padding:11px 13px;margin-bottom:8px;">'
+            + '<div style="font-size:13px;font-weight:700;color:#0f2342;">🎙️ ' + label + '</div>'
+            + '<div style="font-size:11px;color:#94a3b8;margin:2px 0 8px;">' + esc(when) + (j.chars ? ' · ' + j.chars + ' caracteres' : '') + '</div>'
+            + '<div style="display:flex;gap:7px;flex-wrap:wrap;">'
+            + '<button onclick="window.tvLoadPast(\'' + esc(j._id) + '\')" style="background:#0f2342;color:#fff;border:none;border-radius:8px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer;">▶ Previsualizar</button>'
+            + '<a href="' + esc(j.audio_url_en) + '" download style="background:#f1f5f9;color:#0f2342;border-radius:8px;padding:7px 12px;font-size:12px;font-weight:700;text-decoration:none;">⬇ Audio inglés</a>'
+            + (j.subtitle_url_en ? '<a href="' + esc(j.subtitle_url_en) + '" download style="background:#f1f5f9;color:#0f2342;border-radius:8px;padding:7px 12px;font-size:12px;font-weight:700;text-decoration:none;">⬇ Subtítulos</a>' : '')
+            + '</div></div>';
+        });
+        c.innerHTML = h;
+      })
+      .catch(function () { c.innerHTML = '<div style="font-size:12px;color:#dc2626;">No se pudieron cargar tus traducciones. Reintenta.</div>'; });
+  }
+  // Carga un trabajo guardado al reproductor (audio inglés + subtítulos + descargas).
+  window.tvLoadPast = function (id) {
+    var j = _pastJobs[id]; if (!j) return;
+    _result = j; showResult(j);
+    var dl = document.getElementById('tvDownloads'); if (dl) dl.style.display = 'block';
+    var aud = document.getElementById('tvEnAudio'); if (aud) { try { aud.play(); } catch (_) {} }
+    setStatus('✅ Cargué tu traducción guardada — tu voz en inglés está lista para reproducir y descargar.', '#16a34a');
+    try { (document.getElementById('tvDownloads') || document.getElementById('tvStatus')).scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch (_) {}
+  };
+
+  // Refresca la lista cuando termina una traducción nueva.
+  var _origShowResult = showResult;
+  showResult = function (job) { _origShowResult(job); try { _renderPastJobs(); } catch (_) {} };
 })();
