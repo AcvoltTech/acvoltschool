@@ -626,6 +626,8 @@ function _zoomShowNoAccess() {
 }
 
 function showZoomRecordings() {
+  // Conceder acceso de ESCUELA (abre todas las zonas de estudio en la web) — Mario 2026-06-25.
+  try { sessionStorage.setItem('school_access', '1'); } catch (_) {}
   var gate = document.getElementById('zoomVerifyGate');
   var list = document.getElementById('zoomRecordingsList');
   var welcome = document.getElementById('zoomWelcomeName');

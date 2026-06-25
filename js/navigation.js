@@ -2425,6 +2425,34 @@ function showScreen(screenId) {
           MaestroLoader.load(['js/ble-manager.js']).then(function(){ try { initBluetoothTools(); } catch(e) { console.warn('[Navigation] bluetoothTools init error:', e); } });
         }
       }
+      // ── CANDADO DE ESCUELA WEB (Mario 2026-06-25): TODAS las zonas de estudio en la WEB
+      // requieren pagar por Stripe O tener token. En el app NATIVO no aplica (ahí manda el
+      // paywall/IAP). Una sola verificación (token o email) abre todas (sessionStorage school_access).
+      var _schoolZones = { studySectionsScreen: 1, certOficialesScreen: 1, videoLessonsScreen: 1, attendanceScreen: 1 };
+      var _nativeApp = window.isIOSAppStore || window.isAndroidPlayStore || window.isAndroidApp || window.isIOSApp || !!(window.webkit && window.webkit.messageHandlers);
+      if (_schoolZones[screenId] && !_nativeApp) {
+        var _admin = (typeof isAdminAuthenticated === 'function' && isAdminAuthenticated());
+        var _hasAccess = false; try { _hasAccess = sessionStorage.getItem('school_access') === '1'; } catch (_) {}
+        if (!_admin && !_hasAccess) {
+          (function (target) {
+            var sbUrl = window.SUPABASE_URL || 'https://htklsowiyjwsjnacnvnr.supabase.co';
+            var sbKey = (typeof SUPABASE_KEY !== 'undefined' ? SUPABASE_KEY : '');
+            function toGate() { setTimeout(function () { try { showScreen('zoomClassesScreen'); } catch (_) {} }, 30); }
+            try {
+              if (window.supabaseClient && supabaseClient.auth) {
+                supabaseClient.auth.getSession().then(function (s) {
+                  var tok = (s && s.data && s.data.session && s.data.session.access_token) || sbKey;
+                  return fetch(sbUrl + '/functions/v1/school-access-check', { method: 'POST', headers: { 'Content-Type': 'application/json', 'apikey': sbKey, 'Authorization': 'Bearer ' + tok }, body: '{}' });
+                }).then(function (r) { return r.json(); }).then(function (d) {
+                  if (d && d.access) { try { sessionStorage.setItem('school_access', '1'); } catch (_) {} showScreen(target); }
+                  else toGate();
+                }).catch(toGate);
+              } else toGate();
+            } catch (_) { toGate(); }
+          })(screenId);
+          return;
+        }
+      }
       // VIP gate — Estudio y Certificaciones (EPA, OSHA, NATE, A2L, Refri, Calefacción modules
       // are individually paywalled but the entry screen needs to be gated too)
       if (screenId === 'studySectionsScreen') {
