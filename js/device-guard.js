@@ -160,6 +160,8 @@ var DeviceGuard = (function() {
      */
     onLogin: function(email) {
       if (!email) return;
+      // Admins EXENTOS del límite de dispositivos (Mario 6-25: "no puedo estar bloqueado como admin").
+      if (typeof isAdminAuthenticated === 'function' && isAdminAuthenticated()) return;
       try {
         _call({
           action: 'register_device',
@@ -197,6 +199,8 @@ var DeviceGuard = (function() {
      */
     checkDevice: function(email) {
       if (!email || _checking) return;
+      // Admins EXENTOS: nunca se les muestra "Sesión Cerrada" ni se les patea (Mario 6-25).
+      if (typeof isAdminAuthenticated === 'function' && isAdminAuthenticated()) return;
       _checking = true;
       try {
         _call({
