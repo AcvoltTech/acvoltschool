@@ -547,26 +547,60 @@ function autoVerifyZoomIfLoggedIn() {
     showZoomRecordings();
     return true;
   }
-  // FIX 2026-06-25 (fuga de dinero): antes CUALQUIER usuario logueado entraba
-  // ("tier guard handled by navigation.js" — pero en la WEB el paywall pasa de largo),
-  // así que usuarios GRATIS veían las clases de paga. Ahora el auto-acceso EXIGE estar
-  // inscrito: en un grupo de estudiante O en la lista verificada (mismo criterio que el
-  // formulario manual). Si está logueado pero NO inscrito → cae al gate de verificación.
+  // ACCESO POR STRIPE (Mario 2026-06-25): SOLO quien paga (suscripción activa) ve las grabaciones.
+  // Se valida EN VIVO contra Stripe con el email del usuario LOGUEADO (no uno tecleado = no spoof).
   if (typeof currentUser !== 'undefined' && currentUser && currentUser.email) {
-    var _em = String(currentUser.email).toLowerCase();
-    var _enrolled = (getStudentGroupsForEmail(_em).length > 0) ||
-      (getZoomVerified() || []).some(function (v) { return v && v.email && String(v.email).toLowerCase() === _em; });
-    if (_enrolled) {
-      var session = getZoomSession();
-      if (!session) {
-        setZoomSession({ name: currentUser.nombre || currentUser.email, email: currentUser.email, ts: Date.now() });
+    var _sess = getZoomSession();
+    if (_sess && _sess.access === true) { showZoomRecordings(); return true; } // ya verificado esta sesión
+    _zoomShowChecking();
+    _zoomCheckStripeAccess().then(function (ok) {
+      var ov = document.getElementById('zoomAccessOverlay'); if (ov) ov.remove();
+      if (ok) {
+        setZoomSession({ name: currentUser.nombre || currentUser.email, email: currentUser.email, ts: Date.now(), access: true });
+        showZoomRecordings();
+      } else {
+        _zoomShowNoAccess();
       }
-      showZoomRecordings();
-      return true;
-    }
-    return false; // logueado pero NO inscrito → muestra el gate (que lo bloquea)
+    }).catch(function () { var ov = document.getElementById('zoomAccessOverlay'); if (ov) ov.remove(); _zoomShowNoAccess(); });
+    return true; // manejado async — no mostrar el gate viejo
   }
   return false;
+}
+
+// ── Verificación de acceso por Stripe (suscripción activa) — Mario 2026-06-25 ──
+async function _zoomCheckStripeAccess() {
+  try {
+    var sbUrl = window.SUPABASE_URL || 'https://htklsowiyjwsjnacnvnr.supabase.co';
+    var sbKey = (typeof SUPABASE_KEY !== 'undefined' ? SUPABASE_KEY : '');
+    var tok = sbKey;
+    try { var s = await supabaseClient.auth.getSession(); if (s && s.data && s.data.session && s.data.session.access_token) tok = s.data.session.access_token; } catch (_) {}
+    var r = await fetch(sbUrl + '/functions/v1/school-access-check', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'apikey': sbKey, 'Authorization': 'Bearer ' + tok },
+      body: '{}'
+    });
+    var d = await r.json();
+    return !!(d && d.access);
+  } catch (_) { return false; }
+}
+function _zoomAccessOverlay(html) {
+  var ex = document.getElementById('zoomAccessOverlay'); if (ex) ex.remove();
+  var d = document.createElement('div'); d.id = 'zoomAccessOverlay';
+  d.style.cssText = 'position:fixed;inset:0;z-index:999998;background:rgba(8,12,24,.97);display:flex;align-items:center;justify-content:center;padding:24px;font-family:system-ui,-apple-system,sans-serif;';
+  d.innerHTML = '<div style="max-width:420px;text-align:center;color:#e7eefb;">' + html + '</div>';
+  document.body.appendChild(d);
+}
+function _zoomShowChecking() {
+  _zoomAccessOverlay('<div style="font-size:40px;">⏳</div><div style="font-size:16px;font-weight:700;margin-top:12px;">Verificando tu acceso…</div>');
+}
+function _zoomShowNoAccess() {
+  _zoomAccessOverlay(
+    '<div style="font-size:46px;">🔒</div>'
+    + '<div style="font-size:19px;font-weight:900;margin:12px 0 6px;color:#f4dca0;">Clases solo para estudiantes inscritos</div>'
+    + '<div style="font-size:14px;line-height:1.6;color:#cbd5e1;">Las clases grabadas son exclusivas de estudiantes con <b>suscripción activa</b>. Si ya pagas y ves esto, escríbele al instructor para revisar tu correo.</div>'
+    + '<a href="tel:+19096390448" style="display:inline-block;margin-top:18px;padding:12px 22px;background:#16a34a;color:#fff;border-radius:12px;font-weight:800;text-decoration:none;">📞 Hablar con la escuela</a>'
+    + '<button onclick="var o=document.getElementById(\'zoomAccessOverlay\');if(o)o.remove();if(typeof showScreen===\'function\')showScreen(\'dashboardScreen\');" style="display:block;width:100%;margin-top:10px;padding:11px;background:transparent;border:1px solid #2a4a78;color:#9fb6d6;border-radius:10px;font-weight:700;cursor:pointer;">Volver</button>'
+  );
 }
 
 function showZoomRecordings() {
