@@ -547,14 +547,24 @@ function autoVerifyZoomIfLoggedIn() {
     showZoomRecordings();
     return true;
   }
-  // Non-admin: any authenticated user gets access (tier guard already handled by navigation.js)
+  // FIX 2026-06-25 (fuga de dinero): antes CUALQUIER usuario logueado entraba
+  // ("tier guard handled by navigation.js" — pero en la WEB el paywall pasa de largo),
+  // así que usuarios GRATIS veían las clases de paga. Ahora el auto-acceso EXIGE estar
+  // inscrito: en un grupo de estudiante O en la lista verificada (mismo criterio que el
+  // formulario manual). Si está logueado pero NO inscrito → cae al gate de verificación.
   if (typeof currentUser !== 'undefined' && currentUser && currentUser.email) {
-    var session = getZoomSession();
-    if (!session) {
-      setZoomSession({ name: currentUser.nombre || currentUser.email, email: currentUser.email, ts: Date.now() });
+    var _em = String(currentUser.email).toLowerCase();
+    var _enrolled = (getStudentGroupsForEmail(_em).length > 0) ||
+      (getZoomVerified() || []).some(function (v) { return v && v.email && String(v.email).toLowerCase() === _em; });
+    if (_enrolled) {
+      var session = getZoomSession();
+      if (!session) {
+        setZoomSession({ name: currentUser.nombre || currentUser.email, email: currentUser.email, ts: Date.now() });
+      }
+      showZoomRecordings();
+      return true;
     }
-    showZoomRecordings();
-    return true;
+    return false; // logueado pero NO inscrito → muestra el gate (que lo bloquea)
   }
   return false;
 }
