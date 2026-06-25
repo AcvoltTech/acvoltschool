@@ -40,7 +40,10 @@
         var res = await fetch(sbUrl + '/functions/v1/get-stripe-data', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'apikey': sbKey, 'Authorization': 'Bearer ' + (await window.getAdminBearer()) },
-          body: JSON.stringify({ action: 'dashboard', admin_email: adminEmail })
+          // FIX 2026-06-25: NO mandamos admin_email — verifyAdminAuth da 403 si no coincide con
+          // el email del JWT (tu sesion es gmail pero el panel guardaba hotmail). La funcion te
+          // identifica por tu JWT; ambos correos son master. (get-stripe-data solo lo usaba para ese check.)
+          body: JSON.stringify({ action: 'dashboard' })
         });
         if (!res.ok) throw new Error('HTTP ' + res.status);
         var data = await res.json();
@@ -94,7 +97,8 @@
         var res = await fetch(sbUrl + '/functions/v1/admin-data', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'apikey': sbKey, 'Authorization': 'Bearer ' + (await window.getAdminBearer()) },
-          body: JSON.stringify({ admin_email: adminEmail, action: 'memberships' }),
+          // FIX 2026-06-25: sin admin_email (evita el 403 por mismatch gmail/hotmail; te identifica por JWT).
+          body: JSON.stringify({ action: 'memberships' }),
         });
         var resData = await res.json();
         if (resData.error) { console.error('[Finanzas] Edge function error:', resData.error); }
