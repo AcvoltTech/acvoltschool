@@ -334,7 +334,7 @@ async function registerPayment(){
     var _adminEmail = sessionStorage.getItem('admin_email') || localStorage.getItem('tecnico_email') || '';
     var _resp = await fetch(_sbUrl + '/functions/v1/admin-payments', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'apikey': _sbKey, 'Authorization': 'Bearer ' + _sbKey },
+      headers: { 'Content-Type': 'application/json', 'apikey': _sbKey, 'Authorization': 'Bearer ' + (await window.getAdminBearer()) },
       body: JSON.stringify({
         action: 'admin_insert',
         admin_email: _adminEmail,
@@ -371,7 +371,7 @@ async function loadAdminPayments(){
     var _adminEmail = sessionStorage.getItem('admin_email') || localStorage.getItem('tecnico_email') || '';
     var _resp = await fetch(_sbUrl + '/functions/v1/admin-payments', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'apikey': _sbKey, 'Authorization': 'Bearer ' + _sbKey },
+      headers: { 'Content-Type': 'application/json', 'apikey': _sbKey, 'Authorization': 'Bearer ' + (await window.getAdminBearer()) },
       body: JSON.stringify({ action: 'admin_list', admin_email: _adminEmail, search_email: searchEmail.trim() }),
     });
     var res = await _resp.json();
@@ -411,7 +411,7 @@ async function deletePayment(id){
     var _adminEmail = sessionStorage.getItem('admin_email') || localStorage.getItem('tecnico_email') || '';
     var _resp = await fetch(_sbUrl + '/functions/v1/admin-payments', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'apikey': _sbKey, 'Authorization': 'Bearer ' + _sbKey },
+      headers: { 'Content-Type': 'application/json', 'apikey': _sbKey, 'Authorization': 'Bearer ' + (await window.getAdminBearer()) },
       body: JSON.stringify({ action: 'admin_delete', admin_email: _adminEmail, id: id }),
     });
     var res = await _resp.json();
@@ -478,7 +478,7 @@ async function loadStudentPaymentsLegacy(email){
     var _adminEmail = sessionStorage.getItem('admin_email') || localStorage.getItem('tecnico_email') || '';
     var _resp = await fetch(_sbUrl + '/functions/v1/admin-payments', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'apikey': _sbKey, 'Authorization': 'Bearer ' + _sbKey },
+      headers: { 'Content-Type': 'application/json', 'apikey': _sbKey, 'Authorization': 'Bearer ' + (await window.getAdminBearer()) },
       body: JSON.stringify({ action: 'admin_get_for_student', admin_email: _adminEmail, student_email: email }),
     });
     var res = await _resp.json();

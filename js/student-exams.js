@@ -1035,7 +1035,7 @@
         const _sbKey = (typeof SUPABASE_KEY !== 'undefined' ? SUPABASE_KEY : (window.SUPABASE_KEY || ''));
         const _resp = await fetch(_sbUrl + '/functions/v1/admin-payments', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'apikey': _sbKey, 'Authorization': 'Bearer ' + _sbKey },
+          headers: { 'Content-Type': 'application/json', 'apikey': _sbKey, 'Authorization': 'Bearer ' + (await window.getAdminBearer()) },
           body: JSON.stringify({ action: 'student_my_payments', student_email: email }),
         });
         const _json = await _resp.json();

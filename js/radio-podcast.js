@@ -400,7 +400,7 @@
           headers: {
             'Content-Type': 'application/json',
             'apikey': SUPABASE_KEY,
-            'Authorization': 'Bearer ' + SUPABASE_KEY
+            'Authorization': 'Bearer ' + (await window.getAdminBearer())
           },
           body: JSON.stringify({ action: 'check_subscription', email: email })
         });

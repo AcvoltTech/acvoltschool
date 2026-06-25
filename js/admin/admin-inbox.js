@@ -109,7 +109,7 @@
             const _adminEmail = sessionStorage.getItem('admin_email') || localStorage.getItem('tecnico_email') || '';
             const _resp = await fetch(_sbUrl + '/functions/v1/admin-payments', {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json', 'apikey': _sbKey, 'Authorization': 'Bearer ' + _sbKey },
+              headers: { 'Content-Type': 'application/json', 'apikey': _sbKey, 'Authorization': 'Bearer ' + (await window.getAdminBearer()) },
               body: JSON.stringify({ action: 'admin_list_intents', admin_email: _adminEmail }),
             });
             const _json = await _resp.json();

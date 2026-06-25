@@ -24,7 +24,7 @@
       headers: {
         'Content-Type': 'application/json',
         'apikey': k,
-        'Authorization': 'Bearer ' + k,
+        'Authorization': 'Bearer ' + (await window.getAdminBearer()),
       },
       body: JSON.stringify(body || {}),
     });

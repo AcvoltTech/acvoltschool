@@ -1101,7 +1101,7 @@
       try {
         var response = await fetch(SUPABASE_URL + '/functions/v1/get-stripe-data', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY },
+          headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + (await window.getAdminBearer()) },
           body: JSON.stringify({ action: 'dashboard', admin_email: getAdminEmail() })
         });
         if (!response.ok) throw new Error('HTTP ' + response.status);
@@ -1643,7 +1643,7 @@
           } else {
             var response = await fetch(SUPABASE_URL + '/functions/v1/get-stripe-data', {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY },
+              headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + (await window.getAdminBearer()) },
               body: JSON.stringify({ action: 'dashboard', admin_email: getAdminEmail() })
             });
             if (response.ok) {
@@ -2338,7 +2338,7 @@
         if (!_ssDashLoaded || _ssDashData.length === 0) {
           var response = await fetch(SUPABASE_URL + '/functions/v1/get-stripe-data', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY },
+            headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + (await window.getAdminBearer()) },
             body: JSON.stringify({ action: 'dashboard', admin_email: getAdminEmail() })
           });
           if (!response.ok) throw new Error('HTTP ' + response.status);

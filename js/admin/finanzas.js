@@ -39,7 +39,7 @@
         var adminEmail = sessionStorage.getItem('admin_email') || localStorage.getItem('tecnico_email') || '';
         var res = await fetch(sbUrl + '/functions/v1/get-stripe-data', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'apikey': sbKey, 'Authorization': 'Bearer ' + sbKey },
+          headers: { 'Content-Type': 'application/json', 'apikey': sbKey, 'Authorization': 'Bearer ' + (await window.getAdminBearer()) },
           body: JSON.stringify({ action: 'dashboard', admin_email: adminEmail })
         });
         if (!res.ok) throw new Error('HTTP ' + res.status);
@@ -93,7 +93,7 @@
         var sbKey = typeof SUPABASE_KEY !== 'undefined' ? SUPABASE_KEY : '';
         var res = await fetch(sbUrl + '/functions/v1/admin-data', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'apikey': sbKey, 'Authorization': 'Bearer ' + sbKey },
+          headers: { 'Content-Type': 'application/json', 'apikey': sbKey, 'Authorization': 'Bearer ' + (await window.getAdminBearer()) },
           body: JSON.stringify({ admin_email: adminEmail, action: 'memberships' }),
         });
         var resData = await res.json();

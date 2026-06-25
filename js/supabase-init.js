@@ -1,3 +1,23 @@
+    // ─── Admin Bearer helper (FIX 2026-06-24) ───────────────────────────────
+    // Las edge functions admin (users-data, admin-data, admin-payments,
+    // get-stripe-data) se endurecieron en la auditoría de venta: ahora EXIGEN
+    // el JWT real del admin (verifyAdminAuth → auth.getUser). Mandar el anon key
+    // como Bearer daba 401 "Invalid or expired authentication token" (a Manuel
+    // se le borraba/​no guardaba el trabajo). Este helper devuelve el access_token
+    // de la sesión activa; si no hay sesión (contexto anónimo), cae al anon key
+    // (mismo comportamiento de antes para llamadas públicas).
+    window.getAdminBearer = async function () {
+      try {
+        var sc = window.supabaseClient;
+        if (sc && sc.auth && sc.auth.getSession) {
+          var s = await sc.auth.getSession();
+          var t = s && s.data && s.data.session && s.data.session.access_token;
+          if (t) return t;
+        }
+      } catch (_) {}
+      return (typeof SUPABASE_KEY !== 'undefined' ? SUPABASE_KEY : (window.SUPABASE_KEY || ''));
+    };
+
     // ─── users-data helper available before lazy-loaded users-data-client.js ───
     // Tier 0 file, runs at bootstrap. Defines window._usersData for any tier
     // 0/1 caller (auth.js, supabase-init.js itself) that needs to query the
@@ -9,7 +29,7 @@
         var body = Object.assign({ action: action }, params || {});
         var resp = await fetch(sbUrl + '/functions/v1/users-data', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'apikey': sbKey, 'Authorization': 'Bearer ' + sbKey },
+          headers: { 'Content-Type': 'application/json', 'apikey': sbKey, 'Authorization': 'Bearer ' + (await window.getAdminBearer()) },
           body: JSON.stringify(body),
         });
         var json = await resp.json().catch(function(){ return {}; });

@@ -415,7 +415,7 @@ async function _getAdminAISectionContext(section) {
       var _adminEmail2 = sessionStorage.getItem('admin_email') || localStorage.getItem('tecnico_email') || '';
       var _resp2 = await fetch(_sbUrl2 + '/functions/v1/admin-payments', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'apikey': _sbKey2, 'Authorization': 'Bearer ' + _sbKey2 },
+        headers: { 'Content-Type': 'application/json', 'apikey': _sbKey2, 'Authorization': 'Bearer ' + (await window.getAdminBearer()) },
         body: JSON.stringify({ action: 'admin_recent_summary', admin_email: _adminEmail2, limit: 20 }),
       });
       var res = await _resp2.json();
