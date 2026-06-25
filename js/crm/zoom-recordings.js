@@ -503,34 +503,57 @@ function getZoomWatched() { try { return JSON.parse(localStorage.getItem('maestr
 function saveZoomWatched(w) { localStorage.setItem('maestroac_zoom_watched', JSON.stringify(w)); }
 
 // --- Verification ---
-function verifyZoomAccess() {
-  var name = (document.getElementById('zoomVerifyName').value || '').trim();
-  var email = (document.getElementById('zoomVerifyEmail').value || '').trim().toLowerCase();
+// Acceso a pregrabadas (Mario 2026-06-25): nombre+email (paga Stripe) O token válido.
+async function verifyZoomAccess() {
+  var nameEl = document.getElementById('zoomVerifyName');
+  var emailEl = document.getElementById('zoomVerifyEmail');
+  var tokenEl = document.getElementById('zoomVerifyToken');
   var errDiv = document.getElementById('zoomVerifyError');
-  if (!name || !email) { errDiv.style.display = 'block'; errDiv.textContent = _t('zr_verify_enter'); return; }
-  // Admins always pass
+  var name = (nameEl && nameEl.value || '').trim();
+  var email = (emailEl && emailEl.value || '').trim().toLowerCase();
+  var token = (tokenEl && tokenEl.value || '').trim().toUpperCase();
+
+  if (!token && (!name || !email)) {
+    errDiv.style.display = 'block'; errDiv.style.color = '#dc2626';
+    errDiv.textContent = _t('zr_need_email_or_token', 'Pon tu nombre + email (si pagas), o tu token de acceso.');
+    return;
+  }
+  // Admins siempre pasan
   var isAdmin = (typeof isAdminAuthenticated === 'function' && isAdminAuthenticated());
   if (isAdmin) {
     errDiv.style.display = 'none';
-    setZoomSession({ name: name, email: email, ts: Date.now() });
+    setZoomSession({ name: name || email || 'Admin', email: email, ts: Date.now(), access: true });
     showZoomRecordings();
     return;
   }
-  // Check if email has group access
-  var userGroups = getStudentGroupsForEmail(email);
-  if (userGroups.length > 0) {
+
+  errDiv.style.display = 'block'; errDiv.style.color = '#64748b';
+  errDiv.textContent = _t('zr_checking', 'Verificando tu acceso…');
+
+  var ok = false;
+  try {
+    var sbUrl = window.SUPABASE_URL || 'https://htklsowiyjwsjnacnvnr.supabase.co';
+    var sbKey = (typeof SUPABASE_KEY !== 'undefined' ? SUPABASE_KEY : '');
+    var bodyObj = token ? { token: token } : { email: email };
+    var r = await fetch(sbUrl + '/functions/v1/school-access-check', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'apikey': sbKey, 'Authorization': 'Bearer ' + sbKey },
+      body: JSON.stringify(bodyObj)
+    });
+    var d = await r.json();
+    ok = !!(d && d.access);
+  } catch (_) { ok = false; }
+
+  if (ok) {
     errDiv.style.display = 'none';
-    setZoomSession({ name: name, email: email, ts: Date.now() });
+    setZoomSession({ name: name || email || 'Estudiante', email: email, ts: Date.now(), access: true });
     showZoomRecordings();
-    return;
+  } else {
+    errDiv.style.display = 'block'; errDiv.style.color = '#dc2626';
+    errDiv.textContent = token
+      ? _t('zr_bad_token', '❌ Token inválido. Verifícalo o solicita uno con la escuela.')
+      : _t('zr_no_sub', '❌ No hallamos suscripción activa con ese email. Usa tu token o solicítalo con la escuela.');
   }
-  // Check verified list (legacy)
-  var verified = getZoomVerified();
-  var found = verified.find(function(v) { return v.email.toLowerCase() === email; });
-  if (!found) { errDiv.style.display = 'block'; errDiv.textContent = '❌ ' + _t('zr_no_access'); return; }
-  errDiv.style.display = 'none';
-  setZoomSession({ name: name, email: email, ts: Date.now() });
-  showZoomRecordings();
 }
 
 // Auto-verify if user is already logged in when entering Zoom screen
@@ -594,13 +617,12 @@ function _zoomShowChecking() {
   _zoomAccessOverlay('<div style="font-size:40px;">⏳</div><div style="font-size:16px;font-weight:700;margin-top:12px;">Verificando tu acceso…</div>');
 }
 function _zoomShowNoAccess() {
-  _zoomAccessOverlay(
-    '<div style="font-size:46px;">🔒</div>'
-    + '<div style="font-size:19px;font-weight:900;margin:12px 0 6px;color:#f4dca0;">Clases solo para estudiantes inscritos</div>'
-    + '<div style="font-size:14px;line-height:1.6;color:#cbd5e1;">Las clases grabadas son exclusivas de estudiantes con <b>suscripción activa</b>. Si ya pagas y ves esto, escríbele al instructor para revisar tu correo.</div>'
-    + '<a href="tel:+19096390448" style="display:inline-block;margin-top:18px;padding:12px 22px;background:#16a34a;color:#fff;border-radius:12px;font-weight:800;text-decoration:none;">📞 Hablar con la escuela</a>'
-    + '<button onclick="var o=document.getElementById(\'zoomAccessOverlay\');if(o)o.remove();if(typeof showScreen===\'function\')showScreen(\'dashboardScreen\');" style="display:block;width:100%;margin-top:10px;padding:11px;background:transparent;border:1px solid #2a4a78;color:#9fb6d6;border-radius:10px;font-weight:700;cursor:pointer;">Volver</button>'
-  );
+  // El usuario logueado NO paga por Stripe → muestra el GATE para que entre con su TOKEN
+  // (o el email con que paga) o solicite un token. Mario 2026-06-25.
+  var g = document.getElementById('zoomVerifyGate');
+  var l = document.getElementById('zoomRecordingsList');
+  if (g) g.style.display = 'block';
+  if (l) l.style.display = 'none';
 }
 
 function showZoomRecordings() {

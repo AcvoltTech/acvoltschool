@@ -6393,7 +6393,7 @@ function closeMarioV2(){document.getElementById('marioV2Overlay').style.display=
         <div style="text-align:center;margin-bottom:20px;">
           <div style="font-size:50px;margin-bottom:10px;">🔐</div>
           <h2 style="color:#1e293b;margin-bottom:5px;" data-i18n="html_zoom_verify_title">Verificación de Técnico</h2>
-          <p style="color:#64748b;font-size:13px;" data-i18n="html_zoom_verify_subtitle">Ingresa tu nombre y email registrado para acceder a las clases grabadas</p>
+          <p style="color:#64748b;font-size:13px;" data-i18n="html_zoom_verify_subtitle">Para ver las clases grabadas: pon tu <b>nombre y email</b> (si pagas por Stripe) <b>o</b> tu <b>token de acceso</b>.</p>
         </div>
         <div class="card" style="padding:20px;">
           <div class="form-group" style="margin-bottom:15px;">
@@ -6401,12 +6401,17 @@ function closeMarioV2(){document.getElementById('marioV2Overlay').style.display=
             <input type="text" id="zoomVerifyName" data-i18n-placeholder="html_zoom_ph_name" placeholder="Tu nombre completo" autocomplete="name">
           </div>
           <div class="form-group" style="margin-bottom:15px;">
-            <label data-i18n="html_zoom_label_email">📧 Email registrado</label>
+            <label data-i18n="html_zoom_label_email">📧 Email registrado (si pagas por Stripe)</label>
             <input type="email" id="zoomVerifyEmail" data-i18n-placeholder="html_zoom_ph_email" placeholder="tu@email.com" autocomplete="email">
+          </div>
+          <div style="text-align:center;color:#94a3b8;font-size:12px;font-weight:800;letter-spacing:1px;margin:4px 0 14px;">— O —</div>
+          <div class="form-group" style="margin-bottom:15px;">
+            <label>🎟️ Token de acceso</label>
+            <input type="text" id="zoomVerifyToken" placeholder="ACV-XXXXXX" autocomplete="off" style="text-transform:uppercase;">
           </div>
           <div id="zoomVerifyError" style="display:none;background:#fef2f2;border:1px solid #fca5a5;color:#dc2626;padding:10px;border-radius:8px;font-size:13px;margin-bottom:15px;text-align:center;"></div>
           <button class="btn btn-primary" onclick="if(typeof verifyZoomAccess==='function'){verifyZoomAccess()}else{this.textContent=_t('html_loading_emoji','⏳ Cargando...');var b=this;window.addEventListener('maestro:loaded',function f(){if(typeof verifyZoomAccess==='function'){verifyZoomAccess();window.removeEventListener('maestro:loaded',f)}},false);setTimeout(function(){b.textContent=_t('html_verify_enter','🔓 Verificar y Entrar')},3000)}" style="padding:14px;font-size:16px;" data-i18n="html_zoom_verify_btn">🔓 Verificar y Entrar</button>
-          <p style="text-align:center;color:#94a3b8;font-size:11px;margin-top:12px;" data-i18n="html_zoom_no_access">¿No tienes acceso? Contacta a Maestro Mario para registrarte</p>
+          <p style="text-align:center;color:#94a3b8;font-size:12px;margin-top:14px;" data-i18n="html_zoom_no_access">¿No tienes token ni suscripción? <a href="tel:+19096390448" style="color:#2D8CFF;font-weight:700;text-decoration:none;">📞 Solicita tu token con la escuela</a></p>
         </div>
       </div>
 

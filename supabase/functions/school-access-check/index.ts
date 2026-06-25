@@ -58,13 +58,24 @@ serve(async (req) => {
     const STRIPE_KEY = Deno.env.get("STRIPE_SECRET_KEY");
     const sb = createClient(SB_URL, SB_SR);
 
-    // ── Identifica al usuario por su JWT (solo puede checar SU propio acceso) ──
+    const body = await req.json().catch(() => ({} as any));
+    const provEmail = String(body?.email || "").toLowerCase().trim();
+    const portalToken = String(body?.token || "").toUpperCase().trim();
+
+    // ── CAMINO TOKEN: un token válido del portal = acceso (el token ES la credencial) ──
+    if (portalToken) {
+      const { data: st } = await sb.from("portal_students").select("id").eq("token", portalToken).maybeSingle();
+      if (st) return new Response(JSON.stringify({ access: true, reason: "token" }), { status: 200, headers });
+      // token inválido → cae a los demás caminos (puede que también haya email)
+    }
+
+    // ── Identidad por email: JWT (más seguro) o el correo tecleado (nombre+email) ──
+    let email = "";
     const authHeader = req.headers.get("authorization") || "";
-    const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : "";
-    if (!token) return new Response(JSON.stringify({ access: false, reason: "no_token" }), { status: 200, headers });
-    const { data: u } = await sb.auth.getUser(token);
-    const email = (u?.user?.email || "").toLowerCase().trim();
-    if (!email) return new Response(JSON.stringify({ access: false, reason: "no_user" }), { status: 200, headers });
+    const jwt = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : "";
+    if (jwt) { try { const { data: u } = await sb.auth.getUser(jwt); email = (u?.user?.email || "").toLowerCase().trim(); } catch (_) {} }
+    if (!email) email = provEmail;
+    if (!email) return new Response(JSON.stringify({ access: false, reason: portalToken ? "bad_token" : "no_id" }), { status: 200, headers });
 
     // ── Admins SIEMPRE pasan ──
     const { data: staff } = await sb.from("admin_staff").select("email").eq("email", email).eq("activo", true).limit(1);
