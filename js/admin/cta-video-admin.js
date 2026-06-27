@@ -23,11 +23,25 @@
   var STATE = { videos: [], social: {}, editingId: '' };
 
   function post(payload, cb) {
-    payload.admin_email = _adminEmail();
-    fetch(_sbUrl() + '/functions/v1/cta-video-save', {
-      method: 'POST', headers: { 'Content-Type': 'application/json', 'apikey': _sbKey(), 'Authorization': 'Bearer ' + _sbKey() },
-      body: JSON.stringify(payload)
-    }).then(function (r) { return r.json(); }).then(function (res) { cb(res, null); }, function (e) { cb(null, e); });
+    // FIX 2026-06-26: cta-video-save exige JWT real (verifyAdminAuth). Antes mandaba el anon key
+    // -> "Unauthorized" -> NO se podía cambiar el video. Ahora manda el token de sesión + el email
+    // del JWT (para que coincida y no de 403 por mismatch gmail/hotmail).
+    _getToken(function (token) {
+      function send(em) {
+        payload.admin_email = em || _adminEmail();
+        fetch(_sbUrl() + '/functions/v1/cta-video-save', {
+          method: 'POST', headers: { 'Content-Type': 'application/json', 'apikey': _sbKey(), 'Authorization': 'Bearer ' + token },
+          body: JSON.stringify(payload)
+        }).then(function (r) { return r.json(); }).then(function (res) { cb(res, null); }, function (e) { cb(null, e); });
+      }
+      try {
+        if (window.supabaseClient && supabaseClient.auth && supabaseClient.auth.getSession) {
+          supabaseClient.auth.getSession().then(function (s) {
+            send((s && s.data && s.data.session && s.data.session.user && s.data.session.user.email) || '');
+          }, function () { send(''); });
+        } else send('');
+      } catch (_) { send(''); }
+    });
   }
 
   // ── Form (add / edit a video) ──
