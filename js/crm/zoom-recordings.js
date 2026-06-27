@@ -570,22 +570,15 @@ function autoVerifyZoomIfLoggedIn() {
     showZoomRecordings();
     return true;
   }
-  // ACCESO POR STRIPE (Mario 2026-06-25): SOLO quien paga (suscripción activa) ve las grabaciones.
-  // Se valida EN VIVO contra Stripe con el email del usuario LOGUEADO (no uno tecleado = no spoof).
+  // REVERTIDO 2026-06-26: el candado de Stripe bloqueaba a estudiantes con token (no pagan Stripe).
+  // Vuelve a lo de antes: cualquier usuario logueado entra. (Estudiantes desbloqueados.)
   if (typeof currentUser !== 'undefined' && currentUser && currentUser.email) {
-    var _sess = getZoomSession();
-    if (_sess && _sess.access === true) { showZoomRecordings(); return true; } // ya verificado esta sesión
-    _zoomShowChecking();
-    _zoomCheckStripeAccess().then(function (ok) {
-      var ov = document.getElementById('zoomAccessOverlay'); if (ov) ov.remove();
-      if (ok) {
-        setZoomSession({ name: currentUser.nombre || currentUser.email, email: currentUser.email, ts: Date.now(), access: true });
-        showZoomRecordings();
-      } else {
-        _zoomShowNoAccess();
-      }
-    }).catch(function () { var ov = document.getElementById('zoomAccessOverlay'); if (ov) ov.remove(); _zoomShowNoAccess(); });
-    return true; // manejado async — no mostrar el gate viejo
+    var session = getZoomSession();
+    if (!session) {
+      setZoomSession({ name: currentUser.nombre || currentUser.email, email: currentUser.email, ts: Date.now() });
+    }
+    showZoomRecordings();
+    return true;
   }
   return false;
 }
