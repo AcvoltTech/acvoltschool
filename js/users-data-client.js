@@ -33,8 +33,49 @@
     if (!resp.ok && !json.error) json.error = 'HTTP ' + resp.status;
     return json;
   }
+  // admin_list solía capar en 1000 filas (default de PostgREST): pedir limit:5000 era
+  // mentira, la edge devolvía a lo mucho 1000 → el CRM sólo veía ~1000 de 7000+ técnicos
+  // (Mario 2026-07-12: "mis registros de usuarios no aparecen en el CRM"). Cuando el caller
+  // pide la lista COMPLETA (limit grande/ausente y sin offset propio), paginamos solo de
+  // 1000 en 1000 hasta vaciar y devolvemos TODO. Los que piden pocos (limit<2000) o ya
+  // paginan a mano (offset presente) NO se tocan — mismo shape { data: [...] }.
+  async function callAllPages(action, params) {
+    var PAGE = 1000;
+    var all = [];
+    var seen = Object.create(null);
+    var offset = 0;
+    var guard = 0;
+    while (guard++ < 100) { // tope de seguridad = 100k filas
+      var pageBody = Object.assign({ action: action, admin_email: adminEmail() }, params, { offset: offset, limit: PAGE });
+      var resp = await call(pageBody);
+      if (resp && resp.error) {
+        // Error en la 1ª página → propaga. En una página posterior → devuelve lo ya traído
+        // (mejor mostrar 6000 que romper toda la lista por una página que falló).
+        if (all.length === 0) return resp;
+        try { console.warn('[usersDataAdmin] paginado corto en offset', offset, resp.error); } catch (_) {}
+        break;
+      }
+      var batch = (resp && resp.data) || [];
+      var added = 0;
+      for (var i = 0; i < batch.length; i++) {
+        var row = batch[i];
+        // dedup por id/email — si la edge ignorara offset, added=0 en la 2ª página → corta.
+        var kk = row && (row.id != null ? 'i' + row.id : (row.email ? 'e' + String(row.email).toLowerCase() : null));
+        if (kk == null) { all.push(row); added++; continue; }
+        if (!seen[kk]) { seen[kk] = 1; all.push(row); added++; }
+      }
+      if (batch.length < PAGE) break;
+      if (added === 0) break;
+      offset += PAGE;
+    }
+    return { data: all, ok: true };
+  }
   window.usersDataAdmin = function(action, params) {
-    var body = Object.assign({ action: action, admin_email: adminEmail() }, params || {});
+    params = params || {};
+    var lim = params.limit;
+    var wantsAll = (action === 'admin_list') && (params.offset == null) && (lim == null || lim >= 1000);
+    if (wantsAll) return callAllPages(action, params);
+    var body = Object.assign({ action: action, admin_email: adminEmail() }, params);
     return call(body);
   };
   window.usersDataSelf = function(action, params) {

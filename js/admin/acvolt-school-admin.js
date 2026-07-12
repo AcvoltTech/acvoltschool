@@ -763,6 +763,13 @@ async function _ascSave(table, id, data) {
   });
   var result = await resp.json();
   if (!resp.ok) throw new Error(result.error || _t('adm_as_save_error', 'Error al guardar'));
+  // Mario 2026-07-11: el edge map-stream-uids SIEMPRE responde 200 aunque un update falle (guarda el
+  // error por fila en results[]). Antes esto MENTÍA "guardado" y el título se revertía (el cliente
+  // mandaba 'type' y la columna es 'lesson_type' → update tronaba en silencio). Ahora revisamos por-fila.
+  if (result && Array.isArray(result.results)) {
+    var _bad = result.results.filter(function (r) { return r && r.ok === false; });
+    if (_bad.length) throw new Error(_bad[0].error || _t('adm_as_save_error', 'Error al guardar'));
+  }
   return result;
 }
 
@@ -874,7 +881,7 @@ async function _ascSaveLesson() {
       description: document.getElementById('asc-ed-desc').value.trim(),
       stream_uid: document.getElementById('asc-ed-stream').value.trim() || null,
       video_filename: document.getElementById('asc-ed-filename').value.trim() || null,
-      type: parseInt(document.getElementById('asc-ed-type').value),
+      lesson_type: parseInt(document.getElementById('asc-ed-type').value),
       duration_hours: parseInt(document.getElementById('asc-ed-durh').value) || 0,
       duration_minutes: parseInt(document.getElementById('asc-ed-durm').value) || 0,
       status: parseInt(document.getElementById('asc-ed-status').value)
