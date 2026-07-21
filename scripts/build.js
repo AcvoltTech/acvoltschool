@@ -52,6 +52,7 @@ const TIER1_SCRIPTS = [
   'js/notifications.js',
   'js/welcome-back.js',
   'js/inline-late.js',
+  'js/web-access-gate.js',
 ];
 
 // Lazy-loaded scripts (individually minified, loaded by MaestroLoader)
