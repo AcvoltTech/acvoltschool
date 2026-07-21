@@ -10,6 +10,24 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # `pages deploy .` publica la carpeta ENTERA, así que sin esto quedaba accesible
+      # desde el navegador el código que no es del sitio — incluido el fuente de las edge
+      # functions (/supabase/functions/stripe-webhook/index.ts respondía de verdad).
+      # Nota: `.assetsignore` NO sirve aquí (es de Workers Assets, no de Pages) — se probó
+      # el 2026-07-20 y los archivos siguieron expuestos. Borrarlos antes del deploy sí
+      # funciona. Esto pasa SOLO en el checkout efímero del runner; el repo no se toca.
+      #
+      # Se quita solo lo que el navegador nunca pide (medido con Playwright sobre el sitio
+      # vivo: las 78 rutas cargadas caen todas en css/, js/, imágenes de la raíz y cdn-cgi/).
+      # NO tocar: css/ js/ *.html imágenes questions.js manifest.json .well-known/
+      # assetlinks.json (TWA de Android) _headers _redirects cloudflare-fallback/
+      - name: Quitar lo que no es parte del sitio
+        run: |
+          rm -rf supabase scripts tests .github
+          rm -f package.json package-lock.json playwright.config.js vitest.config.js .assetsignore
+          rm -f *.md
+          echo "Publicando:"; ls -A
+
       - name: Deploy to Cloudflare Pages
         uses: cloudflare/wrangler-action@v3
         with:
