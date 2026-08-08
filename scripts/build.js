@@ -52,6 +52,7 @@ const TIER1_SCRIPTS = [
   'js/notifications.js',
   'js/welcome-back.js',
   'js/inline-late.js',
+  'js/web-access-gate.js',
 ];
 
 // Lazy-loaded scripts (individually minified, loaded by MaestroLoader)
@@ -193,6 +194,14 @@ const STATIC_DIRS = [
   '.well-known',
   'cloudflare-fallback',
   'js/vendor',
+];
+
+// Scripts sueltos con <script src> propio en index.html que NO van en ningún tier
+// (cargan SIN defer a propósito) y por eso hay que copiarlos tal cual a dist/.
+// Si un archivo así falta aquí, CF sirve el fallback HTML → "Unexpected token '<'".
+// Ver [[feedback_standalone_scripts_must_be_in_build]].
+const STANDALONE_JS = [
+  'js/debug-overlay.js',   // reportero de errores en pantalla (iOS WKWebView), carga temprano
 ];
 
 // ── Utility Functions ──────────────────────────────────────────
@@ -489,6 +498,17 @@ function copyStaticAssets() {
     if (fs.existsSync(path.join(ROOT, dir))) {
       copyDir(dir);
       count++;
+    }
+  }
+
+  // Copy standalone <script src> files (no tier, no defer) — sin esto dist/ los
+  // sirve como HTML y el navegador truena con "Unexpected token '<'".
+  for (const rel of STANDALONE_JS) {
+    if (fs.existsSync(path.join(ROOT, rel))) {
+      copyFile(rel);
+      count++;
+    } else {
+      console.warn(`  ⚠️  STANDALONE_JS: no existe ${rel} — el <script src> quedará roto`);
     }
   }
 

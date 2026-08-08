@@ -45,12 +45,50 @@
     // variable: usersDataSelf". Expose them eagerly on window from tier 0
     // here so every code path has them available the moment Supabase init runs.
     window.usersDataSelf = window._usersData;
+    function _adminEmail() {
+      try { return sessionStorage.getItem('admin_email') || localStorage.getItem('tecnico_email') || ''; }
+      catch (_) { return ''; }
+    }
+    // admin_list capaba en 1000 filas (default de PostgREST): pedir limit:5000 era mentira,
+    // la edge devolvía a lo mucho 1000 → el CRM sólo veía ~1000 de 7000+ técnicos (Mario
+    // 2026-07-12: "mis registros de usuarios no aparecen en el CRM"). Cuando el caller pide
+    // la lista COMPLETA (limit grande/ausente, sin offset propio), paginamos solo de 1000 en
+    // 1000 hasta vaciar y devolvemos TODO. Los que piden un preview chico (ej. limit:10) o ya
+    // paginan a mano (offset presente) NO se tocan — mismo shape { data: [...] }. Va en tier0 (garantizado
+    // activo) además del helper lazy users-data-client.js.
+    async function _adminListAllPages(action, params) {
+      var PAGE = 1000, all = [], seen = Object.create(null), offset = 0, guard = 0;
+      while (guard++ < 100) {
+        var pageBody = Object.assign({ admin_email: _adminEmail() }, params, { offset: offset, limit: PAGE });
+        var resp = await window._usersData(action, pageBody);
+        if (resp && resp.error) {
+          if (all.length === 0) return resp;
+          try { console.warn('[usersDataAdmin] paginado corto en offset', offset, resp.error); } catch (_) {}
+          break;
+        }
+        var batch = (resp && resp.data) || [];
+        var added = 0;
+        for (var i = 0; i < batch.length; i++) {
+          var row = batch[i];
+          // dedup por id o email — RED DE SEGURIDAD: si la edge ignorara offset y repitiera
+          // la 1ª página, added=0 en la 2ª y cortamos (jamás duplicamos ni loopeamos 100 veces).
+          var kk = row && (row.id != null ? 'i' + row.id : (row.email ? 'e' + String(row.email).toLowerCase() : null));
+          if (kk == null) { all.push(row); added++; continue; }
+          if (!seen[kk]) { seen[kk] = 1; all.push(row); added++; }
+        }
+        if (batch.length < PAGE) break; // última página
+        if (added === 0) break;         // la edge no avanzó → no repetir
+        offset += PAGE;
+      }
+      return { data: all, ok: true };
+    }
     window.usersDataAdmin = function(action, params) {
-      var adminEmail = '';
-      try {
-        adminEmail = sessionStorage.getItem('admin_email') || localStorage.getItem('tecnico_email') || '';
-      } catch (_) {}
-      return window._usersData(action, Object.assign({ admin_email: adminEmail }, params || {}));
+      params = params || {};
+      var lim = params.limit;
+      if (action === 'admin_list' && params.offset == null && (lim == null || lim >= 1000)) {
+        return _adminListAllPages(action, params);
+      }
+      return window._usersData(action, Object.assign({ admin_email: _adminEmail() }, params));
     };
 
     function initSupabase() {
