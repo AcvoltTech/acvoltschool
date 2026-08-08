@@ -1001,6 +1001,84 @@ async function _crmLoadLastLiveClass() {
   } catch (e) { console.warn('[CRM] last live class', e.message || e); }
 }
 
+// 💳 Técnicos pagando EN LA APP (IAP: Apple + Play) — monitor en el dashboard. Mario 2026-07-26.
+// (Stripe es legado, se ignora a propósito.) analytics/memberships RLS cerrada → RPC SECURITY DEFINER.
+// 💰 Panel "Mi dinero". El MRR de la escuela viene de Stripe EN VIVO; el de la app se
+// calcula del PRODUCTO comprado (la columna `price` de memberships trae basura de
+// migraciones viejas —111, 99, 119— por eso NO se usa).
+var _dineroStripe = null, _dineroApp = null;
+function _crmFmtDinero(n) { return '$' + Number(n || 0).toLocaleString('en-US', { maximumFractionDigits: 0 }); }
+function _crmPintarDinero(stripe) {
+  if (stripe && stripe._src === 'stripe_live') {
+    _dineroStripe = { mrr: Number(stripe.mrr_real || 0), subs: Number(stripe.active_subs_real || 0),
+                      balance: Number(stripe.stripe_balance || 0), perdido: Number(stripe.failed_revenue || 0) };
+  }
+  var el;
+  if (_dineroStripe) {
+    el = document.getElementById('dineroStripe');    if (el) el.textContent = _crmFmtDinero(_dineroStripe.mrr);
+    el = document.getElementById('dineroStripeSub'); if (el) el.textContent = _dineroStripe.subs + ' suscriptores';
+    el = document.getElementById('dineroBalance');   if (el) el.textContent = _crmFmtDinero(_dineroStripe.balance);
+    el = document.getElementById('dineroPerdido');   if (el) el.textContent = _crmFmtDinero(_dineroStripe.perdido);
+  }
+  if (_dineroApp) {
+    el = document.getElementById('dineroApp');    if (el) el.textContent = _crmFmtDinero(_dineroApp.mrr);
+    el = document.getElementById('dineroAppSub'); if (el) el.textContent = _dineroApp.subs + ' pagando · ' + _dineroApp.nuevas7 + ' nuevas en 7d';
+    el = document.getElementById('dineroDesglose');
+    if (el) el.innerHTML = 'Pagando: <b>' + _dineroApp.vip + '</b> VIP &nbsp;·&nbsp; <b>' +
+      _dineroApp.standard + '</b> Standard &nbsp;·&nbsp; <b>' + _dineroApp.estudio + '</b> Estudio' +
+      ' &nbsp;&nbsp;|&nbsp;&nbsp; <span style="color:#c9a14a;">🎁 ' + _dineroApp.enPrueba +
+      ' en prueba gratis — $' + _dineroApp.potencial.toLocaleString('en-US') + '/mes si convierten</span>';
+  }
+  // El total SOLO cuando ya llegaron los dos lados: un total a medias se ve como si el
+  // dinero hubiera bajado, y eso asusta sin razón.
+  if (_dineroStripe && _dineroApp) {
+    el = document.getElementById('dineroTotal');
+    if (el) el.textContent = _crmFmtDinero(_dineroStripe.mrr + _dineroApp.mrr);
+    el = document.getElementById('dineroActualizado');
+    if (el) el.textContent = 'actualizado ' + new Date().toLocaleTimeString('es-MX', { hour: 'numeric', minute: '2-digit' });
+  }
+}
+
+async function _crmLoadAppIap() {
+  try {
+    if (typeof supabaseClient === 'undefined' || !supabaseClient) return;
+    var res = await supabaseClient.rpc('dashboard_app_iap');
+    var d = (res && res.data) ? res.data : null;
+    if (!d) return;
+    function _set(id, v) { var e = document.getElementById(id); if (e) e.textContent = v; }
+    _set('appIapTotal', (d.activas_total || 0).toLocaleString());
+    _set('appIapIos', (d.ios || 0).toLocaleString());
+    _set('appIapAndroid', (d.android || 0).toLocaleString());
+    _set('appIapHoy', (d.hoy || 0).toLocaleString());
+    // Alimenta el panel de dinero (los pesos salen del RPC, ya calculados por producto).
+    // CORREGIDO (30-jul): antes se contaban las PRUEBAS GRATIS como dinero — el tablero
+    // decía $3,970/mes cuando RevenueCat marcaba $1,590. Ahora `mrr` es SOLO lo que ya paga.
+    _dineroApp = { mrr: Math.round((d.mrr_app_cents || 0) / 100), subs: d.pagando || 0,
+                   vip: d.n_vip || 0, standard: d.n_standard || 0, estudio: d.n_estudio || 0,
+                   nuevas7: d.nuevas_7d || 0,
+                   enPrueba: d.en_prueba || 0, potencial: Math.round((d.mrr_potencial_cents || 0) / 100) };
+    try { _crmPintarDinero(null); } catch (_p) {}
+    var dd = d.by_day || [];
+    var chart = document.getElementById('appIapChart');
+    if (chart && dd.length) {
+      var maxN = dd.reduce(function (m, x) { return Math.max(m, x.n || 0); }, 1);
+      var totalN = dd.reduce(function (a, x) { return a + (x.n || 0); }, 0);
+      chart.innerHTML = dd.map(function (x, i) {
+        var h = Math.round(((x.n || 0) / maxN) * 70) + 2;
+        var lbl = String(x.d || '').slice(5);
+        var isToday = (i === dd.length - 1);
+        var bg = isToday ? 'linear-gradient(180deg,#e0b34a,#c9a14a)' : 'linear-gradient(180deg,#34d399,#059669)';
+        return '<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;min-width:0;">' +
+          '<div style="font-size:9px;font-weight:800;color:' + (isToday ? '#b8860b' : '#059669') + ';">' + (x.n || 0) + '</div>' +
+          '<div title="' + lbl + ': ' + (x.n || 0) + '" style="width:100%;max-width:26px;height:' + h + 'px;background:' + bg + ';border-radius:4px 4px 0 0;"></div>' +
+          '<div style="font-size:8px;color:#94a3b8;white-space:nowrap;">' + lbl + '</div></div>';
+      }).join('');
+      var sub = document.getElementById('appIapSub');
+      if (sub) sub.textContent = (d.hoy || 0) + ' hoy · ' + totalN + ' en 14d · ' + (d.vip || 0) + ' VIP';
+    }
+  } catch (e) { console.warn('[CRM] app iap', e.message || e); }
+}
+
 // Dashboard stats via edge function (uses service role key to bypass RLS)
 async function _crmLoadDashboardStats() {
   var adminEmail = sessionStorage.getItem('admin_email') || localStorage.getItem('tecnico_email') || '';
@@ -1058,6 +1136,8 @@ async function _crmLoadDashboardStats() {
     } catch (_dd) {}
     // Analíticos de la última clase en vivo (fire-and-forget)
     try { _crmLoadLastLiveClass(); } catch (_llc) {}
+    // 💳 Monitor de técnicos pagando en la app (IAP) (fire-and-forget)
+    try { _crmLoadAppIap(); } catch (_pw) {}
     // Mario 2026-05-29: stats now prefer Stripe LIVE numbers over cached/membership
     // table values (which were inflated — memberships.activa=true had 333 ghost
     // entries vs Stripe's real 178 active subs).
@@ -1090,6 +1170,11 @@ async function _crmLoadDashboardStats() {
     if (el) el.textContent = (stripe._src === 'stripe_live')
       ? ('$' + (stripe.stripe_balance || 0).toLocaleString())
       : '—';
+
+    // 💰 MI DINERO (Mario 2026-07-30) — junta los dos canales en un solo número.
+    // Antes el MRR de Stripe estaba en una tarjeta, los de la app en otra sección más
+    // abajo, y el TOTAL en ningún lado: había que sumarlo de cabeza.
+    try { _crmPintarDinero(stripe); } catch (_md) {}
 
     // Reengagement campaign ROI — Mario 2026-05-29
     var reeng = data.reengagement || {};

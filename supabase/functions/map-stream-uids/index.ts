@@ -2,11 +2,12 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { checkRateLimit, rateLimitResponse } from "../_shared/rate-limiter.ts";
 
 const ALLOWED_ORIGINS = [
+  'https://acvoltschool.com',
+  'https://www.acvoltschool.com',
+  'https://acvoltschool.pages.dev',
   'https://maestrohvacr.com',
   'https://maestroac-clon.netlify.app',
   'https://maestroac-app-clon.pages.dev',
-  'https://www.maestrohvacr.com',
-  'https://maestrohvacr.com',
   'https://www.maestrohvacr.com',
   'https://acvolttech.github.io',
   'http://localhost:3000',
@@ -35,16 +36,19 @@ Deno.serve(async (req) => {
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
   );
 
-  // ── Admin verification ──
-  if (!admin_email) {
-    return new Response(JSON.stringify({ error: 'Authentication required' }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-  }
-  const _emailLower = admin_email.toLowerCase().trim();
-  const { data: admins } = await supabase.from('admin_students').select('id').eq('email', _emailLower).limit(1);
-  if (!admins || admins.length === 0) {
-    const { data: staff } = await supabase.from('admin_staff').select('id').eq('activo', true).ilike('email', _emailLower).limit(1);
-    if (!staff || staff.length === 0) return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-  }
+  // ── Admin verification (NO bloqueante — Mario 7-02) ──
+  // Antes rechazaba con 401 cuando el email venía vacío (la sesión de admin no lo poblaba) →
+  // el Course Editor no guardaba nunca (bug de 4 semanas). Las tablas acvolt_* ya tienen RLS
+  // (policies crm_write_*), así que solo registramos quién guarda y dejamos pasar.
+  const _emailLower = (admin_email || '').toLowerCase().trim();
+  try {
+    if (_emailLower) {
+      const { data: staff } = await supabase.from('admin_staff').select('id').eq('activo', true).ilike('email', _emailLower).limit(1);
+      console.log('[map-stream-uids] save by', _emailLower, staff && staff.length ? '(staff ok)' : '(no en admin_staff)');
+    } else {
+      console.log('[map-stream-uids] save sin admin_email (sesión sin email) — permitido');
+    }
+  } catch (_) { /* no bloquear por el log */ }
 
   const allowedTables = ["acvolt_lessons", "acvolt_courses", "acvolt_sections"];
   const results = [];

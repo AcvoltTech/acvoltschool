@@ -415,7 +415,7 @@
 
     .cert-recipient { font-size: 16px; color: #666; margin-bottom: 10px; }
 
-    .cert-recipient-name { font-size: 32px; color: #16803c; font-weight: bold; border-bottom: 2px solid #16803c; display: inline-block; padding-bottom: 5px; margin-bottom: 20px; }
+    .cert-recipient-name { font-size: 32px; color: #16803c; font-weight: bold; border-bottom: 2px solid #16803c; display: inline-block; max-width: 90%; white-space: normal; overflow-wrap: break-word; word-break: break-word; padding-bottom: 5px; margin-bottom: 20px; }
 
     .cert-description { font-size: 14px; color: #555; line-height: 1.6; max-width: 600px; margin: 0 auto 25px; }
 

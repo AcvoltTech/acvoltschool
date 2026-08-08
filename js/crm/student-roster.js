@@ -276,12 +276,20 @@ async function loadStudentRoster() {
       if (!map[em]) {
         map[em] = { email: em, nombre: '', telefono: '', groups: [] };
       }
-      map[em].activa = m.activa;
-      map[em].plan_name = m.plan_name || '';
-      map[em].tipo = m.tipo || '';
-      map[em].amount = m.amount || 0;
-      map[em].student_status = m.student_status || null;
-      map[em].membership_row = m;
+      // FIX (Mario 2026-07-28): un estudiante puede tener VARIAS membresías (una vieja
+      // desactivada + la real activa). Antes "la última fila ganaba" → si la vieja (activa=false)
+      // se procesaba al final, marcaba "bloqueado" a quien SÍ paga. Ahora una fila inactiva NO
+      // sobreescribe una membresía ya activa (la activa gana + conserva sus detalles).
+      if (map[em].activa === true && m.activa !== true) {
+        // ya es activo por otra fila → ignorar esta fila vieja inactiva
+      } else {
+        map[em].activa = m.activa;
+        map[em].plan_name = m.plan_name || '';
+        map[em].tipo = m.tipo || '';
+        map[em].amount = m.amount || 0;
+        map[em].student_status = m.student_status || null;
+        map[em].membership_row = m;
+      }
     });
 
     groups.forEach(function(s) {

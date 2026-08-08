@@ -218,7 +218,7 @@
   }catch(_e){}
 })();
 
-var APP_VERSION = 'v6.33-chaka-tips-removed';
+var APP_VERSION = 'v6.39-dinero-sin-pruebas';
 (function(){
   var stored = localStorage.getItem('maestroac_app_version');
   if(stored && stored !== APP_VERSION){
@@ -286,7 +286,7 @@ var APP_VERSION = 'v6.33-chaka-tips-removed';
 // ── FORCE CACHE PURGE — nuke old caches so students don't have to reinstall ──
 // Runs once per cache version. Deletes stale caches quietly without reload loops.
 (function(){
-  var CURRENT_CACHE = 'maestrohvacr-v199';
+  var CURRENT_CACHE = 'maestrohvacr-v200';
   var PURGE_KEY = 'maestro_cache_purged_v';
   if(typeof caches==='undefined') return;
   if(localStorage.getItem(PURGE_KEY)===CURRENT_CACHE) return;
@@ -556,6 +556,45 @@ function closeMarioV2(){document.getElementById('marioV2Overlay').style.display=
         <div style="color:#FFFFFF;font-size:26px;font-weight:900;text-shadow:0 1px 3px rgba(0,0,0,0.55);">›</div>
       </div>
     </div>
+
+    <!-- 🔴 BANNER CLASE GRATIS EN VIVO → app (dashboard/logueados, Mario 2026-07-29). DENTRO de .app-inner (regla flex-row). IDs únicos, dismiss compartido con el del login. -->
+    <div id="freeLiveBannerDash" style="display:none; margin:12px 0 4px; border-radius:18px; overflow:hidden; box-shadow:0 12px 32px rgba(0,0,0,.45); border:1px solid rgba(201,161,74,.55); background:linear-gradient(135deg,#0f2342 0%,#183056 100%);">
+      <div style="padding:16px 16px 18px; position:relative;">
+        <button type="button" aria-label="Cerrar" onclick="try{document.getElementById('freeLiveBannerDash').style.display='none';sessionStorage.setItem('_flb_dismiss','1');}catch(e){}" style="position:absolute;top:6px;right:9px;background:transparent;border:none;color:rgba(255,255,255,.5);font-size:22px;line-height:1;cursor:pointer;padding:4px;">&times;</button>
+        <div style="display:inline-flex;align-items:center;gap:7px;background:#e11d2a;color:#fff;font-weight:800;font-size:11px;letter-spacing:1px;padding:5px 11px;border-radius:999px;margin-bottom:11px;">
+          <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#fff;animation:flbPulse 1.6s infinite;"></span>
+          <span id="flbBadgeD">EN VIVO · GRATIS</span>
+        </div>
+        <div id="flbTitleD" style="color:#fff;font-size:17px;font-weight:800;line-height:1.25;margin:0 0 5px;">Clase GRATIS · Mini Splits — 30 y 31 jul</div>
+        <div id="flbSubD" style="color:rgba(230,238,250,.9);font-size:13px;line-height:1.45;margin:0 0 14px;">Cálculo de carga (Manual J), selección (Manual S), instalación y arranque — con el Maestro, en vivo por la app.</div>
+        <a href="https://maestrohvacr.com/bajar" target="_blank" rel="noopener" style="display:block;text-align:center;background:linear-gradient(135deg,#c9a14a,#e0be6e);color:#0f2342;font-weight:900;font-size:15px;letter-spacing:.3px;padding:13px;border-radius:12px;text-decoration:none;box-shadow:0 6px 18px rgba(201,161,74,.45);"><span id="flbCtaD">📲 Entrar a la app →</span></a>
+      </div>
+    </div>
+    <script>
+    (function(){
+      try{
+        if(sessionStorage.getItem('_flb_dismiss')==='1') return;
+        var b=document.getElementById('freeLiveBannerDash'); if(!b) return;
+        var en=false;
+        try{ var l=(window._lang||localStorage.getItem('lang')||document.documentElement.lang||'es'); en=String(l).toLowerCase().indexOf('en')===0; }catch(e){}
+        var expired=false;
+        try{ expired=(new Date()).getTime() > new Date('2026-08-01T07:00:00Z').getTime(); }catch(e){}
+        var T={
+          badge: en?'LIVE · FREE':'EN VIVO · GRATIS',
+          title: expired ? (en?'FREE live classes with the Maestro':'Clases en vivo GRATIS con el Maestro')
+                         : (en?'FREE class · Mini Splits — Jul 30 & 31':'Clase GRATIS · Mini Splits — 30 y 31 jul'),
+          sub: expired ? (en?'Refrigerant charging, heat pumps, mini splits & airflow — live in the app.':'Carga de refrigerante, bombas de calor, mini splits y airflow — en vivo por la app.')
+                       : (en?'Load calc (Manual J), selection (Manual S), install & startup — with the Maestro, live in the app.':'Cálculo de carga (Manual J), selección (Manual S), instalación y arranque — con el Maestro, en vivo por la app.'),
+          cta: en?'📲 Open the app →':'📲 Entrar a la app →'
+        };
+        document.getElementById('flbBadgeD').textContent=T.badge;
+        document.getElementById('flbTitleD').textContent=T.title;
+        document.getElementById('flbSubD').textContent=T.sub;
+        document.getElementById('flbCtaD').textContent=T.cta;
+        b.style.display='block';
+      }catch(e){}
+    })();
+    </script>
 
     <!-- Streak Badge — fixed top-left opposite home button -->
     <div id="streakBadge" style="display:none;position:fixed;top:max(48px, env(safe-area-inset-top, 48px));left:16px;z-index:800;align-items:center;gap:5px;background:linear-gradient(135deg,#fef3c7,#fde68a);border:1px solid #f59e0b;border-radius:20px;padding:4px 12px;font-size:12px;font-weight:700;color:#92400e;box-shadow:0 4px 15px rgba(0,0,0,0.3);">
@@ -1123,6 +1162,46 @@ function closeMarioV2(){document.getElementById('marioV2Overlay').style.display=
       <!-- Content Section -->
       <div style="padding:0 16px 20px; margin-top:-20px; position:relative; z-index:2;">
 
+      <!-- 🔴 BANNER CLASE GRATIS EN VIVO → app móvil (Mario 2026-07-29). Self-contained, bilingüe, auto-evergreen tras 31-jul. -->
+      <div id="freeLiveBanner" style="display:none; margin:0 0 16px; border-radius:18px; overflow:hidden; box-shadow:0 12px 32px rgba(0,0,0,.45); border:1px solid rgba(201,161,74,.55); background:linear-gradient(135deg,#0f2342 0%,#183056 100%);">
+        <div style="padding:16px 16px 18px; position:relative;">
+          <button type="button" aria-label="Cerrar" onclick="try{document.getElementById('freeLiveBanner').style.display='none';sessionStorage.setItem('_flb_dismiss','1');}catch(e){}" style="position:absolute;top:6px;right:9px;background:transparent;border:none;color:rgba(255,255,255,.5);font-size:22px;line-height:1;cursor:pointer;padding:4px;">&times;</button>
+          <div style="display:inline-flex;align-items:center;gap:7px;background:#e11d2a;color:#fff;font-weight:800;font-size:11px;letter-spacing:1px;padding:5px 11px;border-radius:999px;margin-bottom:11px;">
+            <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#fff;animation:flbPulse 1.6s infinite;"></span>
+            <span id="flbBadge">EN VIVO · GRATIS</span>
+          </div>
+          <div id="flbTitle" style="color:#fff;font-size:17px;font-weight:800;line-height:1.25;margin:0 0 5px;">Clase GRATIS · Mini Splits — 30 y 31 jul</div>
+          <div id="flbSub" style="color:rgba(230,238,250,.9);font-size:13px;line-height:1.45;margin:0 0 14px;">Cálculo de carga (Manual J), selección (Manual S), instalación y arranque — con el Maestro, en vivo por la app.</div>
+          <a href="https://maestrohvacr.com/bajar" target="_blank" rel="noopener" style="display:block;text-align:center;background:linear-gradient(135deg,#c9a14a,#e0be6e);color:#0f2342;font-weight:900;font-size:15px;letter-spacing:.3px;padding:13px;border-radius:12px;text-decoration:none;box-shadow:0 6px 18px rgba(201,161,74,.45);"><span id="flbCta">📲 Entrar a la app →</span></a>
+        </div>
+      </div>
+      <style>@keyframes flbPulse{0%{box-shadow:0 0 0 0 rgba(255,255,255,.65)}70%{box-shadow:0 0 0 8px rgba(255,255,255,0)}100%{box-shadow:0 0 0 0 rgba(255,255,255,0)}}</style>
+      <script>
+      (function(){
+        try{
+          if(sessionStorage.getItem('_flb_dismiss')==='1') return;
+          var b=document.getElementById('freeLiveBanner'); if(!b) return;
+          var en=false;
+          try{ var l=(window._lang||localStorage.getItem('lang')||document.documentElement.lang||'es'); en=String(l).toLowerCase().indexOf('en')===0; }catch(e){}
+          var expired=false;
+          try{ expired=(new Date()).getTime() > new Date('2026-08-01T07:00:00Z').getTime(); }catch(e){}
+          var T={
+            badge: en?'LIVE · FREE':'EN VIVO · GRATIS',
+            title: expired ? (en?'FREE live classes with the Maestro':'Clases en vivo GRATIS con el Maestro')
+                           : (en?'FREE class · Mini Splits — Jul 30 & 31':'Clase GRATIS · Mini Splits — 30 y 31 jul'),
+            sub: expired ? (en?'Refrigerant charging, heat pumps, mini splits & airflow — live in the app.':'Carga de refrigerante, bombas de calor, mini splits y airflow — en vivo por la app.')
+                         : (en?'Load calc (Manual J), selection (Manual S), install & startup — with the Maestro, live in the app.':'Cálculo de carga (Manual J), selección (Manual S), instalación y arranque — con el Maestro, en vivo por la app.'),
+            cta: en?'📲 Open the app →':'📲 Entrar a la app →'
+          };
+          document.getElementById('flbBadge').textContent=T.badge;
+          document.getElementById('flbTitle').textContent=T.title;
+          document.getElementById('flbSub').textContent=T.sub;
+          document.getElementById('flbCta').textContent=T.cta;
+          b.style.display='block';
+        }catch(e){}
+      })();
+      </script>
+
       <!-- YA TIENES CUENTA - Zona de Login -->
       <div class="card" style="border:1px solid rgba(255,255,255,0.08); background:rgba(255,255,255,0.04); border-radius:20px; padding:24px 18px; box-shadow:0 20px 60px rgba(0,0,0,0.45); backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px);">
         <div style="text-align:center; margin-bottom:18px;">
@@ -1676,6 +1755,46 @@ function closeMarioV2(){document.getElementById('marioV2Overlay').style.display=
         <!-- Main admin content (hidden in mobile portrait) -->
         <div class="admin-main-content">
 
+        <!-- ═══ 💰 MI DINERO (Mario 2026-07-30) ═══════════════════════════════════
+             Antes el dinero estaba partido: el MRR de Stripe en una tarjeta, los que
+             pagan en la app en otra sección más abajo, y en NINGÚN lado el total. Mario
+             tenía que sumarlo de cabeza. Esto lo junta y lo pone primero. -->
+        <div id="miDineroPanel" style="background:linear-gradient(135deg,#0f2342 0%,#1a3a63 100%);border-radius:16px;padding:20px 22px;margin-bottom:16px;color:#fff;box-shadow:0 10px 30px -12px rgba(15,35,66,.55);">
+          <div style="display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:8px;">
+            <div style="font-size:13px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:#c9a14a;">💰 Mi dinero · al mes</div>
+            <div id="dineroActualizado" style="font-size:11px;color:rgba(255,255,255,.55);"></div>
+          </div>
+          <div style="font-size:44px;font-weight:900;line-height:1.05;margin-top:6px;" id="dineroTotal">$0</div>
+          <div style="font-size:12px;color:rgba(255,255,255,.6);margin-top:2px;" id="dineroTotalSub">recurrente, cobrándose hoy</div>
+
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-top:18px;">
+            <div style="background:rgba(255,255,255,.07);border-radius:12px;padding:12px 14px;">
+              <div style="font-size:11px;color:rgba(255,255,255,.6);font-weight:700;">🏫 ESCUELA (Stripe)</div>
+              <div style="font-size:24px;font-weight:800;margin-top:2px;" id="dineroStripe">$0</div>
+              <div style="font-size:11px;color:rgba(255,255,255,.5);" id="dineroStripeSub">— suscriptores</div>
+            </div>
+            <div style="background:rgba(255,255,255,.07);border-radius:12px;padding:12px 14px;">
+              <div style="font-size:11px;color:rgba(255,255,255,.6);font-weight:700;">📱 APP (Apple + Play)</div>
+              <div style="font-size:24px;font-weight:800;margin-top:2px;color:#7ee2a8;" id="dineroApp">$0</div>
+              <div style="font-size:11px;color:rgba(255,255,255,.5);" id="dineroAppSub">— suscriptores</div>
+            </div>
+            <div style="background:rgba(255,255,255,.07);border-radius:12px;padding:12px 14px;">
+              <div style="font-size:11px;color:rgba(255,255,255,.6);font-weight:700;">🏦 LISTO EN STRIPE</div>
+              <div style="font-size:24px;font-weight:800;margin-top:2px;color:#c9a14a;" id="dineroBalance">$0</div>
+              <div style="font-size:11px;color:rgba(255,255,255,.5);">disponible para retirar</div>
+            </div>
+            <div style="background:rgba(255,255,255,.07);border-radius:12px;padding:12px 14px;">
+              <div style="font-size:11px;color:rgba(255,255,255,.6);font-weight:700;">💸 SE ESTÁ CAYENDO</div>
+              <div style="font-size:24px;font-weight:800;margin-top:2px;color:#fca5a5;" id="dineroPerdido">$0</div>
+              <div style="font-size:11px;color:rgba(255,255,255,.5);">cobros fallidos (60d)</div>
+            </div>
+          </div>
+
+          <div style="margin-top:14px;padding-top:12px;border-top:1px solid rgba(255,255,255,.12);font-size:12px;color:rgba(255,255,255,.75);" id="dineroDesglose">
+            Desglose de la app: cargando…
+          </div>
+        </div>
+
         <!-- Quick Stats — 9 tiles since 2026-05-29 (Stripe LIVE integration) -->
         <div class="admin-stats-grid" id="adminStatsGrid">
           <!-- Row 1: Users + Subs + MRR + Certs -->
@@ -1737,6 +1856,33 @@ function closeMarioV2(){document.getElementById('marioV2Overlay').style.display=
             <div style="font-size:12px;color:#64748b;" id="dailyDevicesSub">—</div>
           </div>
           <div id="dailyDevicesChart" style="display:flex;align-items:flex-end;gap:5px;height:96px;padding-top:18px;"></div>
+        </div>
+
+        <!-- ============ TÉCNICOS PAGANDO EN LA APP (IAP: Apple + Play) — Mario 2026-07-26 ============ -->
+        <div style="background:#fff;border:1px solid rgba(201,161,74,0.4);border-radius:14px;padding:16px;margin-bottom:14px;">
+          <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:12px;flex-wrap:wrap;gap:6px;">
+            <div style="font-size:14px;font-weight:800;color:#0f172a;">💳 Técnicos pagando en la app (Apple + Play) · nuevas por día (14d)</div>
+            <div style="font-size:12px;color:#64748b;" id="appIapSub">—</div>
+          </div>
+          <div style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap;">
+            <div style="flex:1;min-width:80px;text-align:center;background:#faf7ef;border-radius:10px;padding:10px;">
+              <div style="font-size:24px;font-weight:900;color:#0f2342;" id="appIapTotal">—</div>
+              <div style="font-size:11px;color:#64748b;">Pagando ahora</div>
+            </div>
+            <div style="flex:1;min-width:80px;text-align:center;background:#f8fafc;border-radius:10px;padding:10px;">
+              <div style="font-size:24px;font-weight:900;color:#0f2342;" id="appIapIos">—</div>
+              <div style="font-size:11px;color:#64748b;">🍎 iOS</div>
+            </div>
+            <div style="flex:1;min-width:80px;text-align:center;background:#f8fafc;border-radius:10px;padding:10px;">
+              <div style="font-size:24px;font-weight:900;color:#0f2342;" id="appIapAndroid">—</div>
+              <div style="font-size:11px;color:#64748b;">🤖 Android</div>
+            </div>
+            <div style="flex:1;min-width:80px;text-align:center;background:#ecfdf5;border-radius:10px;padding:10px;">
+              <div style="font-size:24px;font-weight:900;color:#059669;" id="appIapHoy">—</div>
+              <div style="font-size:11px;color:#64748b;">Nuevas hoy</div>
+            </div>
+          </div>
+          <div id="appIapChart" style="display:flex;align-items:flex-end;gap:5px;height:96px;padding-top:18px;"></div>
         </div>
 
         <!-- ============ ÚLTIMA CLASE EN VIVO (analíticos) — Mario 2026-06-05 ============ -->
@@ -7264,12 +7410,11 @@ if (typeof window._addTranslations === 'function') {
 }
 </script>
 <script src="js/error-tracking.js?v=53"></script>
-<script src="js/debug-overlay.js?v=2"></script>
 <script src="js/logger.js?v=52"></script>
 <script src="js/utils.js?v=52"></script>
 <script src="js/haptics.js?v=1"></script>
-<script src="js/config.js?v=53"></script>
-<script src="js/lazy-loader.js?v=79"></script>
+<script src="js/config.js?v=54"></script>
+<script src="js/lazy-loader.js?v=82"></script>
 <script src="js/supabase-init.js?v=52"></script>
 
 <!-- Tier 1: Defer (core app shell, non-blocking parse) -->

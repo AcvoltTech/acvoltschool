@@ -885,11 +885,13 @@ function tvEditVideo(id) {
 }
 
 async function tvSaveEdit(id) {
-  var title = (document.getElementById('tvEditTitle').value || '').trim();
+  // Lectura SEGURA de campos: si falta un elemento en el DOM NO revienta el guardado (Mario 7-01).
+  var _val = function (elId) { var el = document.getElementById(elId); return el ? (el.value || '') : ''; };
+  var title = _val('tvEditTitle').trim();
   if (!title) { alert(_t('adm_tv_title_mandatory')); return; }
+  if (!id) { alert('⚠️ No se pudo identificar el video. Recarga la página (Ctrl+Shift+R), vuelve a abrir el video y guarda de nuevo.'); return; }
   var btn = document.getElementById('tvEditBtn');
-  btn.disabled = true;
-  btn.textContent = '⏳ ' + _t('adm_tv_saving');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ ' + _t('adm_tv_saving'); }
   try {
     // Collect reinforced areas from checkboxes
     var areaCbs = document.querySelectorAll('.tvEditAreaCb:checked');
@@ -898,29 +900,41 @@ async function tvSaveEdit(id) {
 
     var upd = {
       title: title,
-      description: (document.getElementById('tvEditDesc').value || '').trim(),
-      category: document.getElementById('tvEditCategory').value || 'general',
-      required_tier: document.getElementById('tvEditTier').value || 'basico',
-      sort_order: parseInt(document.getElementById('tvEditOrder').value) || 0,
-      transcript: (document.getElementById('tvEditTranscript').value || '').trim() || null,
-      learning_objectives: (document.getElementById('tvEditObjectives').value || '').trim() || null,
-      target_audience: (document.getElementById('tvEditAudience').value || '').trim() || null,
+      description: _val('tvEditDesc').trim(),
+      category: _val('tvEditCategory') || 'general',
+      required_tier: _val('tvEditTier') || 'basico',
+      sort_order: parseInt(_val('tvEditOrder'), 10) || 0,
+      transcript: _val('tvEditTranscript').trim() || null,
+      learning_objectives: _val('tvEditObjectives').trim() || null,
+      target_audience: _val('tvEditAudience').trim() || null,
       reinforced_areas: areas,
-      quiz_passing_score: parseInt(document.getElementById('tvEditPassingScore').value) || 70
+      quiz_passing_score: parseInt(_val('tvEditPassingScore'), 10) || 70
     };
     // Save quiz edits if editor was opened
     var editedQuiz = _tvCollectQuizFromEditor();
     if (editedQuiz !== null) {
       upd.quiz_questions = editedQuiz;
     }
-    var res = await supabaseClient.from('tutorial_videos').update(upd).eq('id', id);
-    if (res.error) throw res.error;
+    // Guardar Y CONFIRMAR que sí escribió una fila. Antes: update() sin .select() respondía
+    // 200 con 0 filas y SIN error → mentía "guardado" y al recargar revertía (bug de Manuel). Mario 7-01.
+    // Guardar por EDGE con service-role (salta RLS/sesión/rol). Mario 7-01: arregla el "se revierte".
+    var _sbUrl = (window.SUPABASE_URL || (typeof supabaseClient !== 'undefined' && supabaseClient.supabaseUrl) || 'https://htklsowiyjwsjnacnvnr.supabase.co');
+    var _sbKey = (window.SUPABASE_KEY || (typeof SUPABASE_KEY !== 'undefined' ? SUPABASE_KEY : ''));
+    var _resp = await fetch(_sbUrl + '/functions/v1/tutorial-video-save', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'apikey': _sbKey, 'Authorization': 'Bearer ' + _sbKey },
+      body: JSON.stringify({ id: id, admin_email: (typeof getAdminEmail === 'function' ? getAdminEmail() : ''), updates: upd })
+    });
+    var _out = await _resp.json().catch(function () { return {}; });
+    if (!_resp.ok || _out.error) throw new Error(_out.error || ('No se guardó (HTTP ' + _resp.status + ')'));
+    var _savedWords = upd.transcript ? upd.transcript.split(/\s+/).length : 0;
+    var okMsg = '✅ Guardado' + (_savedWords ? (' — ' + _savedWords + ' palabras de transcripción') : '');
+    try { if (window.showToast) window.showToast(okMsg, 'success'); else alert(okMsg); } catch(_) { alert(okMsg); }
     tvCloseModal();
     tvLoadVideos();
   } catch(e) {
-    alert(_t('adm_tv_err_save') + e.message);
-    btn.disabled = false;
-    btn.textContent = '💾 ' + _t('adm_tv_save_changes');
+    alert('❌ ' + _t('adm_tv_err_save') + (e && e.message ? e.message : e));
+    if (btn) { btn.disabled = false; btn.textContent = '💾 ' + _t('adm_tv_save_changes'); }
   }
 }
 
@@ -973,7 +987,28 @@ async function tvTranscribeVideo(videoId) {
 
     var textarea = document.getElementById('tvEditTranscript');
     if (textarea) textarea.value = fullTranscript;
-    _tvTranscribeStatus(_t('adm_tv_trans_completed', '\u2705 Transcripci\u00F3n completada \u2014 {n} palabras').replace('{n}', fullTranscript.split(/\s+/).length), '#4ade80');
+
+    // \uD83D\uDCBE AUTO-GUARDAR el transcript en la base AL INSTANTE (Mario 7-01). Antes solo llenaba el
+    // campo y el editor cre\u00EDa que ya estaba guardado \u2192 al refrescar se perd\u00EDa. Ahora persiste solo,
+    // sin depender de que se d\u00E9 el segundo bot\u00F3n "Guardar Cambios".
+    var _words = fullTranscript.split(/\s+/).length;
+    var _autoSaved = false, _saveErr = '';
+    try {
+      var _u = (window.SUPABASE_URL || (typeof supabaseClient !== 'undefined' && supabaseClient.supabaseUrl) || 'https://htklsowiyjwsjnacnvnr.supabase.co');
+      var _k = (window.SUPABASE_KEY || (typeof SUPABASE_KEY !== 'undefined' ? SUPABASE_KEY : ''));
+      var _r = await fetch(_u + '/functions/v1/tutorial-video-save', {
+        method: 'POST', headers: { 'Content-Type': 'application/json', 'apikey': _k, 'Authorization': 'Bearer ' + _k },
+        body: JSON.stringify({ id: videoId, admin_email: (typeof getAdminEmail === 'function' ? getAdminEmail() : ''), updates: { transcript: fullTranscript } })
+      });
+      var _o = await _r.json().catch(function () { return {}; });
+      if (_r.ok && _o.ok) { _autoSaved = true; v.transcript = fullTranscript; } else { _saveErr = _o.error || ('HTTP ' + _r.status); }
+    } catch (se) { _saveErr = (se && se.message) || String(se); }
+
+    if (_autoSaved) {
+      _tvTranscribeStatus('\u2705 Transcripci\u00F3n GUARDADA autom\u00E1ticamente \u2014 ' + _words + ' palabras', '#4ade80');
+    } else {
+      _tvTranscribeStatus('\u26A0\uFE0F Transcrito (' + _words + ' palabras) pero NO se guard\u00F3 solo: ' + _saveErr + '. Da "\uD83D\uDCBE Guardar Cambios".', '#f59e0b');
+    }
 
     if (btn) { btn.disabled = false; btn.textContent = _t('adm_tv_transcribe_ai_btn', '\uD83C\uDF99\uFE0F Transcribir con IA'); }
 

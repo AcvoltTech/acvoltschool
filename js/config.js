@@ -41,7 +41,10 @@
     // ADMIN EMAIL HELPER — used by all edge function calls
     // ============================================
     function getAdminEmail() {
-      var email = sessionStorage.getItem('admin_email')
+      // 1º la sesión de admin (login del CRM la guarda aquí). Faltaba y por eso el edge recibía
+      // email VACÍO → "Authentication required" → el editor no guardaba (bug de 4 semanas). Mario 7-02.
+      var email = (typeof window !== 'undefined' && window._adminSession && window._adminSession.email ? window._adminSession.email : '')
+        || sessionStorage.getItem('admin_email')
         || (typeof currentUser !== 'undefined' && currentUser && currentUser.email ? currentUser.email : '')
         || localStorage.getItem('tecnico_email')
         || '';
