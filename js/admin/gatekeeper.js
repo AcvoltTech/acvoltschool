@@ -252,7 +252,7 @@ async function loadGatekeeperData() {
   try {
     if (!supabaseClient) { _gkLoading = false; if (listEl) listEl.innerHTML = '<div style="text-align:center;color:#ef4444;padding:40px;">' + _t('adm_gk_db_unavail') + '</div>'; return; }
     // 1. Memberships
-    var mbRes = await supabaseClient.from('memberships').select('*');
+    var mbRes = await MaestroMemberships.list('*');
     var memberships = (mbRes.data || []);
 
     // 2. Technicians (all registered users)

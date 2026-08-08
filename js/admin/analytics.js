@@ -814,7 +814,7 @@ async function _anLoadChurnRisk() {
 
     // Get memberships
     if (!_anCache.memberships) {
-      var r3 = await supabaseClient.from('memberships').select('user_email, activa, plan_name');
+      var r3 = await MaestroMemberships.list('user_email, activa, plan_name');
       _anCache.memberships = (r3.data || []);
     }
     var membershipMap = {};

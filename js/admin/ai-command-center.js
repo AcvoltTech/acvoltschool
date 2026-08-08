@@ -48,7 +48,7 @@
 
     var results = await Promise.all([
       (async function() { var all = [], off = 0, more = true; while (more) { var r = await usersDataAdmin('admin_list', { offset: off, limit: 1000, fields: ["id","nombre","email","ultimo_acceso","fecha_registro"] }); var b = r.data || []; all = all.concat(b); if (b.length < 1000) more = false; else off += 1000; } return { data: all }; })(),
-      _sb().from('memberships').select('*'),
+      MaestroMemberships.list('*'),
       _sb().from('student_success_tickets').select('id, estado, prioridad, tipo, created_at').eq('estado', 'abierto'),
       _sb().from('submitted_tasks').select('id, student_email, task_type, submitted_at, grade').is('grade', null).order('submitted_at', { ascending: false }),
       _sb().from('attendance').select('id, student_id, check_in, check_out').gte('check_in', sevenDaysAgo),

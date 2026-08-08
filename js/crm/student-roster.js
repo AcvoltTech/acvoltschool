@@ -241,7 +241,7 @@ async function loadStudentRoster() {
     var users = (usrRes.data || []);
 
     // 2. Memberships (including student_status)
-    var mbRes = await supabaseClient.from('memberships').select('*');
+    var mbRes = await MaestroMemberships.list('*');
     if (mbRes.error) throw new Error('Memberships query failed: ' + (mbRes.error.message || mbRes.error));
     var memberships = (mbRes.data || []);
 
@@ -523,12 +523,12 @@ async function srSetStudentStatus(email, status) {
     if (activa !== null) upsertData.activa = activa;
     // If activating, check if amount is missing and set default $100 (most common plan)
     if (activa === true) {
-      var { data: existing } = await supabaseClient.from('memberships').select('amount').eq('email', email).limit(1);
+      var { data: existing } = await MaestroMemberships.byEmail(email, { select: 'amount', limit: 1 });
       if (!existing || existing.length === 0 || !existing[0].amount || existing[0].amount === 0) {
         upsertData.amount = 100;
       }
     }
-    await supabaseClient.from('memberships').upsert(upsertData, { onConflict: 'email' });
+    await MaestroMemberships.upsert(upsertData);
 
     // ── Sync CRM groups: add/remove "bloqueado" ──
     if (status === 'bloqueado' || status === 'activo' || status === 'nuevo' || status === 'regreso') {

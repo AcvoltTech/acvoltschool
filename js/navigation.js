@@ -87,7 +87,7 @@
       zoomClassesScreen: ['js/crm/zoom-recordings.js', 'js/crm/zm-navigation.js'],
       attendanceScreen: ['js/admin/class-schedule.js'],
       miPerfilScreen: ['js/student-grades.js', 'js/student-upload.js', 'js/student-exams.js'],
-      adminLoginScreen: ['js/admin/hash-passwords.js', 'js/admin/student-success.js'],
+      adminLoginScreen: ['js/admin/memberships-api.js', 'js/admin/hash-passwords.js', 'js/admin/student-success.js'],
       adminDashboardScreen: '_admin',
       adminTechnicianProfileScreen: '_admin',
       friendsScreen: ['js/social-system.js'],
@@ -1792,6 +1792,9 @@ function showScreen(screenId) {
       if (_scripts === '_admin' && window.MaestroLoader) {
         // Load full admin + CRM bundle for admin dashboard
         MaestroLoader.load([
+          // 🔐 PRIMERO: la puerta del CRM a memberships. Todo lo de abajo la usa; si no
+          // está cargada, el roster y Student Success truenan. Mario 2026-08-08.
+          'js/admin/memberships-api.js',
           'js/admin/hash-passwords.js',
           'js/admin/student-success.js',
           'js/admin/create-user.js',

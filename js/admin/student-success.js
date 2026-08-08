@@ -555,7 +555,7 @@
         var _ud_user = await usersDataAdmin('admin_get', { email: email }); var user = _ud_user.data;
         var membership = null;
         try {
-          var { data: memArr } = await supabaseClient.from('memberships').select('*').eq('email', email).order('activa', { ascending: false }).limit(1);
+          var { data: memArr } = await MaestroMemberships.byEmail(email, { limit: 1 });
           membership = memArr && memArr.length > 0 ? memArr[0] : null;
         } catch(e) {}
 
@@ -593,7 +593,7 @@
         var _ud_user = await usersDataAdmin('admin_get', { email: email }); var user = _ud_user.data;
         var membership = null;
         try {
-          var { data: memArr2 } = await supabaseClient.from('memberships').select('*').eq('email', email).order('activa', { ascending: false }).limit(1);
+          var { data: memArr2 } = await MaestroMemberships.byEmail(email, { limit: 1 });
           membership = memArr2 && memArr2.length > 0 ? memArr2[0] : null;
         } catch(e) {}
         var { data: prevSurveys } = await supabaseClient.from('student_success_surveys').select('id').eq('student_email', email);
@@ -1396,7 +1396,7 @@
     // Load blocked emails from memberships table
     async function ssDashLoadBlocked() {
       try {
-        var { data } = await supabaseClient.from('memberships').select('email').eq('activa', false);
+        var { data } = await MaestroMemberships.list('email,activa').then(function(r){ return { data: (r.data||[]).filter(function(x){ return x.activa === false; }) }; });
         _ssDashBlockedEmails = {};
         if (data) data.forEach(function(m) {
           if (m.email) _ssDashBlockedEmails[m.email.toLowerCase().trim()] = true;
@@ -1424,10 +1424,10 @@
       if (!confirm(_t('adm_ss_confirm_block').replace('{action}', action).replace('{email}', email) + '\n\n' + (block ? _t('adm_ss_block_msg') : _t('adm_ss_unblock_msg')))) return;
       try {
         if (block) {
-          await supabaseClient.from('memberships').update({ activa: false, updated_at: new Date().toISOString() }).eq('email', email);
+          await MaestroMemberships.setActiva(email, false);
           _ssDashBlockedEmails[email] = true;
         } else {
-          await supabaseClient.from('memberships').update({ activa: true, updated_at: new Date().toISOString() }).eq('email', email);
+          await MaestroMemberships.setActiva(email, true);
           delete _ssDashBlockedEmails[email];
         }
         if (typeof auditLog === 'function') auditLog('membership.toggle_block', { target_email: email, blocked: block });
@@ -1457,7 +1457,7 @@
       for (var i = 0; i < inactive.length; i++) {
         try {
           var email = inactive[i].email;
-          await supabaseClient.from('memberships').update({ activa: false, updated_at: new Date().toISOString() }).eq('email', email);
+          await MaestroMemberships.setActiva(email, false);
           _ssDashBlockedEmails[email] = true;
           localStorage.removeItem('maestroac_membership_cache_' + email);
           blocked++;
@@ -1503,21 +1503,10 @@
       if (!supabaseClient || !email) return null;
       try {
         // First check if there's an ACTIVE membership — if so, not blocked
-        var { data: activeRows } = await supabaseClient
-          .from('memberships')
-          .select('id')
-          .eq('email', email)
-          .eq('activa', true)
-          .limit(1);
+        var { data: activeRows } = await MaestroMemberships.byEmail(email, { select: 'id', activa: true, limit: 1 });
         if (activeRows && activeRows.length > 0) return null;
         // No active membership — check for blocked (activa=false)
-        var { data } = await supabaseClient
-          .from('memberships')
-          .select('*')
-          .eq('email', email)
-          .eq('activa', false)
-          .order('updated_at', { ascending: false })
-          .limit(1);
+        var { data } = await MaestroMemberships.byEmail(email, { activa: false, limit: 1 });
         if (data && data.length > 0) return data[0];
         return null;
       } catch(e) { console.log('[Blocked] Check error:', e); return null; }
