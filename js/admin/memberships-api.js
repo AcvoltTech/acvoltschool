@@ -27,10 +27,17 @@
   var ENDPOINT = (typeof SUPABASE_URL !== 'undefined' ? SUPABASE_URL : 'https://htklsowiyjwsjnacnvnr.supabase.co')
     + '/functions/v1/admin-memberships';
 
+  // 🔴 La sesión de admin vive en DOS lados (js/admin/hash-passwords.js la escribe en ambos):
+  // `sessionStorage` muere al cerrar la pestaña, `localStorage` persiste. Leer solo el primero
+  // dejaba el roster VACÍO ("No technicians registered yet") a un admin con sesión válida —
+  // pasó en cuanto Mario lo abrió. Se leen los dos, y de último `window._adminSession`.
   function _adminEmail() {
-    try {
-      return (sessionStorage.getItem('admin_email') || '').toLowerCase().trim();
-    } catch (_) { return ''; }
+    var e = '';
+    try { e = sessionStorage.getItem('admin_email') || ''; } catch (_) {}
+    if (!e) { try { e = localStorage.getItem('admin_email') || ''; } catch (_) {} }
+    if (!e) { try { e = (window._adminSession && window._adminSession.email) || ''; } catch (_) {} }
+    if (!e) { try { e = localStorage.getItem('tecnico_email') || ''; } catch (_) {} }
+    return String(e).toLowerCase().trim();
   }
 
   // La llave anónima NO es global (vive dentro de un scope en js/config.js), así que se
