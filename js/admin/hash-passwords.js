@@ -102,6 +102,38 @@
           }
           if (staff) {
             var staffEmail = staff.email || localStorage.getItem('tecnico_email') || '';
+            // 🔑 SESIÓN DE SUPABASE DE VERDAD (Mario 2026-08-08).
+            // Hasta hoy el admin quedaba validado SOLO en localStorage: para la base seguía
+            // siendo un anónimo. De ahí salían cuatro cosas rotas a la vez —
+            // `users-data` daba 401 y el roster de técnicos aparecía VACÍO; `memberships`
+            // tenía que quedarse abierta a `anon`; el candado de admin rebotaba al staff; y
+            // toda verificación acababa siendo "confía en el correo del body".
+            // `admin-session` revalida el MISMO hash del lado servidor y emite la sesión.
+            // Si algo falla, el login sigue como antes: nunca deja a Mario fuera de su panel.
+            try {
+              var _pw = document.getElementById('adminLoginPassword');
+              var _hash = (typeof hashPasswordPBKDF2 === 'function' && _pw)
+                ? 'pbkdf2:' + (await hashPasswordPBKDF2(_pw.value, 'acvolt_' + String(staffEmail).toLowerCase()))
+                : null;
+              if (_hash && staffEmail) {
+                var _sbUrl = (window.SUPABASE_URL || 'https://htklsowiyjwsjnacnvnr.supabase.co');
+                var _k = (typeof SUPABASE_KEY !== 'undefined' ? SUPABASE_KEY : (window.SUPABASE_KEY || ''));
+                var _r = await fetch(_sbUrl + '/functions/v1/admin-session', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json', 'apikey': _k, 'Authorization': 'Bearer ' + _k },
+                  body: JSON.stringify({ email: staffEmail, password_hash: _hash })
+                });
+                var _j = await _r.json();
+                if (_j && _j.ok && _j.access_token && window.supabaseClient) {
+                  await window.supabaseClient.auth.setSession({
+                    access_token: _j.access_token, refresh_token: _j.refresh_token
+                  });
+                  console.log('[admin] sesión de Supabase abierta — el CRM ya puede leer users/memberships');
+                } else {
+                  console.warn('[admin] sin sesión de Supabase (el CRM sigue en modo viejo):', _j && _j.error);
+                }
+              }
+            } catch (_e) { console.warn('[admin] admin-session falló:', _e && _e.message); }
             // Store admin session in BOTH localStorage (persists, survives iOS Safari) AND
             // sessionStorage (many legacy readers still use it). Mario 2026-06-05.
             var _adminSess = {
