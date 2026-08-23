@@ -73,11 +73,11 @@ async function _lsPreloadStudentGroups() {
   // Fetch fresh data from Supabase (async update)
   if (!supabaseClient) return;
   try {
-    var res = await supabaseClient.from('zoom_recordings').select('data').eq('id', 'student_groups').maybeSingle();
-    if (res.data && res.data.data) {
-      var all = JSON.parse(res.data.data);
-      var found = all.find(function(s) { return s.email && s.email.toLowerCase() === email; });
-      var groups = found ? (found.groups || []) : [];
+    var res = await supabaseClient.rpc('crm_mis_grupos', { p_email: email });
+    if (res && res.data != null) {
+      var _g3 = res.data;
+      if (typeof _g3 === 'string') { try { _g3 = JSON.parse(_g3); } catch (_) { _g3 = null; } }
+      var groups = Array.isArray(_g3) ? _g3 : [];
       _lsCachedStudentGroups = groups;
       // Persist to localStorage for next time
       if (groups.length > 0) {

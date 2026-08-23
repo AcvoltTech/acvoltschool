@@ -243,18 +243,16 @@
       if (typeof supabaseClient === 'undefined' || !supabaseClient) return Promise.resolve();
 
       // Load CRM groups AND acceso_completo in parallel
-      var groupsPromise = supabaseClient.from('zoom_recordings').select('data').eq('id', 'student_groups').maybeSingle()
+      // 🔐 22-ago: solo MIS grupos; antes bajaba los 377 correos de la escuela a cada teléfono.
+      var groupsPromise = supabaseClient.rpc('crm_mis_grupos', { p_email: email })
         .then(function(res) {
-          if (res.data && res.data.data) {
-            try {
-              var all = JSON.parse(res.data.data);
-              localStorage.setItem('maestroac_student_groups', JSON.stringify(all));
-              var found = all.find(function(s) { return s.email && s.email.toLowerCase() === email; });
-              if (found && found.groups && found.groups.length > 0) {
-                localStorage.setItem('maestroac_student_groups_' + email, JSON.stringify(found.groups));
-              }
-            } catch(e) { console.warn('[Config] CRM groups parse error:', e); }
-          }
+          try {
+            var grupos = res && res.data;
+            if (typeof grupos === 'string') grupos = JSON.parse(grupos);
+            if (grupos && grupos.length > 0) {
+              localStorage.setItem('maestroac_student_groups_' + email, JSON.stringify(grupos));
+            }
+          } catch(e) { console.warn('[Config] CRM groups parse error:', e); }
         })
         .catch(function(e) { console.warn('[Config] CRM groups preload error:', e); });
 

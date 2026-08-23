@@ -155,13 +155,10 @@
             if (!isAdmin) {
               var studentGroups = [];
               try {
-                var sgRes = await supabaseClient.from('zoom_recordings').select('data').eq('id', 'student_groups').single();
-                if (sgRes.data && sgRes.data.data) {
-                  var allGroups = JSON.parse(sgRes.data.data);
-                  var lowerEmail = email.toLowerCase();
-                  var studentEntry = allGroups.find(function(s) { return (s.email || '').toLowerCase() === lowerEmail; });
-                  studentGroups = studentEntry ? (studentEntry.groups || []) : [];
-                }
+                var sgRes = await supabaseClient.rpc('crm_mis_grupos', { p_email: (email || '').toLowerCase() });
+                var _g1 = sgRes && sgRes.data;
+                if (typeof _g1 === 'string') { try { _g1 = JSON.parse(_g1); } catch (_) { _g1 = null; } }
+                studentGroups = Array.isArray(_g1) ? _g1 : [];
               } catch(sgErr) { console.log('Could not fetch student groups:', sgErr); }
               exams = exams.filter(function(exam) {
                 if (!exam.target_groups || exam.target_groups.length === 0) return true;
@@ -307,13 +304,10 @@
           } else {
             // Fallback: fetch student groups from Supabase (zoom-recordings.js not loaded for non-admin)
             try {
-              var sgRes = await supabaseClient.from('zoom_recordings').select('data').eq('id', 'student_groups').maybeSingle();
-              if (sgRes.data && sgRes.data.data) {
-                var allGroups = JSON.parse(sgRes.data.data);
-                var lowerEmail = email.toLowerCase();
-                var found = allGroups.find(function(s) { return s.email && s.email.toLowerCase() === lowerEmail; });
-                studentGroups = found ? (found.groups || []) : [];
-              }
+              var sgRes = await supabaseClient.rpc('crm_mis_grupos', { p_email: (email || '').toLowerCase() });
+              var _g2 = sgRes && sgRes.data;
+              if (typeof _g2 === 'string') { try { _g2 = JSON.parse(_g2); } catch (_) { _g2 = null; } }
+              studentGroups = Array.isArray(_g2) ? _g2 : [];
             } catch(e) { console.warn('Could not fetch student groups:', e); }
           }
           var hasAccess = targetGroups.some(function(g) { return studentGroups.indexOf(g) !== -1; });
