@@ -574,7 +574,11 @@ async function loadLiveStreams() {
   try {
     var { data, error } = await supabaseClient
       .from('live_streams')
-      .select('*')
+      // 🔐 22-ago: NO pedir '*'. La tabla guarda las credenciales de PUBLICACIÓN
+      // (rtmps_url, stream_key, whip_url) y con la llave anónima cualquiera las bajaba
+      // — con la stream_key se puede transmitir al canal. Esta lista solo necesita ver.
+      // (El panel de admin SÍ las usa y corre autenticado: ese select('*') no se toca.)
+      .select('id, cf_input_id, title, description, instructor_email, instructor_name, status, scheduled_at, started_at, ended_at, playback_url, created_at, class_group, instructor_id, cert_enabled')
       .in('status', ['scheduled', 'live'])
       .order('scheduled_at', { ascending: true, nullsFirst: false });
 
