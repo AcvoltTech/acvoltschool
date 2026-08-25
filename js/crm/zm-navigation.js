@@ -1080,6 +1080,61 @@ async function _crmLoadAppIap() {
 }
 
 // Dashboard stats via edge function (uses service role key to bypass RLS)
+// 🚨 AVISO HONESTO CUANDO NO SE PUDIERON TRAER LOS NÚMEROS (Mario 2026-08-24, sesión 056).
+// Mario vio su CRM en $0 y creyó que había perdido todo el dinero: un cero real y un
+// "no pude preguntar" se pintaban idénticos. Misma ley que en los candados del app —
+// nunca contestar "no hay" cuando la verdad es "no sé".
+// Los números se tapan con "—" para que NADIE lea un cero que no se midió.
+function _crmStatsAvisoSesion(modo, detalle) {
+  var ID = 'crmStatsAviso';
+  var previo = document.getElementById(ID);
+  var panel = document.getElementById('miDineroPanel');
+  if (!modo) {                       // todo bien: limpia y restaura
+    if (previo) previo.remove();
+    if (panel) panel.style.opacity = '';
+    return;
+  }
+  if (!panel) return;
+  var esSesion = (modo === 'no_session' || modo === 'expirada');
+  // Tapa los ceros que NO se midieron, para que no se lean como dinero perdido.
+  // IDs verificados contra index.html (los 6 números del panel + sus subtítulos).
+  ['dineroTotal', 'dineroStripe', 'dineroApp', 'dineroBalance', 'dineroPerdido'].forEach(function (id) {
+    var e = document.getElementById(id); if (e) e.textContent = '—';
+  });
+  ['dineroStripeSub', 'dineroAppSub'].forEach(function (id) {
+    var e = document.getElementById(id); if (e) e.textContent = 'sin medir';
+  });
+  var sub = document.getElementById('dineroTotalSub');
+  if (sub) sub.textContent = 'sin medir — no se pudo consultar';
+  var des = document.getElementById('dineroDesglose');
+  if (des) des.textContent = 'Desglose de la app: no disponible mientras no haya sesión válida.';
+
+  // ⚠️ Decirle CUÁL login: entrar al Panel de Admin (usuario/contraseña de `admin_staff`)
+  // NO crea sesión de Supabase — eso lo hace el login normal de acvoltschool. Sin esa
+  // distinción, Mario vuelve a entrar al panel, sigue en "—" y parece que no se arregló.
+  var txt = esSesion
+    ? '🔒 <b>Tu sesión caducó — estos números NO se pudieron consultar.</b><br>' +
+      'Lo que ves con “—” <b>no es cero</b>: es que no se pudo preguntar.<br>' +
+      '<span style="font-size:13px;">Ojo: volver a entrar al <i>Panel de Admin</i> no basta — ' +
+      'hay que iniciar sesión en <b>acvoltschool.com con tu correo y contraseña normales</b>.</span>'
+    : '⚠️ <b>No se pudieron traer los números.</b><br>Lo que ves con “—” no es cero, es un error al consultar' +
+      (detalle ? ': ' + String(detalle).slice(0, 120) : '.');
+
+  var html = '<div id="' + ID + '" style="background:#fef3c7;border:2px solid #f59e0b;border-radius:12px;' +
+    'padding:14px 16px;margin-bottom:14px;color:#7c2d12;font-size:14px;line-height:1.5;">' + txt +
+    (esSesion ? ' <button type="button" id="crmStatsRelogin" style="margin-left:8px;background:#0f2342;color:#fff;' +
+      'border:none;border-radius:8px;padding:8px 14px;font-weight:800;cursor:pointer;">Volver a entrar</button>' : '') +
+    '</div>';
+  if (previo) previo.outerHTML = html; else panel.insertAdjacentHTML('beforebegin', html);
+
+  var btn = document.getElementById('crmStatsRelogin');
+  if (btn) btn.onclick = async function () {
+    try { if (typeof supabaseClient !== 'undefined' && supabaseClient) await supabaseClient.auth.signOut(); } catch (_) {}
+    try { sessionStorage.clear(); } catch (_) {}
+    location.reload();
+  };
+}
+
 async function _crmLoadDashboardStats() {
   var adminEmail = sessionStorage.getItem('admin_email') || localStorage.getItem('tecnico_email') || '';
   if (!adminEmail) {
@@ -1089,13 +1144,41 @@ async function _crmLoadDashboardStats() {
   try {
     var sbUrl = window.SUPABASE_URL || 'https://htklsowiyjwsjnacnvnr.supabase.co';
     var sbKey = typeof SUPABASE_KEY !== 'undefined' ? SUPABASE_KEY : '';
+    // 🔑 EL TABLERO MANDABA LA LLAVE ANÓNIMA, NO TU SESIÓN (Mario 2026-08-24, sesión 056).
+    // `admin-dashboard-stats` exige un JWT de usuario real desde el Build 28
+    // (`_shared/admin-auth.ts`: "Reject if the Bearer is just the anon key"). Aquí se mandaba
+    // `sbKey` como Bearer, así que la edge contestaba 401 "Invalid or expired authentication
+    // token" SIEMPRE — no era una sesión vencida, era que nunca se mandó la sesión.
+    // Mismo patrón que ya funciona en `zoom-recordings.js` (_zoomCheckStripeAccess).
+    var tok = '';
+    try {
+      if (typeof supabaseClient !== 'undefined' && supabaseClient) {
+        var s = await supabaseClient.auth.getSession();
+        if (s && s.data && s.data.session && s.data.session.access_token) tok = s.data.session.access_token;
+      }
+    } catch (_) {}
+    if (!tok) {
+      // Sin sesión de Supabase no hay forma de pedir los números. Antes esto no se distinguía
+      // de "no hay dinero" y el tablero se quedaba en $0.
+      _crmStatsAvisoSesion('no_session');
+      return;
+    }
     var res = await fetch(sbUrl + '/functions/v1/admin-dashboard-stats', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'apikey': sbKey, 'Authorization': 'Bearer ' + sbKey },
+      headers: { 'Content-Type': 'application/json', 'apikey': sbKey, 'Authorization': 'Bearer ' + tok },
       body: JSON.stringify({ admin_email: adminEmail }),
     });
     var data = await res.json();
-    if (data.error) { console.error('[CRM] Stats error:', data.error); return; }
+    // 🚨 UN $0 Y UNA SESIÓN VENCIDA SE VEÍAN IGUAL (Mario 2026-08-24). Antes esto solo hacía
+    // `console.error` y salía: el tablero se quedaba con todo en $0 y parecía que el negocio
+    // se había caído. Ahora se dice en pantalla, con la diferencia entre "no pude preguntar"
+    // y "pregunté y es cero".
+    if (data.error || res.status === 401 || res.status === 403) {
+      console.error('[CRM] Stats error:', data.error || ('HTTP ' + res.status));
+      _crmStatsAvisoSesion((res.status === 401 || res.status === 403) ? 'expirada' : 'error', data.error);
+      return;
+    }
+    _crmStatsAvisoSesion(null);   // salió bien: quita cualquier aviso anterior
 
     var el;
     el = document.getElementById('statTotalTecnicos');
