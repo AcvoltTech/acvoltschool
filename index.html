@@ -286,7 +286,7 @@ var APP_VERSION = 'v6.45-crm-no-miente-con-ceros';
 // ── FORCE CACHE PURGE — nuke old caches so students don't have to reinstall ──
 // Runs once per cache version. Deletes stale caches quietly without reload loops.
 (function(){
-  var CURRENT_CACHE = 'maestrohvacr-v200';
+  var CURRENT_CACHE = 'maestrohvacr-v201';
   var PURGE_KEY = 'maestro_cache_purged_v';
   if(typeof caches==='undefined') return;
   if(localStorage.getItem(PURGE_KEY)===CURRENT_CACHE) return;
@@ -7414,7 +7414,7 @@ if (typeof window._addTranslations === 'function') {
 <script src="js/utils.js?v=52"></script>
 <script src="js/haptics.js?v=1"></script>
 <script src="js/config.js?v=54"></script>
-<script src="js/lazy-loader.js?v=83"></script>
+<script src="js/lazy-loader.js?v=84"></script>
 <script src="js/supabase-init.js?v=53"></script>
 
 <!-- Tier 1: Defer (core app shell, non-blocking parse) -->
