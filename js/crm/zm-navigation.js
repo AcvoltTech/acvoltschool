@@ -1112,7 +1112,11 @@ function _crmStatsAvisoSesion(modo, detalle) {
   // ⚠️ Decirle CUÁL login: entrar al Panel de Admin (usuario/contraseña de `admin_staff`)
   // NO crea sesión de Supabase — eso lo hace el login normal de acvoltschool. Sin esa
   // distinción, Mario vuelve a entrar al panel, sigue en "—" y parece que no se arregló.
-  var txt = esSesion
+  var txt = (modo === 'red')
+    ? '🌐 <b>Se cayó la conexión — estos números NO se pudieron consultar.</b><br>' +
+      'Lo que ves con “—” <b>no es cero</b>: el servidor no contestó. ' +
+      'Revisa tu internet y recarga.'
+    : esSesion
     ? '🔒 <b>Tu sesión caducó — estos números NO se pudieron consultar.</b><br>' +
       'Lo que ves con “—” <b>no es cero</b>: es que no se pudo preguntar.<br>' +
       '<span style="font-size:13px;">Ojo: volver a entrar al <i>Panel de Admin</i> no basta — ' +
@@ -1333,7 +1337,18 @@ async function _crmLoadDashboardStats() {
     if (sgnCount) sgnCount.textContent = (data.signups_1h != null ? data.signups_1h + ' en 1h · ' + (data.signups_24h || 0) + ' en 24h' : (data.signups_24h != null ? data.signups_24h + ' en 24h' : signups.length + ' último(s)'));
 
     console.log('[CRM] Dashboard stats loaded:', data);
-  } catch(e) { console.error('[CRM] Dashboard stats error:', e); }
+  } catch(e) {
+    // 🌐 SI LA RED SE CAE, EL FETCH TRUENA Y NO HAY `data` (Mario 2026-08-24, sesión 056).
+    // Este catch solo hacía console.error, así que con internet intermitente el panel se
+    // quedaba en $0 — el mismo engaño que este arreglo vino a matar. Un cero NO MEDIDO
+    // nunca se pinta como cero.
+    console.error('[CRM] Dashboard stats error:', e);
+    var _msg = String((e && e.message) || e || '');
+    var _red = /fetch|network|offline|Load failed|conexión|connection/i.test(_msg);
+    try {
+      _crmStatsAvisoSesion(_red ? 'red' : 'error', _red ? null : _msg);
+    } catch (_a) {}
+  }
 }
 
 // Initialize CRM redesign when admin panel loads
