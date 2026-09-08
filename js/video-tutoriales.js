@@ -208,7 +208,14 @@ function vtRenderWelcome(screen, onContinue) {
 
         // Welcome video (Cloudflare Stream)
         '<div class="vt-welcome-video-wrap">' +
-          '<iframe src="https://iframe.videodelivery.net/f94f72bea33b09dbd092967d7f1ed10a" style="border:none;width:100%;aspect-ratio:16/9;border-radius:12px;" allow="autoplay;fullscreen;encrypted-media" allowfullscreen></iframe>' +
+          // 🔴 CAMBIADO 7-sep-2026: era un iframe de Cloudflare Stream CLAVADO, y Cloudflare
+          // responde 401 a TODO desde hace días -> el video de introducción salia como una
+          // caja negra que decia "An unknown error occurred", como PRIMERA cosa de la pantalla.
+          // El MP4 del mismo video estaba en el bucket school-files todo este tiempo.
+          // `preload="none"`: pesa 120 MB, no se baja hasta que el tecnico le da play.
+          '<video controls playsinline preload="none" controlslist="nodownload" style="width:100%;aspect-ratio:16/9;border-radius:12px;background:#000;">' +
+            '<source src="https://htklsowiyjwsjnacnvnr.supabase.co/storage/v1/object/public/school-files/videos/1777503034739_Bienvenido_A_Maestro_HVACR.mp4" type="video/mp4">' +
+          '</video>' +
         '</div>' +
 
         // Why certifications matter
