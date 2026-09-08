@@ -27,7 +27,14 @@ async function _acvoltLoadData() {
     _acvoltQuery('acvolt_sections', 'select=*&order=course_id,sort_order,old_id'),
     _acvoltQuery('acvolt_lessons', 'select=*&order=section_id,sort_order,old_id'),
   ]);
-  _acvoltData.courses = results[0] || [];
+  // 🧹 Fuera los cursos apagados (7-sep-2026). La consulta pide TODOS los cursos y
+  // nadie miraba `status`, así que apagar un curso duplicado en la base no lo escondía
+  // del app. Se filtra aquí, y solo se quita el que está EXPLÍCITAMENTE en 0: si el
+  // dato viniera nulo o raro, el curso SE MUESTRA (nunca esconder contenido por dudar).
+  // Duplicados apagados: ids 5, 6 y 7 (mismo slug que 11, 12 y 16, con menos lecciones).
+  _acvoltData.courses = (results[0] || []).filter(function (c) {
+    return !(c && Number(c.status) === 0);
+  });
   _acvoltData.sections = results[1] || [];
   _acvoltData.lessons = results[2] || [];
   _acvoltLoaded = true;

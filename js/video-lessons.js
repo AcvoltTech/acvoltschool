@@ -14,7 +14,7 @@
     const VIDEO_COMPLETION_THRESHOLD = 90; // 90% watched = completed
 
     // YouTube Channel Configuration (API key is server-side in youtube-proxy Edge Function)
-    const YOUTUBE_CHANNEL_HANDLE = '@MaestroMarioAc';
+    const YOUTUBE_CHANNEL_HANDLE = '@MaestroHvacr';
     
     // Video lessons will be loaded from YouTube
     let videoLessons = [];
