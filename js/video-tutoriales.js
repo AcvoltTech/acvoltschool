@@ -849,7 +849,14 @@ async function vtPlayVideo(videoId) {
     '<div class="vt-player-container">' +
       '<button class="vt-player-close" onclick="vtClosePlayer()">&times;</button>' +
       '<div class="vt-player-wrap">' +
-        '<video id="vtVideoEl" controls controlslist="nodownload" disablepictureinpicture oncontextmenu="return false" playsinline crossorigin="anonymous">' +
+        // 🔴 REPRODUCTOR NEGRO EN 00:00/00:00 (Mario, 9-sep-2026, con captura).
+        // `crossorigin="anonymous"` iba SIEMPRE. Pedir CORS en un MP4 grande
+        // servido por rangos a través del CDN es un modo de falla conocido: el
+        // video se queda en 00:00 sin un solo error. Y solo 2 de los 175 videos
+        // tienen subtítulos, así que en los otros 173 ese atributo **no aporta
+        // NADA** y sí puede romper. (Mismo arreglo que ya lleva el app grande.)
+        '<video id="vtVideoEl" controls controlslist="nodownload" disablepictureinpicture oncontextmenu="return false" playsinline' +
+          (video.subtitle_url_en ? ' crossorigin="anonymous"' : '') + '>' +
           '<source src="' + _escHtml(videoUrl) + '" type="video/mp4">' +
           (video.subtitle_url_en ? '<track kind="subtitles" src="' + _escHtml(video.subtitle_url_en) + '" srclang="en" label="English" default>' : '') +
         '</video>' +

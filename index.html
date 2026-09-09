@@ -7416,6 +7416,47 @@ if (typeof window._addTranslations === 'function') {
 <script src="js/config.js?v=54"></script>
 <script src="js/lazy-loader.js?v=85"></script>
 <script src="js/supabase-init.js?v=53"></script>
+<!-- 🩺 EL PARTE DE LA APP, HABLADO (Mario, 9-sep-2026). Mismo módulo que corre
+     en el app: lee `v_zonas_resumen` y `get_error_logs` del MISMO proyecto de
+     Supabase, así que no necesita nada nuevo del lado del servidor.
+     🪤 Va en carga tardía y detrás de un botón: a un estudiante de la escuela
+     no le sirve de nada, y no tiene por qué pesarle. -->
+<script>
+window.__abrirParte = function () {
+  function go() {
+    if (window.MaestroParte) window.MaestroParte.abrir({ saludar: true });
+    else alert('No cargó el parte. Revisa tu internet.');
+  }
+  if (window.MaestroParte) { go(); return; }
+  if (!window.MaestroLoader) { alert('No cargó el parte.'); return; }
+  window.MaestroLoader.load('js/maestro-parte.js').then(go).catch(function (e) {
+    alert('No se pudo abrir el parte: ' + ((e && e.message) || '?'));
+  });
+};
+// El botón solo se pinta para Mario. 🪤 Esto NO es seguridad —las RLS son las
+// que protegen—; es para no ensuciarle la pantalla a los estudiantes.
+document.addEventListener('DOMContentLoaded', function () {
+  setTimeout(function () {
+    var admin = false;
+    try {
+      if (typeof isAdminAuthenticated === 'function' && isAdminAuthenticated()) admin = true;
+      if (!admin && typeof isAdminStudent === 'function' && isAdminStudent()) admin = true;
+    } catch (e) { void e; }
+    if (!admin || document.getElementById('btnParteApp')) return;
+    var b = document.createElement('button');
+    b.id = 'btnParteApp';
+    b.type = 'button';
+    b.setAttribute('onclick', 'window.__abrirParte()');
+    b.textContent = '🩺 Parte de la app';
+    b.style.cssText = 'position:fixed;right:16px;bottom:16px;z-index:99990;' +
+      'background:#ffc43d;color:#0b1326;border:none;border-radius:14px;' +
+      'padding:14px 18px;font-size:15px;font-weight:900;cursor:pointer;' +
+      'box-shadow:0 8px 24px rgba(0,0,0,.35);font-family:inherit;' +
+      '-webkit-tap-highlight-color:transparent;';
+    document.body.appendChild(b);
+  }, 2500);
+});
+</script>
 
 <!-- Tier 1: Defer (core app shell, non-blocking parse) -->
 <script defer src="js/legibility.js?v=2"></script>

@@ -58,6 +58,7 @@ const TIER1_SCRIPTS = [
 // Lazy-loaded scripts (individually minified, loaded by MaestroLoader)
 const LAZY_JS_DIRS = ['js/admin', 'js/crm'];
 const LAZY_JS_ROOT = [
+  'js/maestro-parte.js',   // 🩺 el parte hablado (solo Mario)
   'js/users-data-client.js',
   'js/inline-early.js',
   'js/desafio-questions-c1.js',

@@ -12,11 +12,38 @@ var _acvoltCurrentCourse = null;
 var _acvoltCurrentLesson = null;
 
 // ---- Supabase helpers ----
+// 🔴 "0 cursos disponibles" (Mario, 9-sep-2026). MEDIDO: la tabla `acvolt_courses`
+// tiene 17 filas y 14 activas, pero la misma consulta con la llave anónima
+// devuelve **HTTP 200 con `[]`**. La causa: las policies de `acvolt_courses`,
+// `acvolt_sections` y `acvolt_lessons` dan SELECT solo al rol `authenticated`,
+// y aquí se mandaba la llave ANÓNIMA como identidad —aunque el alumno hubiera
+// iniciado sesión—. O sea: el app siempre se presentaba como visitante.
+//
+// 🪤 NO se toca la policy: el temario de la escuela NO debe ser público. Lo que
+// se arregla es la identidad: se manda el token REAL de la sesión, y si no hay
+// sesión se cae a la anónima (que verá vacío, como debe ser).
+// El app grande ya traía este arreglo; la escuela se había quedado atrás.
+function _acvoltAuthHeader() {
+  try {
+    if (window.supabaseClient && window.supabaseClient.auth && window.supabaseClient.auth.getSession) {
+      return window.supabaseClient.auth.getSession()
+        .then(function (r) {
+          var t = r && r.data && r.data.session && r.data.session.access_token;
+          return t || SUPABASE_KEY;
+        })
+        .catch(function () { return SUPABASE_KEY; });
+    }
+  } catch (_) {}
+  return Promise.resolve(SUPABASE_KEY);
+}
+
 function _acvoltQuery(table, params) {
   var url = SUPABASE_URL + '/rest/v1/' + table + '?' + params;
-  return fetch(url, {
-    headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY }
-  }).then(function(r) { return r.json(); });
+  return _acvoltAuthHeader().then(function (tok) {
+    return fetch(url, {
+      headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + tok }
+    });
+  }).then(function (r) { return r.json(); });
 }
 
 // ---- Load all data ----
@@ -95,7 +122,14 @@ function _acvoltRenderCourseList() {
   var el = document.getElementById('acvoltCertScreen');
   if (!el) return;
 
-  var activeCourses = _acvoltData.courses.filter(function(c) { return c.status === 1; });
+  // 🪤 CONTRADICCIÓN: al cargar (línea ~35) la regla es "si el dato viene nulo o
+  // raro, el curso SE MUESTRA — nunca esconder contenido por dudar". Aquí se
+  // exigía `=== 1` ESTRICTO, que esconde cualquier status nulo, "1" de texto o
+  // 2. Se aplica la misma regla en los dos lados: solo se esconde el que está
+  // EXPLÍCITAMENTE apagado.
+  var activeCourses = _acvoltData.courses.filter(function (c) {
+    return !(c && Number(c.status) === 0);
+  });
   var progress = _acvGetProgress();
 
   var html = '<div class="acvolt-wrap">';
