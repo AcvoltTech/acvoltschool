@@ -373,8 +373,38 @@ async function _acvoltRenderLesson() {
     // 🪤 Si el firmador no cargó, se avisa en consola en vez de dejar un negro
     // mudo — el técnico ya vio suficientes rectángulos negros hoy.
     try {
-      if (window.MaestroVideoFirma) window.MaestroVideoFirma.firmarPendientes(el);
-      else if (el.querySelector('iframe[data-vf-uid]')) {
+      if (window.MaestroVideoFirma) {
+        // 🔴 SIN VOZ, UN NEGRO NO SE PUEDE DIAGNOSTICAR (Mario, 9-sep-2026:
+        // desaparecieron los 401 pero el video seguía negro y la consola
+        // limpia). Si la firma no sale, el iframe se queda SIN `src` — y un
+        // iframe vacío se ve negro y no genera ni un error. Aquí se muestra el
+        // porqué encima del video.
+        var _onFalla = function (ev) {
+          window.removeEventListener('maestro:firma-fallo', _onFalla);
+          var d = (ev && ev.detail) || {};
+          var caja = el.querySelector('iframe[data-vf-uid], iframe');
+          caja = caja && caja.parentNode;
+          if (!caja || caja.querySelector('.acv-firma-error')) return;
+          var v = document.createElement('div');
+          v.className = 'acv-firma-error';
+          v.style.cssText = 'position:absolute;inset:0;display:flex;align-items:center;' +
+            'justify-content:center;text-align:center;padding:22px;background:rgba(0,0,0,.9);' +
+            'color:#fff;font-size:14px;line-height:1.6;z-index:5;';
+          v.textContent = 'No se pudo desbloquear el video. ' + (d.porque || '');
+          caja.appendChild(v);
+        };
+        window.addEventListener('maestro:firma-fallo', _onFalla);
+        window.MaestroVideoFirma.firmarPendientes(el);
+        // 🪤 Y si a los 8 s el iframe sigue sin `src`, tampoco se deja mudo:
+        // puede que ni el evento haya salido.
+        setTimeout(function () {
+          var f = el.querySelector('iframe');
+          if (!f || f.getAttribute('src') || el.querySelector('.acv-firma-error')) return;
+          var porque = '';
+          try { porque = window.MaestroVideoFirma.ultimaFalla ? window.MaestroVideoFirma.ultimaFalla() : ''; } catch (e2) { void e2; }
+          _onFalla({ detail: { porque: porque || 'la firma no respondió' } });
+        }, 8000);
+      } else if (el.querySelector('iframe[data-vf-uid]')) {
         console.warn('[acvolt] falta js/video-firma.js: el video no se puede desbloquear');
       }
     } catch (e) { console.warn('[acvolt] firma:', e && e.message); }
