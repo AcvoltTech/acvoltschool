@@ -510,6 +510,44 @@ async function _acvoltRenderLesson() {
   html += '</div>';
   el.innerHTML = html;
 
+  // 🔴 LA FIRMA TAMBIÉN VA AQUÍ. Esta es LA causa del video negro (Mario,
+  // 9-sep-2026, tres horas de capturas). La única llamada a
+  // `firmarPendientes()` estaba DENTRO del bloque `if (lesson.lesson_type === 2)`
+  // —la rama del QUIZ— y una lección de VIDEO es `lesson_type === 0`, que se
+  // pinta AQUÍ, 90 líneas más abajo y fuera de ese `if`.
+  //
+  // Resultado: el iframe salía con `data-vf-uid` y SIN `src`, nadie lo firmaba
+  // nunca, y un iframe vacío se ve NEGRO sin generar una sola petición ni un
+  // solo error. Por eso la consola salía limpia.
+  // 🪤 Y el diagnóstico y el aviso de error que puse hoy quedaron encerrados en
+  // ESE MISMO `if` — por eso tampoco salían. Un diagnóstico en la rama
+  // equivocada es peor que no tenerlo: hace creer que ya se descartó.
+  //
+  // El app grande ya traía este arreglo desde el 8-sep; la escuela se quedó
+  // atrás. Ver clon-ios-googleplay/js/acvolt-certification.js:416.
+  try {
+    if (window.MaestroVideoFirma) {
+      var _onFallaV = function (ev) {
+        window.removeEventListener('maestro:firma-fallo', _onFallaV);
+        var d0 = (ev && ev.detail) || {};
+        var f0 = el.querySelector('iframe');
+        var caja = f0 && f0.parentNode;
+        if (!caja || caja.querySelector('.acv-firma-error')) return;
+        var v0 = document.createElement('div');
+        v0.className = 'acv-firma-error';
+        v0.style.cssText = 'position:absolute;inset:0;display:flex;align-items:center;' +
+          'justify-content:center;text-align:center;padding:22px;background:rgba(0,0,0,.9);' +
+          'color:#fff;font-size:14px;line-height:1.6;z-index:5;';
+        v0.textContent = 'No se pudo desbloquear el video. ' + (d0.porque || '');
+        caja.appendChild(v0);
+      };
+      window.addEventListener('maestro:firma-fallo', _onFallaV);
+      window.MaestroVideoFirma.firmarPendientes(el);
+    } else if (el.querySelector('iframe[data-vf-uid]')) {
+      console.warn('[acvolt] falta js/video-firma.js: el video no se puede desbloquear');
+    }
+  } catch (e) { console.warn('[acvolt] firma (video):', e && e.message); }
+
   // If AI quiz was previously cached, show "retake" option
   if (lesson.lesson_type === 0) {
     var cached = _acvGetCachedAiQuiz(lesson.id);
