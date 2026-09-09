@@ -399,10 +399,32 @@ async function _acvoltRenderLesson() {
         // puede que ni el evento haya salido.
         setTimeout(function () {
           var f = el.querySelector('iframe');
-          if (!f || f.getAttribute('src') || el.querySelector('.acv-firma-error')) return;
-          var porque = '';
-          try { porque = window.MaestroVideoFirma.ultimaFalla ? window.MaestroVideoFirma.ultimaFalla() : ''; } catch (e2) { void e2; }
-          _onFalla({ detail: { porque: porque || 'la firma no respondió' } });
+          if (!f) { _onFalla({ detail: { porque: 'no se creó el reproductor' } }); return; }
+          var src = f.getAttribute('src') || '';
+          if (!src && !el.querySelector('.acv-firma-error')) {
+            var porque = '';
+            try { porque = window.MaestroVideoFirma.ultimaFalla ? window.MaestroVideoFirma.ultimaFalla() : ''; } catch (e2) { void e2; }
+            _onFalla({ detail: { porque: porque || 'la firma no respondió' } });
+            return;
+          }
+          // 🩺 SÍ hay src y aun así está negro. Sin ver QUÉ src, ni Mario ni yo
+          // podemos hacer nada — llevamos tres rondas de capturas. Se muestra
+          // debajo del video, solo para admin, y se acaba el ping-pong.
+          try {
+            var esAdmin = (typeof isAdminAuthenticated === 'function' && isAdminAuthenticated()) ||
+                          (typeof isAdminStudent === 'function' && isAdminStudent());
+            if (!esAdmin || document.getElementById('acvDiagVideo')) return;
+            var firmada = /videodelivery\.net\/[A-Za-z0-9._-]{60,}/.test(src);
+            var d = document.createElement('div');
+            d.id = 'acvDiagVideo';
+            d.style.cssText = 'margin:8px 16px;padding:10px 12px;border-radius:10px;' +
+              'background:#0f2342;color:#fff6e0;font-size:12px;line-height:1.6;' +
+              'font-family:ui-monospace,Menlo,monospace;word-break:break-all;';
+            d.textContent = '🩺 ' + (firmada ? 'URL FIRMADA ✅' : 'SIN FIRMAR ❌ (uid crudo)') +
+              ' · alto ' + Math.round(f.getBoundingClientRect().height) + 'px' +
+              ' · ' + src.slice(0, 110);
+            if (el.firstChild) el.appendChild(d);
+          } catch (e3) { console.warn('[acvolt] diag:', e3 && e3.message); }
         }, 8000);
       } else if (el.querySelector('iframe[data-vf-uid]')) {
         console.warn('[acvolt] falta js/video-firma.js: el video no se puede desbloquear');
