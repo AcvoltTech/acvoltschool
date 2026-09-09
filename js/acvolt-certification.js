@@ -327,7 +327,14 @@ async function _acvoltRenderLesson() {
     if (lesson.stream_uid) {
       // Cloudflare Stream player — 16:9 responsive
       html += '<div style="position:relative;padding-top:56.25%;background:#000;margin-top:12px;">';
-      html += '<iframe src="https://iframe.videodelivery.net/' + _acvEsc(lesson.stream_uid) + '" ';
+      // 🔴 401 "You don't have permission to view this video" (Mario, 9-sep-2026,
+      // con la consola en la mano). Se armaba la URL con el uid CRUDO, y
+      // Cloudflare tiene `requireSignedURLs` PRENDIDO: rechaza y el alumno ve
+      // negro. El app grande ya lo hacía firmado; la escuela se quedó atrás.
+      // 🪤 El iframe sale SIN `src`: lo rellena `MaestroVideoFirma.firmarPendientes()`
+      // con un token. Si se deja el src crudo "por si acaso", el iframe intenta
+      // la versión sin firma, falla, y ya no se recupera.
+      html += '<iframe data-vf-uid="' + _acvEsc(lesson.stream_uid) + '" ';
       html += 'style="position:absolute;top:0;left:0;width:100%;height:100%;border:0;" allow="accelerometer;gyroscope;autoplay;encrypted-media;picture-in-picture" allowfullscreen></iframe>';
       html += '</div>';
     } else {
@@ -361,6 +368,16 @@ async function _acvoltRenderLesson() {
 
     // Load quiz questions
     el.innerHTML = html + '</div>';
+    // 🔒 Ya en el DOM: se le pide a Cloudflare la URL firmada y se rellena el
+    // `src` del iframe marcado con `data-vf-uid`. Ver js/video-firma.js.
+    // 🪤 Si el firmador no cargó, se avisa en consola en vez de dejar un negro
+    // mudo — el técnico ya vio suficientes rectángulos negros hoy.
+    try {
+      if (window.MaestroVideoFirma) window.MaestroVideoFirma.firmarPendientes(el);
+      else if (el.querySelector('iframe[data-vf-uid]')) {
+        console.warn('[acvolt] falta js/video-firma.js: el video no se puede desbloquear');
+      }
+    } catch (e) { console.warn('[acvolt] firma:', e && e.message); }
     await _acvoltLoadAndRenderQuiz(lesson);
     return;
   }

@@ -25,6 +25,12 @@ const TIER0_SCRIPTS = [
   'js/config.js',
   'js/lazy-loader.js',
   'js/supabase-init.js',
+  // 🔒 Firma las URLs de Cloudflare Stream (lecciones en video → 401 sin esto).
+  // 🪤 Va en el BUNDLE, no suelto: en este repo `SUPABASE_KEY` es un `const` de
+  // bloque dentro de config.js, no `window.SUPABASE_KEY`. Suelto, el firmador se
+  // quedaba con la llave VACÍA y fallaba siempre, en silencio. Bundleado
+  // comparte ámbito con config.js y sí la ve. Por eso va DESPUÉS de config.js.
+  'js/video-firma.js',
 ];
 
 // Tier 1: Deferred scripts (core app shell, execute after parse)
