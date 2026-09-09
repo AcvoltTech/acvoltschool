@@ -407,29 +407,45 @@ async function _acvoltRenderLesson() {
             _onFalla({ detail: { porque: porque || 'la firma no respondió' } });
             return;
           }
-          // 🩺 SÍ hay src y aun así está negro. Sin ver QUÉ src, ni Mario ni yo
-          // podemos hacer nada — llevamos tres rondas de capturas. Se muestra
-          // debajo del video, solo para admin, y se acaba el ping-pong.
-          try {
-            var esAdmin = (typeof isAdminAuthenticated === 'function' && isAdminAuthenticated()) ||
-                          (typeof isAdminStudent === 'function' && isAdminStudent());
-            if (!esAdmin || document.getElementById('acvDiagVideo')) return;
-            var firmada = /videodelivery\.net\/[A-Za-z0-9._-]{60,}/.test(src);
-            var d = document.createElement('div');
-            d.id = 'acvDiagVideo';
-            d.style.cssText = 'margin:8px 16px;padding:10px 12px;border-radius:10px;' +
-              'background:#0f2342;color:#fff6e0;font-size:12px;line-height:1.6;' +
-              'font-family:ui-monospace,Menlo,monospace;word-break:break-all;';
-            d.textContent = '🩺 ' + (firmada ? 'URL FIRMADA ✅' : 'SIN FIRMAR ❌ (uid crudo)') +
-              ' · alto ' + Math.round(f.getBoundingClientRect().height) + 'px' +
-              ' · ' + src.slice(0, 110);
-            if (el.firstChild) el.appendChild(d);
-          } catch (e3) { console.warn('[acvolt] diag:', e3 && e3.message); }
-        }, 8000);
+          }, 8000);
       } else if (el.querySelector('iframe[data-vf-uid]')) {
         console.warn('[acvolt] falta js/video-firma.js: el video no se puede desbloquear');
       }
     } catch (e) { console.warn('[acvolt] firma:', e && e.message); }
+    // 🩺 DIAGNÓSTICO INCONDICIONAL. Las dos versiones anteriores no salieron
+    // nunca: una vivía dentro del bloque del firmador (si ese objeto falta, ni
+    // se ejecuta) y la otra pedía ser admin. Un diagnóstico con condiciones es
+    // un diagnóstico que no está cuando hace falta.
+    // 🪤 NO se muestra la URL: una URL firmada de Cloudflare **es** el permiso
+    // para ver el video. Se dice si está firmada y qué tamaño tiene, nada más.
+    if (lesson.stream_uid) {
+      setTimeout(function () {
+        try {
+          if (document.getElementById('acvDiagVideo')) return;
+          var f = el.querySelector('iframe');
+          var r = f ? f.getBoundingClientRect() : null;
+          var src = (f && f.getAttribute('src')) || '';
+          var estado = !f ? 'NO se creó el reproductor'
+            : !src ? ('el iframe quedó SIN url' +
+                      (window.MaestroVideoFirma ? '' : ' · y el firmador NO cargó'))
+            : (/videodelivery\.net\/[A-Za-z0-9._-]{60,}/.test(src) ? 'url FIRMADA ✅' : 'url SIN FIRMAR ❌');
+          var porque = '';
+          try {
+            porque = (window.MaestroVideoFirma && window.MaestroVideoFirma.ultimaFalla)
+              ? window.MaestroVideoFirma.ultimaFalla() : '';
+          } catch (e4) { void e4; }
+          var d = document.createElement('div');
+          d.id = 'acvDiagVideo';
+          d.style.cssText = 'margin:10px 16px;padding:11px 13px;border-radius:10px;' +
+            'background:#0f2342;color:#fff6e0;font-size:12.5px;line-height:1.6;';
+          d.textContent = '🩺 ' + estado +
+            (r ? ' · ' + Math.round(r.width) + '×' + Math.round(r.height) + 'px' : '') +
+            (porque ? ' · ' + porque : '') +
+            ' · firmador: ' + (window.MaestroVideoFirma ? 'sí' : 'NO');
+          el.appendChild(d);
+        } catch (e5) { console.warn('[acvolt] diag:', e5 && e5.message); }
+      }, 6000);
+    }
     await _acvoltLoadAndRenderQuiz(lesson);
     return;
   }
