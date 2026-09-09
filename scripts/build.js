@@ -25,12 +25,6 @@ const TIER0_SCRIPTS = [
   'js/config.js',
   'js/lazy-loader.js',
   'js/supabase-init.js',
-  // 🔒 Firma las URLs de Cloudflare Stream (lecciones en video → 401 sin esto).
-  // 🪤 Va en el BUNDLE, no suelto: en este repo `SUPABASE_KEY` es un `const` de
-  // bloque dentro de config.js, no `window.SUPABASE_KEY`. Suelto, el firmador se
-  // quedaba con la llave VACÍA y fallaba siempre, en silencio. Bundleado
-  // comparte ámbito con config.js y sí la ve. Por eso va DESPUÉS de config.js.
-  'js/video-firma.js',
 ];
 
 // Tier 1: Deferred scripts (core app shell, execute after parse)
@@ -209,6 +203,13 @@ const STATIC_DIRS = [
 // Ver [[feedback_standalone_scripts_must_be_in_build]].
 const STANDALONE_JS = [
   'js/debug-overlay.js',   // reportero de errores en pantalla (iOS WKWebView), carga temprano
+  // 🔒 Firma las URLs de Cloudflare Stream (sin esto, las lecciones dan 401).
+  // 🪤 SUELTO, no en el bundle: el sitio publicado sirve los archivos
+  // individuales, no `tier0.bundle.js` — lo comprobé pidiendo el HTML en vivo.
+  // Meterlo solo al bundle lo dejaba SIN CARGAR. Y como el `const SUPABASE_KEY`
+  // de config.js es de nivel superior, un script suelto posterior sí lo ve
+  // (es lo mismo que hace js/supabase-init.js).
+  'js/video-firma.js',
 ];
 
 // ── Utility Functions ──────────────────────────────────────────
