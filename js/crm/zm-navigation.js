@@ -1008,43 +1008,79 @@ async function _crmLoadLastLiveClass() {
 // migraciones viejas —111, 99, 119— por eso NO se usa).
 var _dineroStripe = null, _dineroApp = null;
 function _crmFmtDinero(n) { return '$' + Number(n || 0).toLocaleString('en-US', { maximumFractionDigits: 0 }); }
+// 🔴 EL TABLERO DECÍA $0 CON $5,559 EN LA BASE (Mario, 9-sep-2026). El RPC
+// `dashboard_app_iap` devuelve `mrr_app_cents: 555950` y 50 pagando, y la
+// tarjeta de abajo SÍ se pintaba (67/49/18) — o sea el dato llegó. Lo que
+// fallaba era ESTA función, y su llamador la envolvía en `catch (_p) {}`: un
+// catch VACÍO que borró toda pista.
+//
+// 🪤 Ahora cada campo se pinta por separado. Si uno truena, los demás se
+// pintan igual — un tablero a medias es infinitamente mejor que un $0 falso,
+// porque un cero se LEE como "no hay dinero" y eso asusta sin razón.
+function _crmPintaCampo(id, valor, comoHtml) {
+  try {
+    var e = document.getElementById(id);
+    if (!e) { console.warn('[CRM dinero] no existe #' + id); return false; }
+    if (comoHtml) e.innerHTML = valor; else e.textContent = valor;
+    return true;
+  } catch (err) {
+    console.warn('[CRM dinero] no pude pintar #' + id + ':', err && err.message);
+    return false;
+  }
+}
+
 function _crmPintarDinero(stripe) {
   if (stripe && stripe._src === 'stripe_live') {
     _dineroStripe = { mrr: Number(stripe.mrr_real || 0), subs: Number(stripe.active_subs_real || 0),
                       balance: Number(stripe.stripe_balance || 0), perdido: Number(stripe.failed_revenue || 0) };
   }
-  var el;
   if (_dineroStripe) {
-    el = document.getElementById('dineroStripe');    if (el) el.textContent = _crmFmtDinero(_dineroStripe.mrr);
-    el = document.getElementById('dineroStripeSub'); if (el) el.textContent = _dineroStripe.subs + ' suscriptores';
-    el = document.getElementById('dineroBalance');   if (el) el.textContent = _crmFmtDinero(_dineroStripe.balance);
-    el = document.getElementById('dineroPerdido');   if (el) el.textContent = _crmFmtDinero(_dineroStripe.perdido);
+    _crmPintaCampo('dineroStripe', _crmFmtDinero(_dineroStripe.mrr));
+    _crmPintaCampo('dineroStripeSub', (_dineroStripe.subs || 0) + ' suscriptores');
+    _crmPintaCampo('dineroBalance', _crmFmtDinero(_dineroStripe.balance));
+    _crmPintaCampo('dineroPerdido', _crmFmtDinero(_dineroStripe.perdido));
   }
   if (_dineroApp) {
-    el = document.getElementById('dineroApp');    if (el) el.textContent = _crmFmtDinero(_dineroApp.mrr);
-    el = document.getElementById('dineroAppSub'); if (el) el.textContent = _dineroApp.subs + ' pagando · ' + _dineroApp.nuevas7 + ' nuevas en 7d';
-    el = document.getElementById('dineroDesglose');
-    if (el) el.innerHTML = 'Pagando: <b>' + _dineroApp.vip + '</b> VIP &nbsp;·&nbsp; <b>' +
-      _dineroApp.standard + '</b> Standard &nbsp;·&nbsp; <b>' + _dineroApp.estudio + '</b> Estudio' +
-      ' &nbsp;&nbsp;|&nbsp;&nbsp; <span style="color:#c9a14a;">🎁 ' + _dineroApp.enPrueba +
-      ' en prueba gratis — $' + _dineroApp.potencial.toLocaleString('en-US') + '/mes si convierten</span>';
+    _crmPintaCampo('dineroApp', _crmFmtDinero(_dineroApp.mrr));
+    _crmPintaCampo('dineroAppSub', (_dineroApp.subs || 0) + ' pagando · ' +
+                   (_dineroApp.nuevas7 || 0) + ' nuevas en 7d');
+    // 🪤 `Number(...)` a la fuerza: si el RPC cambia un campo a texto o a nulo,
+    // `.toLocaleString` truena y ANTES eso se llevaba TODO el panel al $0.
+    var pot = Number(_dineroApp.potencial || 0);
+    _crmPintaCampo('dineroDesglose',
+      'Pagando: <b>' + (_dineroApp.vip || 0) + '</b> VIP &nbsp;·&nbsp; <b>' +
+      (_dineroApp.standard || 0) + '</b> Standard &nbsp;·&nbsp; <b>' +
+      (_dineroApp.estudio || 0) + '</b> Estudio' +
+      ' &nbsp;&nbsp;|&nbsp;&nbsp; <span style="color:#c9a14a;">🎁 ' + (_dineroApp.enPrueba || 0) +
+      ' en prueba gratis — $' + pot.toLocaleString('en-US') + '/mes si convierten</span>', true);
   }
-  // El total SOLO cuando ya llegaron los dos lados: un total a medias se ve como si el
-  // dinero hubiera bajado, y eso asusta sin razón.
-  if (_dineroStripe && _dineroApp) {
-    el = document.getElementById('dineroTotal');
-    if (el) el.textContent = _crmFmtDinero(_dineroStripe.mrr + _dineroApp.mrr);
-    el = document.getElementById('dineroActualizado');
-    if (el) el.textContent = 'actualizado ' + new Date().toLocaleTimeString('es-MX', { hour: 'numeric', minute: '2-digit' });
+  // 🔴 EL TOTAL YA NO ESPERA A LOS DOS. Antes exigía Stripe **y** app; si Stripe
+  // no contestaba, el total se quedaba en el "$0" del HTML — con $5,559 reales
+  // de la app medidos y a la vista. Un cero falso es peor que un número parcial.
+  if (_dineroStripe || _dineroApp) {
+    var totalMrr = (_dineroStripe ? _dineroStripe.mrr : 0) + (_dineroApp ? _dineroApp.mrr : 0);
+    _crmPintaCampo('dineroTotal', _crmFmtDinero(totalMrr));
+    var falta = !_dineroStripe ? ' (falta Stripe)' : (!_dineroApp ? ' (falta la app)' : '');
+    _crmPintaCampo('dineroActualizado',
+      'actualizado ' + new Date().toLocaleTimeString('es-MX', { hour: 'numeric', minute: '2-digit' }) + falta);
   }
 }
 
 async function _crmLoadAppIap() {
   try {
-    if (typeof supabaseClient === 'undefined' || !supabaseClient) return;
+    if (typeof supabaseClient === 'undefined' || !supabaseClient) {
+      console.warn('[CRM dinero] sin cliente de Supabase: no se pudo medir la app');
+      return;
+    }
     var res = await supabaseClient.rpc('dashboard_app_iap');
+    // 🪤 supabase-js NO truena: el error viene en `res.error`. Sin revisarlo,
+    // un 400 (RLS, función renombrada) se veía IGUAL que "no hay dinero".
+    if (res && res.error) {
+      console.error('[CRM dinero] el RPC dashboard_app_iap falló:', res.error.message);
+      return;
+    }
     var d = (res && res.data) ? res.data : null;
-    if (!d) return;
+    if (!d) { console.warn('[CRM dinero] el RPC no devolvió datos'); return; }
     function _set(id, v) { var e = document.getElementById(id); if (e) e.textContent = v; }
     _set('appIapTotal', (d.activas_total || 0).toLocaleString());
     _set('appIapIos', (d.ios || 0).toLocaleString());
@@ -1057,7 +1093,9 @@ async function _crmLoadAppIap() {
                    vip: d.n_vip || 0, standard: d.n_standard || 0, estudio: d.n_estudio || 0,
                    nuevas7: d.nuevas_7d || 0,
                    enPrueba: d.en_prueba || 0, potencial: Math.round((d.mrr_potencial_cents || 0) / 100) };
-    try { _crmPintarDinero(null); } catch (_p) {}
+    // 🔴 Este catch estaba VACÍO y fue el que escondió el $0 durante meses.
+    try { _crmPintarDinero(null); }
+    catch (_p) { console.error('[CRM dinero] falló al pintar:', _p && _p.message); }
     var dd = d.by_day || [];
     var chart = document.getElementById('appIapChart');
     if (chart && dd.length) {
@@ -1076,7 +1114,7 @@ async function _crmLoadAppIap() {
       var sub = document.getElementById('appIapSub');
       if (sub) sub.textContent = (d.hoy || 0) + ' hoy · ' + totalN + ' en 14d · ' + (d.vip || 0) + ' VIP';
     }
-  } catch (e) { console.warn('[CRM] app iap', e.message || e); }
+  } catch (e) { console.error('[CRM dinero] app iap:', e && (e.message || e)); }
 }
 
 // Dashboard stats via edge function (uses service role key to bypass RLS)
@@ -1261,7 +1299,8 @@ async function _crmLoadDashboardStats() {
     // 💰 MI DINERO (Mario 2026-07-30) — junta los dos canales en un solo número.
     // Antes el MRR de Stripe estaba en una tarjeta, los de la app en otra sección más
     // abajo, y el TOTAL en ningún lado: había que sumarlo de cabeza.
-    try { _crmPintarDinero(stripe); } catch (_md) {}
+    try { _crmPintarDinero(stripe); }
+    catch (_md) { console.error('[CRM dinero] falló al pintar (stripe):', _md && _md.message); }
 
     // Reengagement campaign ROI — Mario 2026-05-29
     var reeng = data.reengagement || {};
