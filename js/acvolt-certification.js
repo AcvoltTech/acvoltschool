@@ -29,6 +29,9 @@ function _acvoltAuthHeader() {
       return window.supabaseClient.auth.getSession()
         .then(function (r) {
           var t = r && r.data && r.data.session && r.data.session.access_token;
+          // 🪤 Se ANOTA si hubo token real: sin esta bandera, la pantalla vacía
+          // no puede distinguir "no hay contenido" de "entré como visitante".
+          try { window.__acvSesionOk = !!t; } catch (e) { void e; }
           return t || SUPABASE_KEY;
         })
         .catch(function () { return SUPABASE_KEY; });
@@ -140,6 +143,29 @@ function _acvoltRenderCourseList() {
   html += '<img src="maestro-hvacr-logo.png" alt="Maestro HVACR" style="width:100%;height:100%;object-fit:contain;"></div>';
   html += '<h2 style="color:#0F0F0F;font-size:22px;font-weight:800;margin:0;">Videos Maestro HVACR</h2>';
   html += '<p style="color:#6B6B66;font-size:13px;margin-top:4px;font-weight:500;">' + activeCourses.length + ' ' + _tc('acv_courses_available', 'cursos disponibles') + '</p>';
+
+  // 🔴 CERO CURSOS NUNCA SE MUESTRA A SECAS (Mario, 9-sep-2026: "esa zona no
+  // abre"). Una pantalla vacía y muda es indistinguible de una rota. MEDIDO:
+  // la tabla tiene 17 filas y 14 activas; si aquí sale 0 es que la consulta
+  // volvió vacía — y la causa casi siempre es la SESIÓN (las policies de
+  // acvolt_courses dan SELECT solo al rol `authenticated`).
+  if (!activeCourses.length) {
+    var _haySesion = false;
+    try {
+      _haySesion = !!(window.supabaseClient && window.supabaseClient.auth);
+      if (_haySesion && window.__acvSesionOk === false) _haySesion = false;
+    } catch (e) { void e; }
+    var _traidos = (_acvoltData.courses || []).length;
+    html += '<div style="background:#FEF3C7;border:2px solid #F59E0B;border-radius:12px;' +
+      'padding:14px 16px;margin:14px 16px;color:#7C2D12;font-size:13.5px;line-height:1.6;text-align:left;">' +
+      '<b>No se pudo traer tu temario.</b><br>' +
+      'La base trae <b>17 cursos</b>, así que esto no es que no haya contenido.<br>' +
+      '<span style="font-size:12px;opacity:.85;">Diagnóstico: la consulta devolvió <b>' + _traidos +
+      '</b> filas' + (_haySesion ? '' : ' · <b>y no hay sesión de Supabase</b>') + '.<br>' +
+      'El temario se abre con la sesión iniciada — entrar al Panel de Admin NO basta: ' +
+      'hay que iniciar sesión en acvoltschool.com con tu correo y contraseña.</span>' +
+      '</div>';
+  }
   html += '</div>';
 
   // Course cards
