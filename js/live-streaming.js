@@ -1647,11 +1647,36 @@ function watchRecording(playbackUrl, title, streamId, recordingId) {
   var isDriveVideo = playbackUrl.indexOf('drive.google.com') !== -1;
   var isCfStream = playbackUrl.indexOf('cloudflarestream.com') !== -1;
 
+  // 🪤 Quita la nota de "se abrió en otra pestaña" de una grabación anterior.
+  var _notaVieja = document.getElementById('lsDriveNota');
+  if (_notaVieja) _notaVieja.remove();
+
   if (isDriveVideo) {
-    // Google Drive recording — open in new tab (iframe embedding blocked by Google CSP)
+    // 🔴 ESTA RAMA SE SALÍA DEL FLUJO Y SE LLEVABA DOS COSAS (9-sep-2026).
+    // Hacía `window.open(...); return;` — y ese `return` brincaba el registro de
+    // asistencia VOD (abajo) y la inyección del botón "📝 Tomar Quiz". O sea: el
+    // estudiante que abría una grabación alojada en Google Drive NUNCA quedaba
+    // marcado como presente y NUNCA veía el quiz. La grabación era, en la
+    // práctica, imposible de calificar — y nadie se enteraba, porque el video sí
+    // abría en la otra pestaña y todo "se veía bien".
+    // 🪤 Es el mismo patrón que el video negro de hoy: una rama de render que no
+    // llama lo que sus hermanas sí llaman. Ahora NO se sale: se abre la pestaña
+    // (Google bloquea el embebido por su CSP, eso no se puede evitar) y el flujo
+    // continúa igual que en las demás ramas.
     var driveView = playbackUrl.replace('/preview', '/view');
     window.open(driveView, '_blank');
-    return;
+    if (videoEl) videoEl.style.display = 'none';
+    if (iframe) { iframe.style.display = 'none'; iframe.src = ''; }
+    if (playerSection) {
+      var nota = document.createElement('div');
+      nota.id = 'lsDriveNota';
+      nota.style.cssText = 'margin:12px;padding:14px 16px;border-radius:12px;background:#0f2342;' +
+        'color:#fff6e0;font-size:13.5px;line-height:1.6;text-align:center;';
+      nota.textContent = _tc('ls_drive_new_tab',
+        'Esta grabación se abrió en otra pestaña (Google Drive no permite verla aquí dentro). ' +
+        'Cuando termines, regresa a esta pantalla para tomar el quiz.');
+      playerSection.appendChild(nota);
+    }
   } else if (isCfStream && iframe) {
     // Cloudflare Stream recording — use iframe embed or convert to HLS for <video>
     if (videoEl) videoEl.style.display = 'none';
@@ -1659,7 +1684,26 @@ function watchRecording(playbackUrl, title, streamId, recordingId) {
     var cfUrl = playbackUrl;
     if (cfUrl.indexOf('/iframe') === -1) cfUrl = cfUrl.replace(/\/?$/, '/iframe');
     iframe.style.display = '';
-    iframe.src = cfUrl;
+    // 🪤 FIRMA: si esta grabación vive en Cloudflare Stream con `requireSignedURLs`
+    // prendido (como quedaron los 175 tutoriales al migrarlos), una URL cruda da
+    // 401 y el iframe se ve NEGRO sin decir nada. Se marca con `data-vf-uid` y
+    // SIN `src` para que `MaestroVideoFirma` le ponga la URL ya firmada.
+    // Si no se puede sacar el uid, se carga tal cual: hoy las grabaciones en vivo
+    // todavía son abiertas y así siguen funcionando.
+    var _cfUid = (String(playbackUrl).match(/(?:cloudflarestream\.com|videodelivery\.net)\/([a-f0-9]{32})/i) || [])[1];
+    if (_cfUid && window.MaestroVideoFirma) {
+      iframe.removeAttribute('src');
+      iframe.setAttribute('data-vf-uid', _cfUid);
+      window.MaestroVideoFirma.firmarPendientes(iframe.parentNode || document);
+      setTimeout(function () {
+        if (!iframe.getAttribute('src')) {
+          console.warn('[LiveStreaming] la grabación de Cloudflare no se firmó; se carga sin firma como respaldo');
+          iframe.src = cfUrl;
+        }
+      }, 6000);
+    } else {
+      iframe.src = cfUrl;
+    }
   } else if (isDirectVideo && videoEl) {
     // Use <video> tag for direct video files (100ms recordings, mp4, m3u8, webm)
     if (iframe) iframe.style.display = 'none';

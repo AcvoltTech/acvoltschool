@@ -79,7 +79,12 @@
     try { var _m = document.getElementById(MODAL_ID); if (_m) _m.remove(); } catch (_) {}
     if (callback) callback();
     return false;
+    // 🪤 Todo lo que sigue es ZONA MUERTA A PROPÓSITO por el kill-switch de arriba.
+    // Se silencia la regla para que el lint quede en verde y así un `no-unreachable`
+    // NUEVO (accidental) sí se vea. Si algún día se reactiva el gate, quita el
+    // `return false` de arriba y esta línea.
     // Admin bypasses gate
+    // eslint-disable-next-line no-unreachable
     if (_isAdmin()) { if (callback) callback(); return false; }
     // iOS App Store: skip gate — Apple reviewers shouldn't be blocked by profile form
     if (window.isIOSAppStore) { if (callback) callback(); return false; }

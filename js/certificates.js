@@ -870,10 +870,21 @@
         checkPromises.push(
           supabaseClient.from('certificates').select('nivel,cert_status,certificate_number').eq('user_id', supabaseUserId)
           .then(function(res) {
+            // 🔴 `.catch(function() {})` VACÍO: si esta lectura fallaba,
+            // `approvalCache` se quedaba en blanco y ABAJO todo certificado se
+            // pinta como 'pending' → el botón de imprimir desaparece y el
+            // estudiante cree que NO le aprobaron nada. Un fallo de red se veía
+            // igual que un rechazo del instructor.
+            // 🪤 supabase-js resuelve con `{ error }`: sin leerlo, ni el `.catch`
+            // se enteraba.
+            if (res && res.error) throw res.error;
             (res.data || []).forEach(function(c) {
               approvalCache[c.nivel] = c.cert_status || 'pending';
             });
-          }).catch(function() {})
+          }).catch(function(e) {
+            console.warn('[Certificates] no se pudo leer el estado de aprobación de los certificados:', (e && e.message) || e, { userId: supabaseUserId });
+            if (typeof window.showToast === 'function') window.showToast(_tc('cert_status_unknown', 'No se pudo consultar el estado de tus certificados. Si ya te aprobaron alguno, vuelve a entrar en un momento.'), 'warning');
+          })
         );
       }
 
@@ -1061,7 +1072,23 @@
       try { if (typeof currentUser !== 'undefined' && currentUser) currentUser.nombre = name; } catch (_) {}
       var em = _certEmail();
       if (em && typeof supabaseClient !== 'undefined' && supabaseClient && supabaseClient.from) {
-        try { supabaseClient.from('users').update({ nombre: name }).eq('email', em).then(function () {}, function () {}); } catch (_) {}
+        // 🔴 ERA `.then(function () {}, function () {})`: el manejador de rechazo
+        // VACÍO. El estudiante escribe su nombre real para el diploma, el modal se
+        // cierra, el diploma se imprime... y si el servidor rechazó el update, su
+        // nombre nunca se guardó. El SIGUIENTE diploma vuelve a salir con el
+        // usuario/número — el bug de "cambio mi nombre y se revierte".
+        // 🪤 supabase-js RESUELVE con `{ error }`, no lanza: hay que leer `.error`.
+        try {
+          supabaseClient.from('users').update({ nombre: name }).eq('email', em).then(function (r) {
+            if (r && r.error) {
+              console.warn('[Certificates] no se guardó el nombre del certificado en el servidor:', r.error.message || r.error, { email: em });
+              if (typeof window.showToast === 'function') window.showToast(_tc('cert_name_local_only', 'Tu nombre se usó para este diploma, pero no se pudo guardar en tu cuenta. Revísalo en tu perfil.'), 'warning');
+            }
+          }, function (err) {
+            console.warn('[Certificates] falló la conexión al guardar el nombre del certificado:', (err && err.message) || err, { email: em });
+            if (typeof window.showToast === 'function') window.showToast(_tc('cert_name_local_only', 'Tu nombre se usó para este diploma, pero no se pudo guardar en tu cuenta. Revísalo en tu perfil.'), 'warning');
+          });
+        } catch (e) { console.warn('[Certificates] error al guardar el nombre del certificado:', e.message || e); }
       }
       var o = document.getElementById('certReqOverlay'); if (o) o.remove();
       var cb = _certReqOnComplete; _certReqOnComplete = null;

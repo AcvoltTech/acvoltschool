@@ -899,9 +899,17 @@
       var examTitle = _examState.examData.title || 'Examen';
 
       // Update attempt in DB
+      // 🔴 EL EXAMEN SE PODÍA PERDER EN SILENCIO (9-sep-2026). Aquí solo había un
+      // `try/catch` con `console.error`, y `.update()` de supabase-js **no lanza**
+      // cuando el servidor rechaza: RESUELVE con `{ error }`. Así que un fallo de
+      // RLS o de red no entraba al `catch`, el estudiante veía su calificación en
+      // pantalla tan campante... y el instructor nunca veía el intento. "Pasé el
+      // examen" contra "aquí no hay nada" — sin forma de saber quién tiene razón.
+      // Ahora se lee el `.error`, se avisa al estudiante y se le deja el resultado
+      // guardado en el teléfono para que se pueda reclamar con evidencia.
       try {
         if (_examState.attemptId) {
-          await supabaseClient.from('zm_exam_attempts').update({
+          var _resAtt = await supabaseClient.from('zm_exam_attempts').update({
             status: 'completed',
             score: percentage,
             percentage: percentage,
@@ -914,9 +922,21 @@
             violations: _examState.violations || [],
             penalty_applied: penaltyPct
           }).eq('id', _examState.attemptId);
+          if (_resAtt && _resAtt.error) throw _resAtt.error;
         }
       } catch(e) {
-        console.error('[MaestroAC] Error saving exam attempt:', e);
+        console.error('[MaestroAC] Error saving exam attempt:', e, { attemptId: _examState.attemptId, percentage: percentage });
+        // Copia local como evidencia: si el servidor no lo registró, que al menos
+        // quede el intento con su hora para poder reclamarlo.
+        try {
+          var _pend = JSON.parse(localStorage.getItem('maestroac_exam_no_guardados') || '[]');
+          _pend.push({ attemptId: _examState.attemptId, examTitle: examTitle, percentage: percentage,
+                       correct: correct, total: total, cuando: new Date().toISOString() });
+          localStorage.setItem('maestroac_exam_no_guardados', JSON.stringify(_pend.slice(-20)));
+        } catch (e2) { console.warn('[MaestroAC] tampoco se pudo guardar el intento localmente:', e2.message || e2); }
+        if (typeof window.showToast === 'function') {
+          window.showToast(_tc('se_attempt_not_saved', '⚠️ Tu calificación se muestra aquí, pero NO se pudo guardar en el servidor. Toma una captura y avísale a tu instructor.'), 'error');
+        }
       }
 
       // Show results in the overlay
@@ -1065,20 +1085,32 @@
       const statusEl = document.getElementById('taxFormStatus');
       
       try {
-        await supabaseClient.from('tax_form_requests').insert([{
+        // 🪤 supabase-js NO lanza excepción cuando el servidor rechaza: RESUELVE
+        // con `{ error }`. Sin leer `.error`, un 401/403 de RLS pasaba de largo
+        // por el `try` y caía directo en el mensaje de éxito.
+        var _resTax = await supabaseClient.from('tax_form_requests').insert([{
           student_name: name,
           student_email: email,
           requested_at: new Date().toISOString(),
           status: 'pending',
           year: new Date().getFullYear()
         }]);
-        
+        if (_resTax && _resTax.error) throw _resTax.error;
+
         if (statusEl) statusEl.innerHTML = '✅ ' + _tc('se_request_sent', 'Solicitud enviada. Te contactaremos pronto.');
         if (typeof window.showToast === 'function') window.showToast(_tc('se_tax_request_sent', 'Solicitud de forma de taxes enviada exitosamente'), 'success'); else window.MaestroDialog.alert({title: '', message: '✅ ' + _tc('se_tax_request_sent', 'Solicitud de forma de taxes enviada exitosamente'), kind: 'success'});
         notifyAdmin(_tc('se_tax_form_request_title', 'Solicitud Tax Form'), name + ' ' + _tc('se_tax_form_request_body', 'solicita forma de taxes'), 'taxform');
       } catch(e) {
-        if (statusEl) statusEl.innerHTML = '✅ ' + _tc('se_request_registered', 'Solicitud registrada.');
-        if (typeof window.showToast === 'function') window.showToast(_tc('se_request_registered_full', 'Solicitud registrada. El instructor te contactará pronto.'), 'success'); else window.MaestroDialog.alert({title: '', message: '✅ ' + _tc('se_request_registered_full', 'Solicitud registrada. El instructor te contactará pronto.'), kind: 'success'});
+        // 🔴 AQUÍ SE LE MENTÍA AL ESTUDIANTE (9-sep-2026). El `catch` pintaba
+        // "✅ Solicitud registrada. El instructor te contactará pronto." — o sea,
+        // el fracaso se veía EXACTAMENTE igual que el éxito. Nadie contactaba a
+        // nadie porque la fila nunca se insertó, y el estudiante se quedaba
+        // esperando su forma de taxes sin saber que tenía que volver a pedirla.
+        console.warn('[StudentExams] no se pudo registrar la solicitud de forma de taxes:', (e && e.message) || e, { email: email });
+        var _msgTax = _tc('se_request_failed', 'No se pudo enviar tu solicitud. Revisa tu internet y vuelve a intentar.');
+        if (statusEl) statusEl.innerHTML = '⚠️ ' + _msgTax;
+        if (typeof window.showToast === 'function') window.showToast(_msgTax, 'error');
+        else window.MaestroDialog.alert({ title: '', message: '⚠️ ' + _msgTax, kind: 'warning' });
       }
     }
 

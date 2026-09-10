@@ -58,6 +58,16 @@ const TIER1_SCRIPTS = [
 // Lazy-loaded scripts (individually minified, loaded by MaestroLoader)
 const LAZY_JS_DIRS = ['js/admin', 'js/crm'];
 const LAZY_JS_ROOT = [
+  // 🔴 FALTABA (9-sep-2026). `js/membresias.js` sí existe y sí lo carga
+  // `SCREEN_SCRIPTS.membresiasScreen` (js/navigation.js:85), pero no estaba en
+  // NINGUNA lista de este archivo: `npm run build` nunca lo copiaba a `dist/`.
+  // Sirviendo `dist/`, la pantalla de Membresías (precios / links de Stripe)
+  // pedía un archivo que no existe → el SPA devuelve index.html → el navegador
+  // lo intenta ejecutar como JS y truena con "Unexpected token '<'".
+  // 🪤 Hoy no se nota porque producción sirve la RAÍZ, no `dist/` (ver CLAUDE.md).
+  // Es una bomba de tiempo: el día que el deploy se alinee con el build, se cae
+  // justo la pantalla donde la gente paga.
+  'js/membresias.js',
   'js/maestro-parte.js',   // 🩺 el parte hablado (solo Mario)
   'js/users-data-client.js',
   'js/inline-early.js',

@@ -22,7 +22,6 @@
       adm_ss_no_phone: { es: 'Sin teléfono registrado', en: 'No phone registered' },
       adm_ss_registered: { es: 'Registrado:', en: 'Registered:' },
       adm_ss_call: { es: 'Llamar', en: 'Call' },
-      adm_ss_error_searching: { es: 'Error buscando estudiante: ', en: 'Error searching student: ' },
       adm_ss_no_membership: { es: 'Sin membresía', en: 'No membership' },
       adm_ss_active_mem: { es: 'Activa', en: 'Active' },
       adm_ss_inactive_mem: { es: 'Inactiva', en: 'Inactive' },
@@ -40,8 +39,6 @@
       adm_ss_enter_email: { es: 'Por favor ingresa el email del estudiante', en: 'Please enter the student email' },
       adm_ss_survey_saved: { es: 'Survey guardado exitosamente', en: 'Survey saved successfully' },
       adm_ss_error_saving_survey: { es: 'Error guardando survey: ', en: 'Error saving survey: ' },
-      adm_ss_no_surveys: { es: 'No hay surveys', en: 'No surveys' },
-      adm_ss_of_type: { es: 'de tipo', en: 'of type' },
       adm_ss_entry: { es: 'Ingreso:', en: 'Entry:' },
       adm_ss_helped: { es: 'Ayudó:', en: 'Helped:' },
       adm_ss_cert: { es: 'Cert:', en: 'Cert:' },
@@ -96,6 +93,12 @@
       adm_ss_unblock_msg: { es: 'El estudiante recuperará acceso a su membresía.', en: 'The student will regain access to their membership.' },
       adm_ss_blocked: { es: 'bloqueado', en: 'blocked' },
       adm_ss_unblocked: { es: 'desbloqueado', en: 'unblocked' },
+      // 🪤 Aquí había 8 claves DUPLICADAS (9-sep-2026). En un objeto de JS la
+      // ÚLTIMA definición gana en silencio, así que 8 textos escritos a mano
+      // nunca se mostraron y nadie podía saberlo leyendo el archivo. Se borró la
+      // definición TEMPRANA de cada par: la tardía es la que ya estaba viva, así
+      // que el comportamiento no cambió ni un carácter. Salieron a la luz al
+      // crear .eslintrc.cjs (no-dupe-keys) — el lint llevaba meses sin correr.
       adm_ss_no_inactive_block: { es: 'No hay estudiantes inactivos para bloquear.', en: 'No inactive students to block.' },
       adm_ss_bulk_block_confirm: { es: 'BLOQUEAR {n} ESTUDIANTES INACTIVOS\n\nEsto desactivará la membresía de todos los estudiantes sin pago en los últimos 30 días.\n\nVerán un mensaje amigable para reactivar su cuenta.\n\n¿Continuar?', en: 'BLOCK {n} INACTIVE STUDENTS\n\nThis will deactivate the membership of all students with no payment in the last 30 days.\n\nThey will see a friendly message to reactivate their account.\n\nContinue?' },
       adm_ss_blocked_count: { es: 'Bloqueados: {n}', en: 'Blocked: {n}' },
@@ -106,11 +109,6 @@
       adm_ss_no_surveys: { es: 'No hay surveys', en: 'No surveys' },
       adm_ss_of_type: { es: 'de tipo', en: 'of type' },
       adm_ss_no_supabase: { es: 'Sin conexión a Supabase', en: 'No connection to Supabase' },
-      adm_ss_requests: { es: 'solicitudes', en: 'requests' },
-      adm_ss_no_exam_requests: { es: 'No hay solicitudes de examen aún.', en: 'No exam requests yet.' },
-      adm_ss_no_activity: { es: 'No hay actividad registrada.', en: 'No activity recorded.' },
-      adm_ss_link_not_found: { es: 'Link no encontrado:', en: 'Link not found:' },
-      adm_ss_link_copied: { es: '✅ Link copiado:', en: '✅ Link copied:' },
       adm_ss_no_phone_label: { es: 'Sin teléfono', en: 'No phone' },
       adm_ss_unknown: { es: 'Desconocido', en: 'Unknown' },
       adm_ss_no_contact: { es: 'Sin contacto', en: 'No contact' },
@@ -2000,7 +1998,9 @@
       ['ssDashBtnAll','ssDashBtnActive','ssDashBtnLost','ssDashBtnTop','ssDashBtnWA','ssDashBtnTG'].forEach(function(id) {
         var btn = document.getElementById(id);
         if (!btn) return;
-        btn.style.background = btn.style.background; // keep original
+        // 🪤 Aquí había `btn.style.background = btn.style.background; // keep original`:
+        // una línea que no hacía NADA y que además mentía — tres líneas abajo el
+        // fondo se pisa con rgba(100,100,100,0.1). Se quitó.
         btn.style.color = '#64748b';
         btn.style.border = '1px solid #e2e8f0';
         btn.style.background = 'rgba(100,100,100,0.1)';

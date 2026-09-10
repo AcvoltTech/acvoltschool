@@ -332,6 +332,104 @@ function _acvoltOpenLesson(lessonId) {
   if (typeof showScreen === 'function') showScreen('acvoltLessonScreen');
 }
 
+// ════════════════════════════════════════════════════════════════════════════
+// 🔴 UNA SOLA PUERTA PARA FIRMAR EL VIDEO — y esa es justamente la lección.
+//
+// El bug de hoy (video negro, sin peticiones, sin errores) fue que
+// `firmarPendientes()` vivía SOLO dentro de `if (lesson.lesson_type === 2)`
+// —la rama del QUIZ— y las lecciones de VIDEO (`lesson_type === 0`) se pintan
+// fuera de ese `if`. Al arreglarlo se copió la llamada a la otra rama... pero
+// la RED DE SEGURIDAD de 8 s y el 🩺 DIAGNÓSTICO se quedaron encerrados en la
+// rama del quiz. O sea: el mismo error, una capa más abajo. Un diagnóstico en
+// la rama equivocada es PEOR que no tenerlo — hace creer que ya se descartó.
+//
+// 🪤 Por eso ahora es UNA función y las dos ramas la llaman. Mientras las dos
+// ramas compartan este cuerpo, no se pueden volver a desincronizar. Si mañana
+// aparece un `lesson_type === 3`, que llame aquí y ya.
+// ════════════════════════════════════════════════════════════════════════════
+function _acvFirmarYVigilar(el, lesson) {
+  if (!el) return;
+
+  // Muestra el porqué ENCIMA del video. Sin esto, un negro no se diagnostica.
+  function _mostrarFalla(porque) {
+    var f = el.querySelector('iframe[data-vf-uid], iframe');
+    var caja = f && f.parentNode;
+    if (!caja || caja.querySelector('.acv-firma-error')) return;
+    var v = document.createElement('div');
+    v.className = 'acv-firma-error';
+    v.style.cssText = 'position:absolute;inset:0;display:flex;align-items:center;' +
+      'justify-content:center;text-align:center;padding:22px;background:rgba(0,0,0,.9);' +
+      'color:#fff;font-size:14px;line-height:1.6;z-index:5;';
+    v.textContent = 'No se pudo desbloquear el video. ' + (porque || '');
+    caja.appendChild(v);
+  }
+
+  try {
+    if (window.MaestroVideoFirma) {
+      var _onFalla = function (ev) {
+        window.removeEventListener('maestro:firma-fallo', _onFalla);
+        _mostrarFalla(((ev && ev.detail) || {}).porque);
+      };
+      window.addEventListener('maestro:firma-fallo', _onFalla);
+      window.MaestroVideoFirma.firmarPendientes(el);
+
+      // 🪤 Y si a los 8 s el iframe sigue sin `src`, tampoco se deja mudo:
+      // puede que el evento `maestro:firma-fallo` ni haya salido (por ejemplo
+      // si `firmarPendientes` no encontró ningún iframe pendiente que firmar).
+      setTimeout(function () {
+        window.removeEventListener('maestro:firma-fallo', _onFalla);
+        var f = el.querySelector('iframe');
+        if (!f) { _mostrarFalla('no se creó el reproductor'); return; }
+        if (f.getAttribute('src') || el.querySelector('.acv-firma-error')) return;
+        var porque = '';
+        try { porque = window.MaestroVideoFirma.ultimaFalla ? window.MaestroVideoFirma.ultimaFalla() : ''; } catch (e2) { console.warn('[acvolt] no se pudo leer la última falla de la firma:', e2 && e2.message); }
+        _mostrarFalla(porque || 'la firma no respondió');
+      }, 8000);
+    } else if (el.querySelector('iframe[data-vf-uid]')) {
+      console.warn('[acvolt] falta js/video-firma.js: el video no se puede desbloquear');
+      _mostrarFalla('el firmador de video no cargó');
+    }
+  } catch (e) { console.warn('[acvolt] firma:', e && e.message); }
+
+  // 🩺 DIAGNÓSTICO INCONDICIONAL. Las versiones anteriores no salieron nunca:
+  // una vivía dentro del bloque del firmador (si ese objeto falta, ni se
+  // ejecuta) y otra pedía ser admin. Un diagnóstico con condiciones es un
+  // diagnóstico que no está cuando hace falta.
+  // 🪤 NO se muestra la URL: una URL firmada de Cloudflare **es** el permiso
+  // para ver el video. Se dice si está firmada y qué tamaño tiene, nada más.
+  // 🪤 Solo cuando esta lección de verdad trae video. Antes se colgaba de
+  // `lesson.stream_uid` dentro de la rama del quiz, así que a una fila de quiz
+  // con `stream_uid` le pintaba "NO se creó el reproductor" — mentira: en esa
+  // rama nunca se emite iframe.
+  if (!el.querySelector('iframe[data-vf-uid], iframe')) return;
+  setTimeout(function () {
+    try {
+      if (document.getElementById('acvDiagVideo')) return;
+      var f = el.querySelector('iframe');
+      var r = f ? f.getBoundingClientRect() : null;
+      var src = (f && f.getAttribute('src')) || '';
+      var estado = !f ? 'NO se creó el reproductor'
+        : !src ? ('el iframe quedó SIN url' + (window.MaestroVideoFirma ? '' : ' · y el firmador NO cargó'))
+        : (/videodelivery\.net\/[A-Za-z0-9._-]{60,}/.test(src) ? 'url FIRMADA ✅' : 'url SIN FIRMAR ❌');
+      var porque = '';
+      try {
+        porque = (window.MaestroVideoFirma && window.MaestroVideoFirma.ultimaFalla)
+          ? window.MaestroVideoFirma.ultimaFalla() : '';
+      } catch (e4) { console.warn('[acvolt] diag, última falla:', e4 && e4.message); }
+      var d = document.createElement('div');
+      d.id = 'acvDiagVideo';
+      d.style.cssText = 'margin:10px 16px;padding:11px 13px;border-radius:10px;' +
+        'background:#0f2342;color:#fff6e0;font-size:12.5px;line-height:1.6;';
+      d.textContent = '🩺 ' + estado +
+        (r ? ' · ' + Math.round(r.width) + '×' + Math.round(r.height) + 'px' : '') +
+        (porque ? ' · ' + porque : '') +
+        ' · firmador: ' + (window.MaestroVideoFirma ? 'sí' : 'NO') +
+        (lesson && lesson.lesson_type !== undefined ? ' · tipo ' + lesson.lesson_type : '');
+      el.appendChild(d);
+    } catch (e5) { console.warn('[acvolt] diag:', e5 && e5.message); }
+  }, 6000);
+}
+
 async function _acvoltRenderLesson() {
   var el = document.getElementById('acvoltLessonScreen');
   if (!el || !_acvoltCurrentLesson) return;
@@ -394,84 +492,7 @@ async function _acvoltRenderLesson() {
 
     // Load quiz questions
     el.innerHTML = html + '</div>';
-    // 🔒 Ya en el DOM: se le pide a Cloudflare la URL firmada y se rellena el
-    // `src` del iframe marcado con `data-vf-uid`. Ver js/video-firma.js.
-    // 🪤 Si el firmador no cargó, se avisa en consola en vez de dejar un negro
-    // mudo — el técnico ya vio suficientes rectángulos negros hoy.
-    try {
-      if (window.MaestroVideoFirma) {
-        // 🔴 SIN VOZ, UN NEGRO NO SE PUEDE DIAGNOSTICAR (Mario, 9-sep-2026:
-        // desaparecieron los 401 pero el video seguía negro y la consola
-        // limpia). Si la firma no sale, el iframe se queda SIN `src` — y un
-        // iframe vacío se ve negro y no genera ni un error. Aquí se muestra el
-        // porqué encima del video.
-        var _onFalla = function (ev) {
-          window.removeEventListener('maestro:firma-fallo', _onFalla);
-          var d = (ev && ev.detail) || {};
-          var caja = el.querySelector('iframe[data-vf-uid], iframe');
-          caja = caja && caja.parentNode;
-          if (!caja || caja.querySelector('.acv-firma-error')) return;
-          var v = document.createElement('div');
-          v.className = 'acv-firma-error';
-          v.style.cssText = 'position:absolute;inset:0;display:flex;align-items:center;' +
-            'justify-content:center;text-align:center;padding:22px;background:rgba(0,0,0,.9);' +
-            'color:#fff;font-size:14px;line-height:1.6;z-index:5;';
-          v.textContent = 'No se pudo desbloquear el video. ' + (d.porque || '');
-          caja.appendChild(v);
-        };
-        window.addEventListener('maestro:firma-fallo', _onFalla);
-        window.MaestroVideoFirma.firmarPendientes(el);
-        // 🪤 Y si a los 8 s el iframe sigue sin `src`, tampoco se deja mudo:
-        // puede que ni el evento haya salido.
-        setTimeout(function () {
-          var f = el.querySelector('iframe');
-          if (!f) { _onFalla({ detail: { porque: 'no se creó el reproductor' } }); return; }
-          var src = f.getAttribute('src') || '';
-          if (!src && !el.querySelector('.acv-firma-error')) {
-            var porque = '';
-            try { porque = window.MaestroVideoFirma.ultimaFalla ? window.MaestroVideoFirma.ultimaFalla() : ''; } catch (e2) { void e2; }
-            _onFalla({ detail: { porque: porque || 'la firma no respondió' } });
-            return;
-          }
-          }, 8000);
-      } else if (el.querySelector('iframe[data-vf-uid]')) {
-        console.warn('[acvolt] falta js/video-firma.js: el video no se puede desbloquear');
-      }
-    } catch (e) { console.warn('[acvolt] firma:', e && e.message); }
-    // 🩺 DIAGNÓSTICO INCONDICIONAL. Las dos versiones anteriores no salieron
-    // nunca: una vivía dentro del bloque del firmador (si ese objeto falta, ni
-    // se ejecuta) y la otra pedía ser admin. Un diagnóstico con condiciones es
-    // un diagnóstico que no está cuando hace falta.
-    // 🪤 NO se muestra la URL: una URL firmada de Cloudflare **es** el permiso
-    // para ver el video. Se dice si está firmada y qué tamaño tiene, nada más.
-    if (lesson.stream_uid) {
-      setTimeout(function () {
-        try {
-          if (document.getElementById('acvDiagVideo')) return;
-          var f = el.querySelector('iframe');
-          var r = f ? f.getBoundingClientRect() : null;
-          var src = (f && f.getAttribute('src')) || '';
-          var estado = !f ? 'NO se creó el reproductor'
-            : !src ? ('el iframe quedó SIN url' +
-                      (window.MaestroVideoFirma ? '' : ' · y el firmador NO cargó'))
-            : (/videodelivery\.net\/[A-Za-z0-9._-]{60,}/.test(src) ? 'url FIRMADA ✅' : 'url SIN FIRMAR ❌');
-          var porque = '';
-          try {
-            porque = (window.MaestroVideoFirma && window.MaestroVideoFirma.ultimaFalla)
-              ? window.MaestroVideoFirma.ultimaFalla() : '';
-          } catch (e4) { void e4; }
-          var d = document.createElement('div');
-          d.id = 'acvDiagVideo';
-          d.style.cssText = 'margin:10px 16px;padding:11px 13px;border-radius:10px;' +
-            'background:#0f2342;color:#fff6e0;font-size:12.5px;line-height:1.6;';
-          d.textContent = '🩺 ' + estado +
-            (r ? ' · ' + Math.round(r.width) + '×' + Math.round(r.height) + 'px' : '') +
-            (porque ? ' · ' + porque : '') +
-            ' · firmador: ' + (window.MaestroVideoFirma ? 'sí' : 'NO');
-          el.appendChild(d);
-        } catch (e5) { console.warn('[acvolt] diag:', e5 && e5.message); }
-      }, 6000);
-    }
+    _acvFirmarYVigilar(el, lesson);
     await _acvoltLoadAndRenderQuiz(lesson);
     return;
   }
@@ -519,34 +540,10 @@ async function _acvoltRenderLesson() {
   // Resultado: el iframe salía con `data-vf-uid` y SIN `src`, nadie lo firmaba
   // nunca, y un iframe vacío se ve NEGRO sin generar una sola petición ni un
   // solo error. Por eso la consola salía limpia.
-  // 🪤 Y el diagnóstico y el aviso de error que puse hoy quedaron encerrados en
-  // ESE MISMO `if` — por eso tampoco salían. Un diagnóstico en la rama
-  // equivocada es peor que no tenerlo: hace creer que ya se descartó.
   //
   // El app grande ya traía este arreglo desde el 8-sep; la escuela se quedó
   // atrás. Ver clon-ios-googleplay/js/acvolt-certification.js:416.
-  try {
-    if (window.MaestroVideoFirma) {
-      var _onFallaV = function (ev) {
-        window.removeEventListener('maestro:firma-fallo', _onFallaV);
-        var d0 = (ev && ev.detail) || {};
-        var f0 = el.querySelector('iframe');
-        var caja = f0 && f0.parentNode;
-        if (!caja || caja.querySelector('.acv-firma-error')) return;
-        var v0 = document.createElement('div');
-        v0.className = 'acv-firma-error';
-        v0.style.cssText = 'position:absolute;inset:0;display:flex;align-items:center;' +
-          'justify-content:center;text-align:center;padding:22px;background:rgba(0,0,0,.9);' +
-          'color:#fff;font-size:14px;line-height:1.6;z-index:5;';
-        v0.textContent = 'No se pudo desbloquear el video. ' + (d0.porque || '');
-        caja.appendChild(v0);
-      };
-      window.addEventListener('maestro:firma-fallo', _onFallaV);
-      window.MaestroVideoFirma.firmarPendientes(el);
-    } else if (el.querySelector('iframe[data-vf-uid]')) {
-      console.warn('[acvolt] falta js/video-firma.js: el video no se puede desbloquear');
-    }
-  } catch (e) { console.warn('[acvolt] firma (video):', e && e.message); }
+  _acvFirmarYVigilar(el, lesson);
 
   // If AI quiz was previously cached, show "retake" option
   if (lesson.lesson_type === 0) {

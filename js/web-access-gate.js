@@ -116,13 +116,23 @@
         sb.rpc('web_access_check').then(function (res) {
           _checked = true;
           var d = res && res.data;
-          if (!d) return;                       // respuesta rara → no bloquear
+          if (!d) {                             // respuesta rara → no bloquear
+            console.warn('[WebGate] web_access_check no devolvió datos: se deja pasar (fail-open)', res && res.error);
+            return;
+          }
           if (d.access === true) { _removeWall(); return; }
           _showWall();
-        }, function () {
+        }, function (err) {
           // Fallo de red/RPC → NO bloquear. Se reintenta al próximo arranque.
+          // 🔴 Fail-open A PROPÓSITO (ley: un candado nunca niega cuando la verdad
+          // es "todavía no sé"). Pero antes era MUDO: desde afuera, "el muro dejó
+          // pasar" y "el muro nunca corrió" se veían idénticos, así que un candado
+          // caído podía llevar semanas sin que nadie lo notara. Ahora se oye.
+          console.warn('[WebGate] no se pudo consultar web_access_check: se deja pasar (fail-open) —', (err && err.message) || err);
         });
-      }, function () {});
+      }, function (err) {
+        console.warn('[WebGate] no se pudo leer la sesión: se deja pasar (fail-open) —', (err && err.message) || err);
+      });
     } catch (_) {}
   }
 

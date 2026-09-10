@@ -186,5 +186,9 @@
 
   // Refresca la lista cuando termina una traducción nueva.
   var _origShowResult = showResult;
-  showResult = function (job) { _origShowResult(job); try { _renderPastJobs(); } catch (_) {} };
+  // 🪤 Se reasigna a propósito una `function` declarada (monkey-patch para colgarle
+  // el refresco de la lista). Funciona, pero es el patrón que `no-func-assign`
+  // marca: se silencia AQUÍ, con nombre, en vez de apagar la regla en todo el repo.
+  // eslint-disable-next-line no-func-assign
+  showResult = function (job) { _origShowResult(job); try { _renderPastJobs(); } catch (e) { console.warn('[traducir-video] no se pudo refrescar la lista de traducciones:', e.message || e); } };
 })();

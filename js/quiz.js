@@ -143,7 +143,18 @@
             clearPartialProgress();
           }
         } catch(e) {
+          // 🔴 Un `catch` que BORRA: cualquier tropiezo leyendo el examen a medias
+          // (JSON corrupto, quota, un campo que cambió de forma) tiraba el avance
+          // del estudiante sin decir una palabra. Vuelve al examen y su progreso
+          // simplemente ya no está. Borrar sigue siendo lo correcto —un dato
+          // corrupto no se puede retomar— pero ahora deja rastro y se le avisa.
+          console.warn('[Quiz] el examen a medias estaba corrupto y se descartó:', e.message || e);
           clearPartialProgress();
+          if (typeof window.showToast === 'function') {
+            window.showToast(typeof _t === 'function'
+              ? _t('quiz_partial_lost', 'No se pudo recuperar tu examen a medias. Tendrás que empezarlo de nuevo.')
+              : 'No se pudo recuperar tu examen a medias. Tendrás que empezarlo de nuevo.', 'warning');
+          }
         }
       }
     }

@@ -108,26 +108,22 @@
       anemometerHvacScreen: ['js/anemometer-hvac.js', 'js/ble-manager.js'],
       heatingScreen: ['js/herramientas-pt-data.js', 'js/herramientas-heating.js', 'js/ble-manager.js'],
       commercialHvacScreen: ['js/herramientas-pt-data.js', 'js/commercial-hvac.js', 'js/ble-manager.js'],
-      diagnosticosScreen: ['js/diag-hub.js'],
-      lavadoraDiagScreen: ['js/lavadora-diag.js', 'js/ble-manager.js'],
-      secadoraDiagScreen: ['js/secadora-diag.js', 'js/ble-manager.js'],
-      refriDomDiagScreen: ['js/refrigerador-domestico-diag.js', 'js/ble-manager.js'],
-      acWindowDiagScreen: ['js/ac-window-diag.js', 'js/ble-manager.js'],
-      acMobileDiagScreen: ['js/ac-mobile-diag.js', 'js/ble-manager.js'],
-      miniSplitDiagScreen: ['js/minisplit-diag.js', 'js/ble-manager.js'],
-      waterHeaterDiagScreen: ['js/water-heater-diag.js', 'js/ble-manager.js'],
-      mainPanelDiagScreen: ['js/main-panel-diag.js', 'js/ble-manager.js'],
-      subpanelDiagScreen: ['js/subpanel-diag.js', 'js/ble-manager.js'],
-      solarDiagScreen: ['js/solar-diag.js', 'js/ble-manager.js'],
-      generatorDiagScreen: ['js/generator-diag.js', 'js/ble-manager.js'],
-      reeferDiagScreen:    ['js/reefer-diag.js', 'js/ble-manager.js'],
-      rackingDiagScreen:   ['js/racking-diag.js', 'js/ble-manager.js'],
-      gelatoDiagScreen:    ['js/gelato-diag.js', 'js/ble-manager.js'],
-      meghometerScreen:    ['js/meghometer.js'],
-      walkinDiagScreen: ['js/herramientas-pt-data.js', 'js/walkin-diag.js', 'js/ble-manager.js'],
-      icemachineDiagScreen: ['js/herramientas-pt-data.js', 'js/icemachine-diag.js', 'js/ble-manager.js'],
-      coldtableDiagScreen: ['js/herramientas-pt-data.js', 'js/coldtable-diag.js', 'js/refrig-common-zone.js', 'js/ble-manager.js'],
-      reachinDiagScreen: ['js/herramientas-pt-data.js', 'js/reachin-diag.js', 'js/refrig-common-zone.js', 'js/ble-manager.js'],
+      // 🔴 AQUÍ VIVÍAN 20 ENTRADAS MUERTAS (quitadas 9-sep-2026). Mapeaban las
+      // pantallas de diagnóstico (diagnosticos, lavadora, secadora, refri
+      // doméstico, ac window/mobile, minisplit, water heater, main panel,
+      // subpanel, solar, generador, reefer, racking, gelato, meghometer, walkin,
+      // icemachine, coldtable, reachin) a archivos que NO EXISTEN en este repo:
+      // js/diag-hub.js, js/lavadora-diag.js, js/*-diag.js, js/meghometer.js,
+      // js/refrig-common-zone.js. Se heredaron al copiar navigation.js del app
+      // grande; ninguna de esas pantallas está en el index.html de la escuela.
+      // 🪤 Comprobado en los DOS sentidos antes de borrar: los archivos no están
+      // en disco Y ningún `id="...Screen"` de esos existe en index.html, así que
+      // no eran alcanzables por nadie. El repo YA tenía una prueba que lo gritaba
+      // —tests/navigation.test.js "no screen references a non-existent script
+      // path"— y llevaba tiempo en rojo. Una prueba que siempre falla es una
+      // prueba que nadie lee, igual que un lint que siempre truena.
+      // Si algún día se portan esas pantallas desde el app grande, hay que traer
+      // el HTML, el JS y volver a agregar su entrada aquí.
       epa608StudyScreen: ['js/social-system.js', 'js/epa608-questions.js', 'js/epa608-study.js', 'js/study-together.js'],
       a2lStudyScreen: ['js/social-system.js', 'js/a2l-questions.js', 'js/a2l-study.js', 'js/study-together.js'],
       oshaStudyScreen: ['js/social-system.js', 'js/osha-questions.js', 'js/osha-study.js', 'js/study-together.js'],

@@ -1249,6 +1249,9 @@
     function checkIdUploadStatus() {
       return; // ID verification disabled
 
+      // 🪤 ZONA MUERTA A PROPÓSITO desde 2026-04-06. Se silencia la regla para que
+      // el lint quede en verde y un `no-unreachable` NUEVO sí se note.
+      // eslint-disable-next-line no-unreachable
       fetch(_idUploadEndpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

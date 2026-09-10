@@ -35,11 +35,20 @@ function checkVtStripeReturn() {
 }
 
 // ---- Access check ----
+// 🪤 TODO LO DE ABAJO DEL `if` ES ZONA MUERTA A PROPÓSITO, y hay que saberlo:
+// el Clon de $59.99 desbloquea TODOS los videos, así que la comprobación real
+// (iOS, admin, donación de Stripe, video_access, tier del CRM) no corre desde
+// que se puso ese `return` de arriba. Antes era un `return` pelón seguido de
+// ~30 líneas inalcanzables: leyendo el archivo parecía que el candado sí se
+// evaluaba. Ahora la puerta tiene NOMBRE — apagas la bandera y el candado
+// vuelve entero. Comportamiento idéntico, cero sorpresas.
+var VT_ACCESO_ABIERTO_POR_CLON = true;
 var _vtAccessCache = null;
 async function vtCheckAccess() {
-  // Clon $59.99 unlocks all videos — always grant full access.
-  _vtAccessCache = { type: 'clon', tier: 'platino' };
-  return _vtAccessCache;
+  if (VT_ACCESO_ABIERTO_POR_CLON) {
+    _vtAccessCache = { type: 'clon', tier: 'platino' };
+    return _vtAccessCache;
+  }
   // 0. iOS App Store — full access
   if (window.isIOSAppStore) { _vtAccessCache = { type: 'ios', tier: 'platino' }; return _vtAccessCache; }
   // Fallback: direct cookie/UA check
@@ -821,6 +830,118 @@ function vtCloseInfoCard() {
 }
 
 // ============================================
+// CLOUDFLARE STREAM — uid, firma y medición del iframe
+// ============================================
+// 🔴 ESTA PANTALLA NUNCA LLAMÓ AL FIRMADOR (9-sep-2026). `js/video-firma.js` ya
+// existía y lo usaba `acvolt-certification.js`; aquí había CERO referencias a
+// `MaestroVideoFirma`. Hoy no se notaba porque `tutorial_videos.video_url` sigue
+// siendo el MP4 viejo (la migración a Stream **agrega** `cf_stream_uid` y NO toca
+// `video_url` — ver supabase/migrations/20260908f_tutorial_videos_stream.sql).
+//
+// 🪤 PERO SÍ SE PUEDE QUEDAR NEGRA, por dos caminos reales:
+//   1) La edge `admin-update-video` acepta reemplazar `video_url` con cualquier
+//      URL, incluida una de Cloudflare (`iframe.videodelivery.net/<uid>`). Con
+//      eso, el código de abajo la metía en `<source type="video/mp4">`: un MP4
+//      que no es MP4 = rectángulo negro en 00:00, sin un solo error en consola.
+//   2) Los 175 videos ya están copiados a Stream **con `requireSignedURLs`
+//      prendido** (cfSellar). El día que Mario borre los 226 GB de MP4 de
+//      Supabase, esta pantalla se apaga entera y el app grande sigue vivo.
+// Se copia el patrón del app grande (~/Developer/clon-ios-googleplay/js/video-tutoriales.js).
+
+// Saca el uid de 32 hex de una URL de Cloudflare Stream. Formatos que llegan:
+//   https://customer-XXXX.cloudflarestream.com/<uid>/iframe?...
+//   https://videodelivery.net/<uid>/manifest/video.m3u8
+//   https://iframe.videodelivery.net/<uid>
+function _vtUidDeStream(url) {
+  var m = String(url || '').match(/(?:cloudflarestream\.com|videodelivery\.net)\/([a-f0-9]{32})/i);
+  return m ? m[1] : '';
+}
+
+// 🪤 En un <iframe> NO existen `timeupdate`, `ended`, `currentTime` ni `.play()`.
+// El SDK oficial de Stream sí los expone sobre el iframe. Sin esto, el quiz al
+// terminar el video quedaría MUERTO para todo video servido por Stream.
+// 🪤 Requiere que `_headers` permita https://*.cloudflarestream.com en `script-src`;
+// si no, el navegador bloquea el SDK por CSP y nunca llega el `ended`.
+var _vtSdkStream = null;
+function _vtCargarSdkStream() {
+  if (_vtSdkStream) return _vtSdkStream;
+  _vtSdkStream = new Promise(function(ok, fallo) {
+    if (window.Stream) { ok(window.Stream); return; }
+    var sc = document.createElement('script');
+    sc.src = 'https://embed.cloudflarestream.com/embed/sdk.latest.js';
+    sc.onload = function() { window.Stream ? ok(window.Stream) : fallo(new Error('el SDK cargó pero no definió window.Stream')); };
+    sc.onerror = function() { fallo(new Error('no cargó el SDK de Cloudflare Stream (¿CSP script-src?)')); };
+    document.head.appendChild(sc);
+  });
+  return _vtSdkStream;
+}
+
+// Engancha progreso + disparo del quiz sobre un iframe de Stream.
+// 🪤 El iframe se pinta SIN `src` (lo llena la firma después, async). Enganchar
+// el SDK antes de que tenga `src` no conecta nada: no hay nadie al otro lado del
+// postMessage y `ended` no llega NUNCA. Por eso se espera al `src`.
+function vtMedirIframe(iframe, videoId, video, savedTime) {
+  function cuandoTengaUrl(intento) {
+    if (iframe.getAttribute('src')) { enganchar(); return; }
+    if (intento > 40) {   // 40 × 500 ms = 20 s
+      console.warn('[VideoTutoriales] el iframe nunca recibió url: no se puede medir ni disparar el quiz', videoId);
+      return;
+    }
+    setTimeout(function() { cuandoTengaUrl(intento + 1); }, 500);
+  }
+
+  function enganchar() {
+    _vtCargarSdkStream().then(function(Stream) {
+      var pl = Stream(iframe);
+      var progTimer = null;
+      var yaDisparado = false;
+
+      // Retomar donde se quedó (equivalente al `loadedmetadata` del <video>)
+      if (savedTime > 0) {
+        pl.addEventListener('loadedmetadata', function() {
+          try { if (savedTime < (pl.duration || 0) - 2) pl.currentTime = savedTime; } catch (e) { console.warn('[VideoTutoriales] no se pudo retomar el minuto guardado:', e.message || e); }
+        });
+      }
+
+      pl.addEventListener('timeupdate', function() {
+        var t = pl.currentTime || 0, d = pl.duration || 0;
+        if (t > 0 && !progTimer) {
+          progTimer = setTimeout(function() { vtSaveProgress(videoId, Math.round(pl.currentTime || 0)); progTimer = null; }, 5000);
+        }
+        // 🪤 RED DE SEGURIDAD: si el `ended` del SDK se pierde (versión vieja del
+        // reproductor, corte de red al final), se detecta por tiempo. Sin esto,
+        // un solo evento perdido cuesta el quiz completo.
+        if (!yaDisparado && d > 5 && (d - t) <= 1.5) { yaDisparado = true; _terminar(d); }
+      });
+      pl.addEventListener('pause', function() {
+        if ((pl.currentTime || 0) > 0) vtSaveProgress(videoId, Math.round(pl.currentTime));
+      });
+      pl.addEventListener('ended', function() {
+        if (yaDisparado) return;
+        yaDisparado = true;
+        _terminar(pl.duration || 0);
+      });
+
+      function _terminar(dur) {
+        try {
+          vtSaveProgress(videoId, Math.round(dur || 0));
+          if (vtGetQuizStatus(video) === 'pending') setTimeout(function() { vtStartQuiz(videoId); }, 800);
+        } catch (e) { console.warn('[VideoTutoriales] falló el quiz al terminar el video:', e.message || e); }
+      }
+    }).catch(function(e) {
+      // 🔴 No se inventa progreso. Si el SDK no cargó, el quiz no se dispara solo:
+      // se le dice al técnico para que no se quede esperando un examen que no viene.
+      console.warn('[VideoTutoriales] no se pudo medir el iframe de Stream:', e && e.message);
+      if (vtGetQuizStatus(video) === 'pending' && typeof window.showToast === 'function') {
+        window.showToast(_tc('vt_quiz_manual', 'Al terminar el video, toca el botón del quiz — no se abrirá solo.'), 'warning');
+      }
+    });
+  }
+
+  cuandoTengaUrl(0);
+}
+
+// ============================================
 // VIDEO PLAYER WITH WATERMARK + QUIZ TRIGGER
 // ============================================
 async function vtPlayVideo(videoId) {
@@ -839,9 +960,42 @@ async function vtPlayVideo(videoId) {
   if (!overlay) return;
 
   var videoUrl = video.video_url || '';
-  if (!videoUrl) { window.showToast(_tc('vt_video_unavailable', 'Video no disponible.'), 'warning'); return; }
+
+  // 🪤 `cf_migrated_at` es el sello de que Cloudflare YA TERMINÓ de transcodificar.
+  // Con solo el uid no basta: mientras transcodifica, el video existe pero NO se
+  // puede ver, y el técnico vería un negro peor que el de antes. Sin el sello se
+  // sirve el MP4 viejo, que aunque pesa 1.3 GB, funciona.
+  var vfUidStream = (video.cf_stream_uid && video.cf_migrated_at) ? String(video.cf_stream_uid) : '';
+
+  // 🔴 Un `video_url` de Cloudflare metido en `<source type="video/mp4">` da un
+  // rectángulo negro MUDO. Se detecta y se manda por la rama de iframe.
+  var esStreamUrl = /cloudflarestream\.com\//i.test(videoUrl) || /videodelivery\.net\//i.test(videoUrl);
+  var vfUid = vfUidStream || _vtUidDeStream(videoUrl);
+  var usaIframe = !!vfUidStream || esStreamUrl;
+
+  if (!videoUrl && !vfUid) { window.showToast(_tc('vt_video_unavailable', 'Video no disponible.'), 'warning'); return; }
 
   var savedTime = vtGetProgress(videoId);
+
+  // 🪤 Se marca con `data-vf-uid` y SIN `src`: `firmarPendientes()` le pone el src
+  // ya con token. Si se deja el src crudo "por si acaso", el iframe intenta cargar
+  // la versión sin firma, Cloudflare la rechaza (requireSignedURLs) y ya no se
+  // recupera. Sin uid legible no hay nada que firmar: se carga la URL tal cual.
+  var mediaHtml = usaIframe
+    ? (vfUid
+        ? '<iframe id="vtVideoEl" data-vf-uid="' + _escHtml(vfUid) + '" allow="autoplay;fullscreen;picture-in-picture" allowfullscreen style="width:100%;height:100%;border:0;background:#000;"></iframe>'
+        : '<iframe id="vtVideoEl" src="' + _escHtml(videoUrl) + '" allow="autoplay;fullscreen;picture-in-picture" allowfullscreen style="width:100%;height:100%;border:0;background:#000;"></iframe>')
+    // 🔴 REPRODUCTOR NEGRO EN 00:00/00:00 (Mario, 9-sep-2026, con captura).
+    // `crossorigin="anonymous"` iba SIEMPRE. Pedir CORS en un MP4 grande
+    // servido por rangos a través del CDN es un modo de falla conocido: el
+    // video se queda en 00:00 sin un solo error. Y solo 2 de los 175 videos
+    // tienen subtítulos, así que en los otros 173 ese atributo **no aporta
+    // NADA** y sí puede romper. (Mismo arreglo que ya lleva el app grande.)
+    : '<video id="vtVideoEl" controls controlslist="nodownload" disablepictureinpicture oncontextmenu="return false" playsinline' +
+        (video.subtitle_url_en ? ' crossorigin="anonymous"' : '') + '>' +
+        '<source src="' + _escHtml(videoUrl) + '" type="video/mp4">' +
+        (video.subtitle_url_en ? '<track kind="subtitles" src="' + _escHtml(video.subtitle_url_en) + '" srclang="en" label="English" default>' : '') +
+      '</video>';
 
   overlay.style.display = 'flex';
   overlay.onclick = null;
@@ -849,25 +1003,70 @@ async function vtPlayVideo(videoId) {
     '<div class="vt-player-container">' +
       '<button class="vt-player-close" onclick="vtClosePlayer()">&times;</button>' +
       '<div class="vt-player-wrap">' +
-        // 🔴 REPRODUCTOR NEGRO EN 00:00/00:00 (Mario, 9-sep-2026, con captura).
-        // `crossorigin="anonymous"` iba SIEMPRE. Pedir CORS en un MP4 grande
-        // servido por rangos a través del CDN es un modo de falla conocido: el
-        // video se queda en 00:00 sin un solo error. Y solo 2 de los 175 videos
-        // tienen subtítulos, así que en los otros 173 ese atributo **no aporta
-        // NADA** y sí puede romper. (Mismo arreglo que ya lleva el app grande.)
-        '<video id="vtVideoEl" controls controlslist="nodownload" disablepictureinpicture oncontextmenu="return false" playsinline' +
-          (video.subtitle_url_en ? ' crossorigin="anonymous"' : '') + '>' +
-          '<source src="' + _escHtml(videoUrl) + '" type="video/mp4">' +
-          (video.subtitle_url_en ? '<track kind="subtitles" src="' + _escHtml(video.subtitle_url_en) + '" srclang="en" label="English" default>' : '') +
-        '</video>' +
+        mediaHtml +
         '<div class="vt-watermark-br">ACVOLT</div>' +
         '<div class="vt-watermark-center">ACVOLT</div>' +
       '</div>' +
       '<div class="vt-player-title">' + _escHtml(video.title) + '</div>' +
     '</div>';
 
+  // Firmar el iframe de Cloudflare. Sin esto: rectángulo negro, sin peticiones,
+  // sin errores — exactamente el síntoma que hoy se arregló en las lecciones.
+  if (vfUid) {
+    try {
+      if (window.MaestroVideoFirma) {
+        window.MaestroVideoFirma.firmarPendientes(overlay);
+        // 🔴 Si la firma no sale, el iframe se queda sin src y NEGRO. Mudo es
+        // imposible de diagnosticar: el firmador avisa el porqué y aquí se pinta.
+        var _onFalla = function(ev) {
+          window.removeEventListener('maestro:firma-fallo', _onFalla);
+          var d = (ev && ev.detail) || {};
+          var w = document.getElementById('vtVideoEl');
+          w = w && w.parentNode;
+          if (!w || document.getElementById('vtErrCapa')) return;
+          w.insertAdjacentHTML('beforeend',
+            '<div id="vtErrCapa" style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;' +
+            'justify-content:center;text-align:center;padding:18px;background:rgba(0,0,0,.9);' +
+            'color:#fff;font-size:13px;line-height:1.55;z-index:4;">' +
+            _escHtml(_tc('vt_no_unlock', 'No se pudo desbloquear el video.')) +
+            '<span style="opacity:.7;font-size:11.5px;margin-top:6px;">' + _escHtml(d.porque || '') + '</span></div>');
+        };
+        window.addEventListener('maestro:firma-fallo', _onFalla);
+        // 🪤 Si en 6 s el iframe sigue sin `src`, la firma nunca llegó (sin sesión,
+        // sin internet, edge caída). Se le DICE, en vez de dejarlo viendo negro.
+        setTimeout(function() {
+          var f = document.getElementById('vtVideoEl');
+          if (f && f.tagName === 'IFRAME' && !f.getAttribute('src') && !document.getElementById('vtErrCapa')) {
+            var w2 = f.parentNode;
+            if (w2) {
+              w2.insertAdjacentHTML('beforeend',
+                '<div id="vtErrCapa" style="position:absolute;inset:0;display:flex;align-items:center;' +
+                'justify-content:center;text-align:center;padding:22px;background:rgba(0,0,0,.86);' +
+                'color:#fff;font-size:13.5px;line-height:1.5;z-index:4;">' +
+                _escHtml(_tc('vt_no_open', 'No se pudo abrir el video. Revisa tu internet y vuelve a intentar. Si sigue, cierra sesión y vuelve a entrar.')) +
+                '</div>');
+            }
+          }
+        }, 6000);
+      } else {
+        // 🔴 Zona muerta: sin el firmador este video NO se puede ver. Que se sepa.
+        console.warn('[VideoTutoriales] MaestroVideoFirma no cargó: el video de Cloudflare no se puede firmar');
+        if (typeof window.showToast === 'function') window.showToast(_tc('vt_no_unlock', 'No se pudo desbloquear el video.'), 'error');
+      }
+    } catch (e) { console.warn('[VideoTutoriales] error al firmar el video:', e.message || e); }
+  }
+
   var el = document.getElementById('vtVideoEl');
   if (!el) return;
+
+  // 🪤 RAMA IFRAME: aquí NO existen `loadedmetadata`, `timeupdate`, `ended`,
+  // `currentTime` ni `.play()`. Todo lo de abajo es SOLO para `<video>`; el
+  // iframe lleva su propio enganche por el SDK de Stream. Registrar los
+  // listeners del <video> sobre un iframe no truena, pero NUNCA disparan:
+  // el progreso se congela y el quiz jamás se abre.
+  if (el.tagName === 'IFRAME') {
+    vtMedirIframe(el, videoId, video, savedTime);
+  } else {
 
   // Resume from saved position
   if (savedTime > 0) {
@@ -902,7 +1101,15 @@ async function vtPlayVideo(videoId) {
     }
   });
 
-  el.play().catch(function() {});
+  el.play().catch(function(e) {
+    // Autoplay bloqueado es normal (el técnico le dará play); cualquier otra
+    // cosa sí importa y antes se tragaba entera.
+    if (e && e.name !== 'NotAllowedError' && e.name !== 'AbortError') {
+      console.warn('[VideoTutoriales] el video no arrancó:', e.name, e.message || e);
+    }
+  });
+
+  }
 
   // Close on Escape
   overlay._escHandler = function(e) {
@@ -917,8 +1124,11 @@ function vtClosePlayer() {
 
   var el = document.getElementById('vtVideoEl');
   if (el) {
-    el.pause();
-    el.src = '';
+    // 🔴 `el.pause()` NO EXISTE en un <iframe>: con un video de Cloudflare Stream
+    // esto tiraba TypeError, abortaba la función ANTES del `display:none` y el
+    // reproductor se quedaba pegado en pantalla — el botón de cerrar "no servía".
+    if (el.tagName === 'VIDEO') { try { el.pause(); } catch (e) { console.warn('[VideoTutoriales] no se pudo pausar el video:', e.message || e); } }
+    el.src = '';   // en el iframe esto sí corta la reproducción
   }
 
   overlay.style.display = 'none';

@@ -46,12 +46,18 @@ describe('Navigation System', () => {
       expect(typeof globalThis.SCREEN_SCRIPTS).toBe('object');
     });
 
+    // 🪤 `groupChatsScreen` NO existe en este repo: no está en index.html, no
+    // tiene entrada en SCREEN_SCRIPTS y `js/group-chats.js` no está en disco.
+    // La prueba se heredó del app grande y llevaba tiempo en ROJO por eso — no
+    // por un bug de la escuela. Una suite que siempre falla es una suite que
+    // nadie corre, y eso tapa las fallas de verdad (aquí tapaba la de rutas
+    // inexistentes, que sí era real). Se quita la expectativa de una función
+    // que este producto no tiene. Si algún día se porta, vuelve a agregarse.
     it('has mappings for all critical screens', () => {
       const criticalScreens = [
         'desafioScreen',
         'techChatScreen',
         'liveStreamingScreen',
-        'groupChatsScreen',
         'adminDashboardScreen',
         'miPerfilScreen',
       ];
@@ -67,9 +73,12 @@ describe('Navigation System', () => {
       expect(scripts).toContain('js/ai-maestro-mario.js');
     });
 
-    it('group chats loads correct scripts', () => {
-      const scripts = globalThis.SCREEN_SCRIPTS.groupChatsScreen;
-      expect(scripts).toContain('js/group-chats.js');
+    // Ver la nota de arriba: `groupChatsScreen` / `js/group-chats.js` no existen
+    // en la escuela. En su lugar se vigila el chat que esta app SÍ tiene, para
+    // no perder cobertura al quitar la prueba heredada.
+    it('tech chat loads correct scripts', () => {
+      const scripts = globalThis.SCREEN_SCRIPTS.techChatScreen;
+      expect(scripts).toContain('js/tech-chat.js');
     });
 
     it('admin screens use _admin bundle marker', () => {

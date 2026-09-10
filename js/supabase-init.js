@@ -256,7 +256,16 @@
           headers: { 'Content-Type': 'application/json', 'apikey': key, 'Authorization': 'Bearer ' + key },
           body: JSON.stringify({ action: 'save', email: email, certs: [cert] })
         });
-        if (res.ok) console.log('[Cert] Saved to Supabase (edge):', cert.nivel || cert.level || cert.levelId);
+        // 🔴 Antes solo había el `if (res.ok)`: SIN `else`. Un 401/403/500 de la
+        // edge se descartaba entero. El diploma se veía en el teléfono y jamás
+        // quedaba en el servidor — reinstalas el app y desapareció.
+        if (res.ok) {
+          console.log('[Cert] Saved to Supabase (edge):', cert.nivel || cert.level || cert.levelId);
+        } else {
+          var _cuerpo = '';
+          try { _cuerpo = (await res.text()).slice(0, 200); } catch (e2) { console.warn('[Cert] no se pudo leer la respuesta de error:', e2.message || e2); }
+          console.warn('[Cert] el servidor NO guardó el certificado:', res.status, _cuerpo, { nivel: cert.nivel || cert.level || cert.levelId });
+        }
       } catch (e) { console.error('Supabase save certificate error:', e); }
     }
 
@@ -272,8 +281,19 @@
         try { local = JSON.parse(localStorage.getItem('tecnico_certificates') || '[]'); } catch (_) { local = []; }
         // 1) Subir los locales (respaldo).
         if (local.length) {
+          // 🔴 Este `.catch(function () {})` estaba VACÍO y es el respaldo de los
+          // DIPLOMAS. Si fallaba, los certificados del teléfono nunca subían al
+          // servidor y nadie —ni el estudiante ni nosotros— se enteraba: el día
+          // que reinstala el app o cambia de teléfono, sus diplomas ya no están.
+          // Es el swallow más caro del repo. No hay toast a propósito: esto corre
+          // en segundo plano al abrir el app y no debe interrumpir; pero SÍ deja
+          // rastro para poder medirlo.
           await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', 'apikey': key, 'Authorization': 'Bearer ' + key },
-            body: JSON.stringify({ action: 'save', email: email, certs: local }) }).catch(function () {});
+            body: JSON.stringify({ action: 'save', email: email, certs: local }) })
+            .then(function (r0) {
+              if (!r0.ok) console.warn('[Cert] el respaldo de certificados NO subió:', r0.status, { email: email, cuantos: local.length });
+            })
+            .catch(function (e0) { console.warn('[Cert] no se pudo subir el respaldo de certificados:', (e0 && e0.message) || e0, { email: email, cuantos: local.length }); });
         }
         // 2) Bajar los del servidor.
         var r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', 'apikey': key, 'Authorization': 'Bearer ' + key },
