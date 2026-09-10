@@ -27,6 +27,11 @@
       cs_no_records: { es: 'Sin registros', en: 'No records' },
       cs_in_class_label: { es: 'En clase', en: 'In class' },
       cs_minutes_remaining: { es: 'minutos de sesión', en: 'minutes of session' },
+      // 🪤 Claves propias de este módulo: se registran aquí con _addTranslations
+      // porque i18n.js está cerrado (una clave duplicada ahora es ERROR de ESLint).
+      cs_att_no_pude: { es: 'No pude cargar la asistencia. Los totales no son confiables.', en: 'Could not load attendance. The totals are not reliable.' },
+      cs_att_no_pude_dato: { es: 'No pude cargar este dato', en: 'Could not load this value' },
+      cs_att_retry: { es: 'Reintentar', en: 'Retry' },
     });
 
     // Global attendance state
@@ -257,6 +262,17 @@
       }
     }
 
+    // Fila honesta para la tabla de asistencia: "no pude cargar · Reintentar".
+    // Nunca "Sin registros", que es una afirmación sobre la escuela.
+    function _csAsistenciaNoPudeCargar(tbody, detalle) {
+      if (!tbody) return;
+      tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#b45309;padding:14px;">⚠️ ' +
+        _t('cs_att_no_pude') +
+        (detalle ? '<div style="font-size:11px;color:#888;margin-top:4px;">' + _escHtml(detalle) + '</div>' : '') +
+        '<div><button onclick="loadAdminAttendance()" style="margin-top:8px;padding:6px 14px;background:#3498db;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;">🔄 ' +
+        _t('cs_att_retry') + '</button></div></td></tr>';
+    }
+
     async function loadAdminAttendance() {
       try {
         if (!supabaseClient) return;
@@ -265,15 +281,56 @@
         if (!filterEl || !typeFilterEl) return;
         var filter = filterEl.value;
         var typeFilter = typeFilterEl.value;
-        var query = supabaseClient.from('attendance').select('*').order('check_in', { ascending: false });
         var now = new Date();
-        if (filter === 'today') { var d = new Date(now); d.setHours(0,0,0,0); query = query.gte('check_in', d.toISOString()); }
-        else if (filter === 'week') { var w = new Date(now); w.setDate(w.getDate() - w.getDay()); w.setHours(0,0,0,0); query = query.gte('check_in', w.toISOString()); }
-        else if (filter === 'month') { var m = new Date(now.getFullYear(), now.getMonth(), 1); query = query.gte('check_in', m.toISOString()); }
-        if (typeFilter !== 'all') { query = query.eq('class_type', typeFilter); }
-        var res = await query;
-        var data = res.data || [];
-        var liveCount = data.filter(function(r) { return !r.check_out; }).length;
+
+        // ══════════════════════════════════════════════════════════════════════
+        // 🔴 LAS HORAS DE CLASE SALÍAN ~5 VECES MÁS BAJAS (10-sep-2026)
+        // El `.gte('check_in', ...)` sólo se agregaba en los filtros hoy/semana/mes:
+        // con el filtro "todos" (el que trae por defecto) la consulta iba SIN
+        // recorte, y PostgREST corta en 1,000 filas sin avisar. MEDIDO: `attendance`
+        // tiene 5,501 filas. `adminWeekHours` es una SUMA de `total_minutes` y
+        // `adminLiveCount` un conteo: los dos se calculaban sobre las 1,000 más
+        // recientes. Y esas horas son requisito de certificación, no un adorno.
+        // 🪤 MaestroPagina pagina ordenando por `id` (columna única). El orden que
+        // ve el admin (check_in descendente) se rehace aquí en memoria: paginar
+        // sobre una fecha con empates repite y salta filas.
+        // ══════════════════════════════════════════════════════════════════════
+        var desde = null;
+        if (filter === 'today') { var d = new Date(now); d.setHours(0,0,0,0); desde = d.toISOString(); }
+        else if (filter === 'week') { var w = new Date(now); w.setDate(w.getDate() - w.getDay()); w.setHours(0,0,0,0); desde = w.toISOString(); }
+        else if (filter === 'month') { var m = new Date(now.getFullYear(), now.getMonth(), 1); desde = m.toISOString(); }
+
+        var tbodyEl = document.getElementById('adminAttendanceBody');
+        var pag = window.MaestroPagina;
+        if (!pag) {
+          console.warn('[ClassSchedule] asistencia admin: MaestroPagina no está cargado');
+          _csAsistenciaNoPudeCargar(tbodyEl, '');
+          return;
+        }
+
+        var r = await pag.todo('attendance', '*', function(q) {
+          if (desde) q = q.gte('check_in', desde);
+          if (typeFilter !== 'all') q = q.eq('class_type', typeFilter);
+          return q;
+        });
+        if (r.error) {
+          // 🔒 Un total a medias en un requisito de certificación es peor que no
+          // enseñar nada: aquí se dice "no pude", no se pinta un número.
+          console.warn('[ClassSchedule] asistencia admin: ' + (r.error.message || 'consulta rechazada'), r.error);
+          if (typeof window.showToast === 'function') {
+            window.showToast(_t('cs_att_no_pude', 'No pude cargar la asistencia. Los totales no son confiables.'), 'error');
+          }
+          ['adminLiveCount', 'adminTodayCount', 'adminWeekHours'].forEach(function(id) {
+            var e = document.getElementById(id);
+            if (e) { e.textContent = '—'; e.title = _t('cs_att_no_pude_dato', 'No pude cargar este dato'); }
+          });
+          _csAsistenciaNoPudeCargar(tbodyEl, r.error.message);
+          return;
+        }
+
+        var data = r.data;
+        data.sort(function(a, b) { return new Date(b.check_in) - new Date(a.check_in); });
+        var liveCount = data.filter(function(r2) { return !r2.check_out; }).length;
         var todayStart = new Date(); todayStart.setHours(0,0,0,0);
         var todayRecords = data.filter(function(r) { return new Date(r.check_in) >= todayStart; });
         var weekHours = data.reduce(function(sum, r) { return sum + (r.total_minutes || 0); }, 0);
@@ -306,7 +363,7 @@
           });
         }
 
-        var tbody = document.getElementById('adminAttendanceBody');
+        var tbody = tbodyEl;
         if (data.length === 0) {
           tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; color:#888;">' + _t('cs_no_records') + '</td></tr>';
         } else {
@@ -320,7 +377,13 @@
             return '<tr><td>' + name + '</td><td><span class="history-type ' + (r.class_type === 'presencial' ? 'type-presencial' : 'type-zoom') + '">' + (r.class_type === 'presencial' ? '\ud83c\udfdb\ufe0f' : '\ud83d\udcbb') + ' ' + safeClassType + '</span></td><td>' + timeIn + '</td><td>' + timeOut + '</td><td>' + hours + '</td><td>' + safeStatus + '</td></tr>';
           }).join('');
         }
-      } catch (err) { console.error('Error asistencia admin:', err); }
+      } catch (err) {
+        // Antes esto sólo iba a la consola: la tabla se quedaba con lo que hubiera
+        // en pantalla y los totales viejos parecían buenos.
+        console.error('[ClassSchedule] asistencia admin: ' + ((err && err.message) || err), err);
+        if (typeof window.showToast === 'function') window.showToast(_t('cs_att_no_pude'), 'error');
+        _csAsistenciaNoPudeCargar(document.getElementById('adminAttendanceBody'), err && err.message);
+      }
     }
 
     setInterval(function() {

@@ -85,12 +85,25 @@
       return window.supabaseClient.from('user_stats')
         .select('*').eq('user_id', uid).maybeSingle()
         .then(function(res) {
-          if (res.data) { _stats = res.data; return _stats; }
+          // 🔴 Un select rechazado por RLS devuelve { data:null, error } sin tronar:
+          // se veía igual que "este técnico es nuevo" y abajo intentábamos INSERTAR
+          // una fila que ya existía → choque de llave y XP perdido toda la sesión.
+          if (res && res.error) {
+            console.warn('[Gamification] no se pudo LEER user_stats (user ' + uid + '): ' + (res.error.message || res.error), res.error);
+            _ensureStatsPromise = null;
+            return null;
+          }
+          if (res.data) { _stats = res.data; _ensureStatsPromise = null; return _stats; }
           // Create initial row
           return window.supabaseClient.from('user_stats')
             .insert({ user_id: uid, xp: 0, level: 1, questions_total: 0, questions_correct: 0, modules_completed: 0, tools_used: 0 })
             .select().single()
-            .then(function(ins) { _stats = ins.data; _ensureStatsPromise = null; return _stats; })
+            .then(function(ins) {
+              // 🪤 Sin leer ins.error, `_stats` quedaba en null/undefined y CADA
+              // punto de XP de esa sesión se tiraba sin que nadie se enterara.
+              if (ins && ins.error) { console.warn('[Gamification] user_stats NO creó la fila inicial (user ' + uid + '): ' + (ins.error.message || ins.error), ins.error); _ensureStatsPromise = null; return null; }
+              _stats = ins.data; _ensureStatsPromise = null; return _stats;
+            })
             .catch(function(e) { console.warn('[Gamification] insert stats:', e); _ensureStatsPromise = null; return null; });
         });
     }).catch(function(e) { console.warn('[Gamification] ensureStats:', e); _ensureStatsPromise = null; return null; });
@@ -118,15 +131,28 @@
       } else if (reason === 'tool_use') {
         updates.tools_used = (stats.tools_used || 0) + 1;
       }
-      _stats = Object.assign({}, stats, updates);
-      // Check for level up
-      if (newLevel > (stats.level || 1)) {
-        _showLevelUp(newLevel);
-      }
+      // 🔴 RAÍZ: antes se hacía `_stats = ...` y se disparaba `_showLevelUp()`
+      // ANTES de que el UPDATE resolviera, y el resultado sólo se console.warn'eaba.
+      // El técnico veía "¡NIVEL 7!" con confeti y al recargar volvía al nivel 6 con
+      // su XP anterior: la celebración era de un premio que nunca se guardó.
+      // Ahora el estado local y la celebración esperan a que el servidor confirme.
+      var _statsPrevios = _stats;
       return window.supabaseClient.from('user_stats')
         .update(updates).eq('user_id', _userId)
-        .then(function(res) { if (res.error) console.warn('[Gamification] update error:', res.error.message); _checkBadges(); })
-        .catch(function(e) { console.warn('[Gamification] update failed:', e); });
+        .then(function(res) {
+          if (res && res.error) {
+            // 🪤 supabase-js NO truena: sin este `if` el fallo se iba callado.
+            // No dejamos el XP fantasma en memoria — se queda como estaba para que
+            // el siguiente intento vuelva a subirlo desde el valor real.
+            _stats = _statsPrevios;
+            console.warn('[Gamification] user_stats NO guardó el XP (user ' + _userId + ', motivo "' + reason + '", +' + amount + ' XP): ' + (res.error.message || res.error), res.error);
+            return;
+          }
+          _stats = Object.assign({}, stats, updates);
+          if (newLevel > (stats.level || 1)) _showLevelUp(newLevel);
+          _checkBadges();
+        })
+        .catch(function(e) { _stats = _statsPrevios; console.warn('[Gamification] user_stats falló de red al guardar XP:', (e && e.message) || e); });
     }).catch(function(e) { console.warn('[Gamification] awardXP error:', e); });
   }
 
@@ -140,6 +166,9 @@
       window.supabaseClient.from('study_progress')
         .select('*').eq('user_id', uid).eq('module', module).eq('category', category || '_all').maybeSingle()
         .then(function(res) {
+          // 🪤 Igual que arriba: sin leer el error, un SELECT rechazado se veía
+          // como "no hay fila" y el INSERT de abajo chocaba con la que ya existe.
+          if (res && res.error) { console.warn('[Gamification] no se pudo LEER study_progress (user ' + uid + ', módulo ' + module + '): ' + (res.error.message || res.error), res.error); return; }
           if (res.data) {
             var row = res.data;
             var newCorrect = (row.correct || 0) + (isCorrect ? 1 : 0);
@@ -162,8 +191,12 @@
     awardXP(XP_TOOL_USE, 'tool_use');
     _getUserId().then(function(uid) {
       if (!uid || !window.supabaseClient) return;
+      // 🔴 Otro `.then(function() {})` vacío: el uso de herramientas no se
+      // registraba y la insignia "Técnico Equipado" nunca llegaba, sin una pista.
       window.supabaseClient.from('tool_usage')
-        .insert({ user_id: uid, tool_name: toolName }).then(function() {}).catch(function(e) { console.warn('[Gamification] tool_usage insert failed:', e && e.message); });
+        .insert({ user_id: uid, tool_name: toolName })
+        .then(function(r) { if (r && r.error) console.warn('[Gamification] tool_usage NO registró la herramienta "' + toolName + '" (user ' + uid + '): ' + (r.error.message || r.error), r.error); })
+        .catch(function(e) { console.warn('[Gamification] tool_usage insert failed:', e && e.message); });
     });
   }
 
@@ -175,15 +208,25 @@
       window.supabaseClient.from('user_streaks')
         .select('*').eq('user_id', uid).maybeSingle()
         .then(function(res) {
+          // 🪤 Si el SELECT falló, res.data es null y antes caíamos al `else` a
+          // INSERTAR una racha que ya existe → choque de llave y racha perdida.
+          if (res && res.error) { console.warn('[Gamification] no se pudo LEER user_streaks (user ' + uid + '): ' + (res.error.message || res.error), res.error); return; }
           if (res.data) {
             var longest = Math.max(res.data.longest_streak || 0, currentStreak);
+            // 🔴 Este `.then(function() {})` VACÍO se tragaba el res.error entero:
+            // la racha del técnico (su 🔥 de días seguidos, lo que más le duele
+            // perder) se veía subir en la pantalla y nunca salía del teléfono.
             window.supabaseClient.from('user_streaks')
               .update({ current_streak: currentStreak, longest_streak: longest, last_active: today, updated_at: new Date().toISOString() })
-              .eq('user_id', uid).then(function() {}).catch(function(e) { console.warn('[Gamification] streak update failed:', e && e.message); });
+              .eq('user_id', uid)
+              .then(function(r) { if (r && r.error) console.warn('[Gamification] user_streaks NO guardó la racha de ' + currentStreak + ' días (user ' + uid + '): ' + (r.error.message || r.error), r.error); })
+              .catch(function(e) { console.warn('[Gamification] streak update failed:', e && e.message); });
           } else {
+            // Mismo swallow en el alta de la primera racha.
             window.supabaseClient.from('user_streaks')
               .insert({ user_id: uid, current_streak: currentStreak, longest_streak: currentStreak, last_active: today })
-              .then(function() {}).catch(function(e) { console.warn('[Gamification] streak insert failed:', e && e.message); });
+              .then(function(r) { if (r && r.error) console.warn('[Gamification] user_streaks NO creó la racha inicial (user ' + uid + '): ' + (r.error.message || r.error), r.error); })
+              .catch(function(e) { console.warn('[Gamification] streak insert failed:', e && e.message); });
           }
         }).catch(function(e) { console.warn('[Gamification] streak select failed:', e && e.message); });
       // Check streak badges
@@ -230,17 +273,34 @@
     if (data.friends >= 1 && data.first_en_vivo && data.study_together && data.job_posted) _awardBadge('social_butterfly');
   }
 
+  // 🔴 RAÍZ: la insignia se marcaba como ganada ANTES de escribirla, el `.then`
+  // NUNCA leía `res.error` (supabase-js no truena) y el `.catch` que reponía la
+  // bandera era código muerto. Resultado: al técnico le salía el confeti de
+  // "LOGRO DESBLOQUEADO", la insignia no existía en el servidor y como la
+  // bandera se quedaba en true tampoco se reintentaba en toda la sesión — al
+  // recargar, su logro simplemente ya no estaba.
+  // La marca inmediata SÍ se conserva (es la protección contra la carrera de dos
+  // llamadas seguidas), pero ahora vale como "pendiente": si el servidor no
+  // confirma, se repone en false para poder reintentar, y NO hay celebración.
   function _awardBadge(badgeId) {
-    if (_earnedBadges[badgeId]) return; // Already earned
-    _earnedBadges[badgeId] = true; // Set immediately to prevent race condition
+    if (_earnedBadges[badgeId]) return; // Already earned (o ya en vuelo)
+    _earnedBadges[badgeId] = true; // marca PENDIENTE — evita la doble llamada
     _getUserId().then(function(uid) {
       if (!uid || !window.supabaseClient) { _earnedBadges[badgeId] = false; return; }
-      window.supabaseClient.from('user_achievements')
+      return window.supabaseClient.from('user_achievements')
         .upsert({ user_id: uid, badge_id: badgeId }, { onConflict: 'user_id,badge_id' })
         .then(function(res) {
+          if (res && res.error) {
+            _earnedBadges[badgeId] = false; // se podrá reintentar
+            console.warn('[Gamification] user_achievements NO guardó la insignia "' + badgeId + '" (user ' + uid + '): ' + (res.error.message || res.error), res.error);
+            return;
+          }
           var badge = BADGES[badgeId];
           if (badge) _showBadgePopup(badge);
-        }).catch(function() { _earnedBadges[badgeId] = false; });
+        });
+    }).catch(function(e) {
+      _earnedBadges[badgeId] = false;
+      console.warn('[Gamification] falló de red al guardar la insignia "' + badgeId + '":', (e && e.message) || e);
     });
   }
 
@@ -256,6 +316,10 @@
       window.supabaseClient.from('user_achievements')
         .select('badge_id').eq('user_id', uid)
         .then(function(res) {
+          // 🪤 Si esta lectura falla en silencio, el app cree que el técnico no
+          // tiene NINGUNA insignia y le vuelve a soltar el confeti de logros que
+          // ya se había ganado hace meses.
+          if (res && res.error) { console.warn('[Gamification] no se pudieron LEER las insignias ya ganadas (user ' + uid + '): ' + (res.error.message || res.error), res.error); return; }
           if (res.data) {
             res.data.forEach(function(row) {
               _earnedBadges[row.badge_id] = true;
@@ -342,6 +406,15 @@
     window.supabaseClient.from('leaderboard_top')
       .select('*').limit(10)
       .then(function(res) {
+        // 🔴 El `.catch` de abajo es código muerto (supabase-js no truena), así que
+        // un leaderboard rechazado llegaba aquí con data=null y le decíamos al
+        // técnico "Sé el primero en la tabla" — mentira: los datos sí existen,
+        // sólo que no se pudieron leer. Ahora se distingue vacío de FALLA.
+        if (res && res.error) {
+          console.warn('[Gamification] no se pudo LEER leaderboard_top: ' + (res.error.message || res.error), res.error);
+          container.innerHTML = '<div style="text-align:center;color:rgba(255,255,255,0.4);font-size:clamp(10px,1.3vw,13px);">No se pudo cargar la tabla</div>';
+          return;
+        }
         if (!res.data || res.data.length === 0) {
           container.innerHTML = '<div style="text-align:center;color:rgba(255,255,255,0.4);font-size:clamp(10px,1.3vw,13px);">Sé el primero en la tabla</div>';
           return;
@@ -400,6 +473,30 @@
     etStudyScreen:           '⚡ Electricidad'
   };
 
+  // 🔒 Último mapa BUENO de insignias de módulo. Si la lectura falla, pintamos
+  // ESTE en vez de un cero: "todavía no sé" NUNCA es "no se lo ganó".
+  var _modulosPorEmail = null;
+
+  // 🔴 RAÍZ: PostgREST corta TODO `.select()` en 1,000 filas SIN avisar — HTTP 200,
+  // sin error, sin excepción. La consulta de `screen_events` para las insignias de
+  // módulo coincide con 7,323 filas (medido 10-sep-2026; la tabla trae 387,374),
+  // así que traía 1,000 arbitrarias de 7,323 y, sin `.order()`, CUÁLES 1,000
+  // cambiaba en cada carga. Síntoma real: al técnico le aparecía su 📚/❄️/🎓 un día
+  // y al siguiente ya no estaba, sin una sola pista en la consola.
+  // 🪤 `.limit(10000)` NO arregla nada: el tope lo pone el servidor.
+  // Por eso va con MaestroPagina.todo (utils.js), que pagina con .order('id')
+  // + .range(), devuelve { data, error, completo } y jamás convierte un fallo en
+  // una lista vacía.
+  function _leerModulosDeEstudio() {
+    if (!window.MaestroPagina || typeof window.MaestroPagina.todo !== 'function') {
+      // utils.js todavía no carga: es "no sé", no "no hay". Se reporta como error.
+      return Promise.resolve({ data: [], error: { message: 'MaestroPagina no está listo (utils.js)' }, completo: false });
+    }
+    return window.MaestroPagina.todo('screen_events', 'user_email, screen_id', function(q) {
+      return q.in('screen_id', Object.keys(MODULE_BADGES));
+    });
+  }
+
   function renderFullLeaderboard(containerId) {
     var container = document.getElementById(containerId);
     if (!container || !window.supabaseClient) return;
@@ -407,27 +504,47 @@
     var email = _userEmail || localStorage.getItem('tecnico_email');
 
     // Fetch leaderboard + screen_events for module badges in parallel
+    // (el .limit(10) de leaderboard_top SÍ es correcto: es un top 10 de verdad.)
     Promise.all([
       window.supabaseClient.from('leaderboard_top').select('*').limit(10),
-      window.supabaseClient.from('screen_events').select('user_email, screen_id').in('screen_id', Object.keys(MODULE_BADGES))
+      _leerModulosDeEstudio()
     ]).then(function(results) {
       var lbRes = results[0];
       var seRes = results[1];
 
+      // 🪤 Misma trampa: sin leer `.error`, una consulta rechazada se mostraba
+      // como "No hay datos aún" y nadie sospechaba que la tabla estaba caída.
+      if (lbRes && lbRes.error) {
+        console.warn('[Gamification] no se pudo LEER leaderboard_top: ' + (lbRes.error.message || lbRes.error), lbRes.error);
+        container.innerHTML = '<div style="text-align:center;padding:40px 20px;color:rgba(239,68,68,0.7);font-size:14px;">Error cargando leaderboard</div>';
+        return;
+      }
       if (!lbRes.data || lbRes.data.length === 0) {
         container.innerHTML = '<div style="text-align:center;padding:40px 20px;color:rgba(148,163,184,0.7);font-size:14px;">No hay datos aún. ¡Sé el primero!</div>';
         return;
       }
 
       // Build module badge map: email → Set of screen_ids
-      var modulesMap = {};
-      if (seRes.data) {
-        seRes.data.forEach(function(ev) {
+      // 🔒 LEY: si la lectura falló o quedó incompleta, NO borramos las insignias
+      // que ya conocíamos — se queda el último mapa bueno. Quitarle al técnico un
+      // módulo que sí estudió, por una consulta rechazada, es peor que no pintarlo.
+      var modulesMap;
+      if (seRes && seRes.error) {
+        console.warn('[Gamification] no se pudo LEER screen_events (insignias de módulo): ' + (seRes.error.message || seRes.error) + ' — se conservan las insignias ya conocidas', seRes.error);
+        modulesMap = _modulosPorEmail || {};
+      } else {
+        modulesMap = {};
+        (seRes && seRes.data ? seRes.data : []).forEach(function(ev) {
           if (!ev.user_email) return;
           var key = ev.user_email.toLowerCase();
           if (!modulesMap[key]) modulesMap[key] = {};
           modulesMap[key][ev.screen_id] = true;
         });
+        if (seRes && seRes.completo === false) {
+          // Sin error pero truncado por el freno del paginador: puede faltar gente.
+          console.warn('[Gamification] screen_events llegó INCOMPLETO (' + (seRes.data || []).length + ' filas): puede faltar alguna insignia de módulo');
+        }
+        _modulosPorEmail = modulesMap; // último mapa BUENO
       }
 
       var medals = ['🥇', '🥈', '🥉'];

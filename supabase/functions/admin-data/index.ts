@@ -63,20 +63,36 @@ serve(async (req) => {
     }
 
     // ── Paginated fetch helper (bypasses 1000-row default) ──
+    // 🪤 Tres fugas que tenía este ayudante (arregladas 10-sep-2026):
+    //  1) NO leía `error`. supabase-js NUNCA lanza: una página rechazada devolvía
+    //     `data:null` → `batch = []` → `more = false`, y la función regresaba una
+    //     lista CORTA como si ya no hubiera filas. Un fallo se veía idéntico a
+    //     "se acabaron los datos". Ahora truena con el nombre de la tabla.
+    //  2) Sin `orderCol` paginaba SIN ORDER BY. Postgres no garantiza el mismo orden
+    //     entre consultas, así que las páginas se traslapan: unas filas salían dos
+    //     veces y otras nunca. `user_progress` y `certificates` se piden justo así.
+    //     Ahora SIEMPRE se desempata por `id`, que es único.
+    //  3) Sin freno: una tabla que crece durante el barrido daba bucle infinito.
     async function fetchAllRows(table: string, selectCols: string, orderCol?: string, asc = false) {
       const all: any[] = [];
       let offset = 0;
       const PAGE = 1000;
-      let more = true;
-      while (more) {
-        let q = sb.from(table).select(selectCols).range(offset, offset + PAGE - 1);
+      const MAX_PAGES = 500;   // freno: 500k filas
+      for (let page = 0; page < MAX_PAGES; page++) {
+        let q = sb.from(table).select(selectCols);
         if (orderCol) q = q.order(orderCol, { ascending: asc });
-        const { data } = await q;
+        // 🔑 Desempate estable. Sin esto el paginado repite y salta filas.
+        q = q.order('id', { ascending: true });
+        const { data, error } = await q.range(offset, offset + PAGE - 1);
+        if (error) {
+          throw new Error('fetchAllRows(' + table + ') falló en la fila ' + offset + ': ' + (error.message || 'consulta rechazada'));
+        }
         const batch = data || [];
         all.push(...batch);
-        if (batch.length < PAGE) more = false;
-        else offset += PAGE;
+        if (batch.length < PAGE) return all;
+        offset += PAGE;
       }
+      console.warn('[admin-data] ' + table + ': se alcanzó el tope de ' + (MAX_PAGES * PAGE) + ' filas; la lista va INCOMPLETA.');
       return all;
     }
 
@@ -86,7 +102,14 @@ serve(async (req) => {
         fetchAllRows('users', 'id, nombre, email, telefono, fecha_registro, ultimo_acceso, nivel_actual, technician_number, technician_number_date', 'fecha_registro'),
         fetchAllRows('user_progress', '*'),
         fetchAllRows('certificates', '*'),
-        sb.from('quiz_attempts').select('*').order('fecha', { ascending: false }).limit(5000).then((r: any) => r.data || []),
+        // 🔴 `.limit(5000)` era DECORATIVO: el tope de 1,000 filas lo pone el servidor
+        // (max_rows), no el cliente. Hoy no se notaba porque `quiz_attempts` tenía 44
+        // filas —congeladas desde el 2026-03-19 porque cada insert moría con un 400
+        // silencioso (columna `server_verified` inexistente, ver js/supabase-init.js).
+        // Ese insert YA quedó arreglado hoy, así que la tabla vuelve a crecer y este
+        // tope se convierte en bomba de tiempo: al pasar de 1,000 intentos el panel de
+        // técnicos empezaría a perder exámenes sin decir nada. Se pagina desde ahora.
+        fetchAllRows('quiz_attempts', '*', 'fecha'),
       ]);
 
       console.log('[admin-data] technicians:', {

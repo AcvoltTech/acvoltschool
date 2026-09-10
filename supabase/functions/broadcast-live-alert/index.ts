@@ -41,6 +41,32 @@ function jsonResponse(data: unknown, status = 200) {
   });
 }
 
+// ── Lector paginado (rompe el tope de 1,000 filas de PostgREST) ──
+// 🔴 RAÍZ: PostgREST corta TODA consulta en 1,000 filas (max_rows = 1000, del lado del
+// servidor). No hay error, no hay aviso: HTTP 200 con exactamente 1,000 filas. El síntoma
+// es un total que nunca se mueve. 🪤 `.limit(5000)` NO sirve — el tope lo pone el servidor,
+// no el cliente. La única salida es paginar con `.range()`.
+// 🪤 Se ordena por `id` (ÚNICO). Ordenar por una columna con empates repite filas en una
+// página y se salta otras: terminarías mandando dos veces a unos y a otros nunca.
+// 🪤 supabase-js NUNCA tira excepción: si una página falla hay que leer `error` y devolver
+// lo que sí se leyó, marcado como PARCIAL. Mentir aquí es peor que fallar.
+const PAGE_SIZE = 1000;
+const MAX_PAGES = 100; // tope de seguridad (100k filas) para no quedarnos en un bucle eterno
+async function fetchAllPaged<T>(
+  build: (from: number, to: number) => PromiseLike<{ data: unknown[] | null; error: { message?: string } | null }>,
+): Promise<{ rows: T[]; error: string | null }> {
+  const rows: T[] = [];
+  for (let page = 0; page < MAX_PAGES; page++) {
+    const offset = page * PAGE_SIZE;
+    const { data, error } = await build(offset, offset + PAGE_SIZE - 1);
+    if (error) return { rows, error: error.message || String(error) };
+    const batch = (data || []) as T[];
+    rows.push(...batch);
+    if (batch.length < PAGE_SIZE) return { rows, error: null };
+  }
+  return { rows, error: `Se alcanzó el tope de ${MAX_PAGES} páginas (${MAX_PAGES * PAGE_SIZE} filas)` };
+}
+
 // HTML template — bold red banner so the email is unmistakable in a crowded inbox
 function emailHtml(title: string, body: string, url: string): string {
   const safe = (s: string) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -108,24 +134,40 @@ serve(async (req) => {
     }
 
     // Pull every user email. Skip rows without an email (shouldn't exist, but guard).
-    const { data: users, error: usersErr } = await supabase
-      .from('users')
-      .select('email')
-      .not('email', 'is', null);
+    // 🔴 RAÍZ (medido 2026-09-10): `users` con email = 11,296, pero esta consulta devolvía
+    // 1,000 y nadie se enteraba. Síntoma real: arrancabas la clase EN VIVO y 10,296
+    // estudiantes NUNCA recibían el correo, mientras la respuesta decía `total: 1000` y
+    // se veía sana. Ahora se pagina: 11,296 destinatarios reales (antes 1,000).
+    const { rows: users, error: usersErr } = await fetchAllPaged<{ email: string | null }>(
+      (from, to) => supabase
+        .from('users')
+        .select('email')
+        .not('email', 'is', null)
+        .order('id', { ascending: true })
+        .range(from, to),
+    );
 
-    if (usersErr) return jsonResponse({ error: 'Could not list users', details: usersErr.message }, 500);
-    const emails: string[] = [...new Set((users || []).map((u: any) => (u.email || '').toLowerCase().trim()).filter(Boolean))];
+    // 🪤 Si la lectura falló ANTES de traer nada, no hay a quién mandarle: error duro.
+    // Si trajo algo y luego falló, seguimos pero la respuesta dirá PARCIAL (ver abajo):
+    // un broadcast que alcanzó 1,000 de 11,296 no se puede reportar como éxito.
+    if (usersErr && users.length === 0) {
+      return jsonResponse({ error: 'Could not list users', details: usersErr }, 500);
+    }
+    const emails: string[] = [...new Set(users.map((u: any) => (u.email || '').toLowerCase().trim()).filter(Boolean))];
 
     if (emails.length === 0) return jsonResponse({ sent: 0, failed: 0, total: 0, note: 'no users' });
 
     const html = emailHtml(title, body, url || 'https://maestrohvacr.com/#liveStreamingScreen');
     const subject = title;
 
-    // Batch in chunks of 100 (Resend limit).
+    // 🪤 Lotes de 50, NO de 100: los lotes de más de ~100 destinatarios fallan MUDOS
+    // (HTTP 200 con 0 enviados) y el contador queda inflado. Antes cortaba en 100 —
+    // justo en el filo donde empieza a fallar callado. 50 es el tamaño seguro.
+    const BATCH = 50;
     let sent = 0;
     let failed = 0;
-    for (let i = 0; i < emails.length; i += 100) {
-      const slice = emails.slice(i, i + 100);
+    for (let i = 0; i < emails.length; i += BATCH) {
+      const slice = emails.slice(i, i + BATCH);
       const r = await sendBatch(RESEND_API_KEY, FROM_EMAIL, subject, html, slice);
       sent += r.ok;
       failed += r.fail;
@@ -139,12 +181,25 @@ serve(async (req) => {
         body,
         type: 'live_broadcast',
         channel: 'email',
-        status: failed > 0 ? 'partial' : 'sent',
-        metadata: { total: emails.length, sent, failed, url },
+        status: (failed > 0 || usersErr) ? 'partial' : 'sent',
+        metadata: { total: emails.length, sent, failed, url, audience_read_error: usersErr || null },
       });
     } catch (_e) { /* best-effort */ }
 
-    return jsonResponse({ sent, failed, total: emails.length });
+    // 🪤 Verdad por delante: si la lista de destinatarios se leyó incompleta, esto NO fue
+    // un envío exitoso — se dice a cuántos se le llegó y que la lectura de la audiencia falló.
+    return jsonResponse({
+      sent,
+      failed,
+      total: emails.length,
+      ...(usersErr
+        ? {
+            partial: true,
+            audience_read_error: usersErr,
+            note: 'La lista de destinatarios se leyó INCOMPLETA. Solo se alcanzó a ' + emails.length + ' correos; faltan usuarios por avisar.',
+          }
+        : {}),
+    });
   } catch (e) {
     console.error('[broadcast-live-alert] error', e);
     return jsonResponse({ error: (e as Error).message || String(e) }, 500);

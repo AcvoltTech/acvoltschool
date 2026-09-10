@@ -1,3 +1,28 @@
+// ╔══════════════════════════════════════════════════════════════════════════╗
+// ║ 🚨 NO DESPLIEGUES ESTE ARCHIVO. ESTA COPIA LOCAL ESTÁ ATRASADA.          ║
+// ╚══════════════════════════════════════════════════════════════════════════╝
+// Medido el 10-sep-2026:
+//   · desplegada en producción: 2026-08-07
+//   · esta copia local:         2026-05-25   ← 2 meses y medio atrás
+//
+// 🔴 Desplegar este archivo TUMBA EL COBRO. La versión viva ya trae el arreglo
+// del 29-may-2026 y ésta NO: aquí `activateMembership` todavía escribe
+// `user_email` y `plan_name` (columnas que NO EXISTEN en `memberships`) y
+// `tipo: "stripe"` (valor inválido: el check permite premium/basico/platino).
+// PostgREST contesta 400 y —como supabase-js NO LANZA— el `try/catch` de abajo
+// nunca se entera: el cliente paga, no recibe acceso, y el log dice "activated".
+// Ésa fue la causa de las 333 membresías fantasma.
+//
+// ✅ La versión DESPLEGADA está SANA (se recuperó y se leyó su fuente el
+// 10-sep-2026): usa `email`, `tipo:"premium"`, `source:"stripe"` y sí revisa
+// `upErr`. Medido en la base: 614 membresías con `source='stripe'`, la última
+// actualizada el 2026-09-07. El cobro por Stripe FUNCIONA.
+//
+// 🪤 Por eso NO se "arregló" este archivo en el barrido del 10-sep: parcharlo a
+// ciegas sobre una base vieja habría reintroducido dos meses de regresiones.
+// Para tocarlo: primero baja el fuente REAL de la función desplegada
+// (GET /v1/projects/<ref>/functions/stripe-webhook/body → paquete ESZIP2.3),
+// reemplaza este archivo con él, y HASTA ENTONCES edita.
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { checkRateLimit, rateLimitResponse } from "../_shared/rate-limiter.ts";

@@ -236,4 +236,70 @@
       delete btn.dataset.origDisabled;
     }
   };
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // MaestroPagina — leer una tabla COMPLETA (10-sep-2026)
+  // ══════════════════════════════════════════════════════════════════════════
+  // 🔴 RAÍZ: PostgREST corta TODO `.select()` en 1,000 filas y NO avisa. No hay
+  // error, no hay encabezado de aviso, no hay excepción: simplemente llegan 1,000
+  // filas y HTTP 200. La firma del bug es un total que no se mueve NUNCA.
+  // MEDIDO en esta base el 10-sep-2026: users 11,296 · profiles 10,549 ·
+  // push_subscriptions 9,570 · user_progress 48,959 · analytics_events 1,595,525.
+  // Cualquier conteo, suma, roster, export o gráfica hecha con un `.select()` sin
+  // paginar de esas tablas está mintiendo, y se ve perfectamente sana.
+  //
+  // 🪤 TRAMPA 1: `.limit(10000)` NO sirve — el tope lo pone el servidor, no el
+  // cliente. `.limit(1000)` tampoco: coincide con el tope y disfraza el corte.
+  // 🪤 TRAMPA 2: hay que ordenar por una columna ÚNICA (`id`). Paginar sobre un
+  // orden con empates (fecha, email) repite y salta filas entre páginas.
+  // 🪤 TRAMPA 3: supabase-js NUNCA lanza. El fallo viene en `res.error`, y el
+  // `|| []` de siempre lo convierte en "no hay datos". Por eso esto devuelve
+  // `{ data, error, completo }` y NUNCA finge: si `error` viene lleno, la lista
+  // está incompleta y quien llama TIENE que decirlo ("no pude cargar · Reintentar"),
+  // no pintar un cero.
+  //
+  //   var r = await MaestroPagina.todo('users', 'id, email');
+  //   if (r.error) { /* decir "no pude medir", NO pintar 0 */ }
+  //
+  // `afinar` recibe el query builder para agregar .eq()/.gte()/etc.
+  // `opts.orden` cambia la columna única de paginado (default 'id').
+  //
+  // ⚠️ La columna de orden por omisión es `id`. Si la tabla NO tiene `id`, PostgREST
+  // responde 400 y esto devuelve {error} — NO una lista vacía, así que se nota; pero
+  // hay que pasarle `{ orden: 'otra_columna_unica' }`. Tiene que ser ÚNICA: paginar
+  // sobre una columna con empates (fecha, email, user_id) repite y salta filas.
+  // Ejemplos de este proyecto: `memberships` no tiene `created_at` (usa `fecha_inicio`,
+  // pero para paginar usa `id`); `users` no tiene `created_at` (es `fecha_registro`).
+  var PAG = 1000;                 // tope real del servidor: pedir más no trae más
+  var TOPE_PAGINAS = 500;         // freno de seguridad: 500k filas máx.
+
+  window.MaestroPagina = {
+    PAGINA: PAG,
+    todo: async function(tabla, columnas, afinar, opts) {
+      var o = opts || {};
+      var col = o.orden || 'id';
+      var sb = window.supabaseClient;
+      if (!sb) {
+        // 🔒 "todavía no sé" NO es "no hay datos": se reporta como error, no como lista vacía.
+        return { data: [], error: { message: 'supabaseClient no está listo' }, completo: false };
+      }
+      var todo = [];
+      for (var pagina = 0; pagina < TOPE_PAGINAS; pagina++) {
+        var desde = pagina * PAG;
+        var q = sb.from(tabla).select(columnas);
+        if (typeof afinar === 'function') q = afinar(q);
+        var res = await q.order(col, { ascending: true }).range(desde, desde + PAG - 1);
+        if (res.error) {
+          console.warn('[MaestroPagina] ' + tabla + ' página ' + desde + ': ' + (res.error.message || 'consulta rechazada'), res.error);
+          return { data: todo, error: res.error, completo: false };
+        }
+        var lote = res.data || [];
+        todo = todo.concat(lote);
+        if (lote.length < PAG) return { data: todo, error: null, completo: true };
+      }
+      // Se acabó el freno antes que la tabla: la lista está truncada y hay que decirlo.
+      console.warn('[MaestroPagina] ' + tabla + ': se alcanzó el tope de ' + (TOPE_PAGINAS * PAG) + ' filas; la lista está incompleta.');
+      return { data: todo, error: null, completo: false };
+    }
+  };
 })();

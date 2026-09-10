@@ -1059,28 +1059,67 @@
         return;
       }
       if (!currentUser || !currentUser.email) return;
-      // Validate code against Supabase access_codes table
+      // ══════════════════════════════════════════════════════════════════════
+      // 🔴 RAÍZ (10-sep-2026): "Código inválido" cuando la consulta ni siquiera corrió.
+      // ══════════════════════════════════════════════════════════════════════
+      // supabase-js NO LANZA: si la lectura de `access_codes` es rechazada (RLS, red,
+      // tabla ausente) devuelve {data:null, error:{...}} SIN excepción. Aquí el `error`
+      // se desestructuraba y NUNCA se leía, así que `!data` era verdadero y al alumno
+      // que SÍ PAGÓ su credencial se le decía "❌ Código inválido o ya utilizado":
+      // lo acusamos de tramposo por una falla NUESTRA.
+      // 🔒 "No pude verificar" NO es "es inválido". Ahora se distinguen (ámbar vs rojo).
+      // 🪤 El `try/catch` de antes era CÓDIGO MUERTO por la misma razón: nunca corría.
       if (supabaseClient) {
+        var _sel = null;
         try {
-          var { data, error } = await supabaseClient
+          _sel = await supabaseClient
             .from('access_codes')
             .select('*')
             .eq('code', code)
             .eq('used', false)
             .limit(1);
-          if (!data || data.length === 0) {
-            msg.style.display = 'block';
-            msg.style.color = '#e74c3c';
-            msg.textContent = '❌ ' + (typeof _t === 'function' ? _t('profile_invalid_code', 'Código inválido o ya utilizado') : 'Código inválido o ya utilizado');
-            return;
-          }
-          await supabaseClient.from('access_codes').update({
+        } catch (e) {
+          _sel = { error: { message: (e && e.message) || 'fallo de red' } };
+        }
+
+        if (_sel && _sel.error) {
+          console.warn('[Profile] no se pudo verificar el código "' + code + '": ' + (_sel.error.message || '?'), _sel.error);
+          msg.style.display = 'block';
+          msg.style.color = '#f59e0b';
+          msg.textContent = '⚠️ ' + (typeof _t === 'function' ? _t('profile_code_check_failed', 'No pude verificar tu código ahora. Revisa tu conexión e intenta de nuevo — tu código NO se usó.') : 'No pude verificar tu código ahora. Revisa tu conexión e intenta de nuevo — tu código NO se usó.');
+          return;
+        }
+
+        var _filas = (_sel && _sel.data) || [];
+        if (_filas.length === 0) {
+          // Aquí sí preguntamos y la respuesta fue "no existe / ya se usó".
+          msg.style.display = 'block';
+          msg.style.color = '#e74c3c';
+          msg.textContent = '❌ ' + (typeof _t === 'function' ? _t('profile_invalid_code', 'Código inválido o ya utilizado') : 'Código inválido o ya utilizado');
+          return;
+        }
+
+        // Quemar el código. 🔴 Este update tampoco se revisaba: si fallaba, el código
+        // quedaba REUTILIZABLE para siempre y nadie se enteraba — una credencial pagada
+        // se podía activar en cuantos teléfonos quisieran.
+        // 🪤 Decisión: si el quemado falla NO se le niega el acceso a quien ya pagó
+        // (el código se verificó válido); se deja rastro fuerte para poder auditarlo.
+        var _upd = null;
+        try {
+          _upd = await supabaseClient.from('access_codes').update({
             used: true, used_at: new Date().toISOString(), used_by: currentUser.email
           }).eq('code', code);
-        } catch(e) {
-          console.warn('[Profile] access_codes check:', e);
+        } catch (e) {
+          _upd = { error: { message: (e && e.message) || 'fallo de red' } };
+        }
+        if (_upd && _upd.error) {
+          console.warn('[Profile] ⚠️ el código "' + code + '" NO se marcó como usado (' +
+                       (_upd.error.message || '?') + '): sigue siendo canjeable por otra persona.', _upd.error);
         }
       }
+      // 🪤 PENDIENTE CONOCIDO: el desbloqueo de la credencial vive solo en localStorage,
+      // así que se pierde al reinstalar o al cambiar de teléfono. Quemar el código es lo
+      // único que queda en el servidor. Moverlo a la base es otro cambio, no de este barrido.
       localStorage.setItem('maestroac_id_purchased_' + currentUser.email, 'true');
       msg.style.display = 'block';
       msg.style.color = '#2ecc71';

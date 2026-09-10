@@ -961,30 +961,66 @@
         return;
       }
       if (!currentUser || !currentUser.email) return;
-      // Validate code against Supabase access_codes table
+      // ══════════════════════════════════════════════════════════════════════
+      // 🔴 RAÍZ (10-sep-2026): "Código inválido" cuando la consulta ni siquiera corrió.
+      // ══════════════════════════════════════════════════════════════════════
+      // supabase-js NO LANZA: si la lectura de `access_codes` es rechazada (RLS, red,
+      // tabla ausente) devuelve {data:null, error:{...}} SIN excepción. El `error` se
+      // desestructuraba y jamás se leía, así que `!data` era verdadero y al alumno que
+      // SÍ PAGÓ se le decía "❌ Código inválido o ya utilizado" — la peor mentira
+      // posible: acusa al cliente de tramposo por una falla nuestra.
+      // 🔒 "No pude verificar" NO es "es inválido". Ahora se distinguen.
+      // 🪤 El `try/catch` de antes tampoco atrapaba nada por la misma razón.
       if (supabaseClient) {
+        var _sel = null;
         try {
-          var { data, error } = await supabaseClient
+          _sel = await supabaseClient
             .from('access_codes')
             .select('*')
             .eq('code', code)
             .eq('used', false)
             .limit(1);
-          if (!data || data.length === 0) {
-            msg.style.display = 'block';
-            msg.style.color = '#e74c3c';
-            msg.textContent = '❌ ' + _tc('cert_code_invalid', 'Código inválido o ya utilizado');
-            return;
-          }
-          // Mark code as used
-          await supabaseClient.from('access_codes').update({
+        } catch (e) {
+          _sel = { error: { message: (e && e.message) || 'fallo de red' } };
+        }
+
+        if (_sel && _sel.error) {
+          console.warn('[Certs] no se pudo verificar el código "' + code + '": ' + (_sel.error.message || '?'), _sel.error);
+          msg.style.display = 'block';
+          msg.style.color = '#f59e0b';
+          msg.textContent = '⚠️ ' + _tc('cert_code_check_failed', 'No pude verificar tu código ahora. Revisa tu conexión e intenta de nuevo — tu código NO se usó.');
+          return;
+        }
+
+        var _filas = (_sel && _sel.data) || [];
+        if (_filas.length === 0) {
+          // Aquí sí preguntamos y la respuesta fue "no existe / ya se usó".
+          msg.style.display = 'block';
+          msg.style.color = '#e74c3c';
+          msg.textContent = '❌ ' + _tc('cert_code_invalid', 'Código inválido o ya utilizado');
+          return;
+        }
+
+        // Quemar el código. 🔴 Este update tampoco se revisaba: si fallaba, el código
+        // quedaba REUTILIZABLE para siempre y nadie se enteraba.
+        // 🪤 Decisión: si el quemado falla NO se le niega el acceso a quien ya pagó
+        // (el código se verificó válido); se deja rastro fuerte para poder auditarlo.
+        var _upd = null;
+        try {
+          _upd = await supabaseClient.from('access_codes').update({
             used: true, used_at: new Date().toISOString(), used_by: currentUser.email
           }).eq('code', code);
-        } catch(e) {
-          // If access_codes table doesn't exist yet, fall through
-          console.warn('[Certs] access_codes check:', e);
+        } catch (e) {
+          _upd = { error: { message: (e && e.message) || 'fallo de red' } };
+        }
+        if (_upd && _upd.error) {
+          console.warn('[Certs] ⚠️ el código "' + code + '" NO se marcó como usado (' +
+                       (_upd.error.message || '?') + '): sigue siendo canjeable por otra persona.', _upd.error);
         }
       }
+      // 🪤 PENDIENTE CONOCIDO: el desbloqueo vive solo en localStorage, así que se pierde
+      // al reinstalar o al cambiar de teléfono. Quemar el código es lo único que queda en
+      // el servidor. Moverlo a la base es otro cambio, no de este barrido.
       localStorage.setItem('maestroac_cert_purchased_' + currentUser.email, 'true');
       msg.style.display = 'block';
       msg.style.color = '#2ecc71';

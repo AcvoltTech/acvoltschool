@@ -26,18 +26,56 @@
     var sessionCheckedIn = false;
 
     // Process any pending checkout from previous session
+    // ══════════════════════════════════════════════════════════════════════
+    // 🔴 RAÍZ (10-sep-2026): se BORRABA la evidencia antes de que la base confirmara.
+    // ══════════════════════════════════════════════════════════════════════
+    // `attendance_pending_checkout` es el ÚNICO respaldo de una salida que no se
+    // alcanzó a guardar (se cerró el navegador, se fue la señal). El código hacía el
+    // `update` sin revisarlo y luego `removeItem(...)` PASE LO QUE PASE — y el
+    // `catch` también borraba. Como supabase-js NO LANZA, un update rechazado se veía
+    // idéntico a uno exitoso: la sesión quedaba abierta para siempre en la base y las
+    // horas de clase del alumno NUNCA se acreditaban.
+    // 🪤 Y esas horas son requisito de certificación: no es un contador bonito, es la
+    // prueba de que el alumno asistió. Perderlas en silencio le cuesta el certificado.
+    // Ahora el respaldo SOLO se borra cuando el servidor confirmó.
     async function _processPendingCheckout() {
+      var pending = null;
       try {
-        var pending = localStorage.getItem('attendance_pending_checkout');
-        if (!pending || !supabaseClient) return;
-        var data = JSON.parse(pending);
-        if (data.id) {
-          await supabaseClient.from('attendance')
-            .update({ check_out: data.checkOut, total_minutes: data.totalMinutes })
-            .eq('id', data.id);
-        }
-        localStorage.removeItem('attendance_pending_checkout');
-      } catch(e) { localStorage.removeItem('attendance_pending_checkout'); }
+        pending = localStorage.getItem('attendance_pending_checkout');
+      } catch (e) { return; }
+      if (!pending || !supabaseClient) return;
+
+      var data = null;
+      try {
+        data = JSON.parse(pending);
+      } catch (e) {
+        // JSON corrupto: esto sí es irrecuperable, no hay nada que reintentar.
+        console.warn('[Attendance] respaldo de salida ilegible, se descarta:', e.message || e);
+        try { localStorage.removeItem('attendance_pending_checkout'); } catch (_) {}
+        return;
+      }
+
+      if (!data || !data.id) {
+        try { localStorage.removeItem('attendance_pending_checkout'); } catch (_) {}
+        return;
+      }
+
+      var res = null;
+      try {
+        res = await supabaseClient.from('attendance')
+          .update({ check_out: data.checkOut, total_minutes: data.totalMinutes })
+          .eq('id', data.id);
+      } catch (e) {
+        res = { error: { message: (e && e.message) || 'fallo de red' } };
+      }
+
+      if (res && res.error) {
+        // 🔒 NO se borra: se conserva para reintentar en el próximo arranque.
+        console.warn('[Attendance] no se pudo cerrar la asistencia ' + data.id + ' (' +
+                     (res.error.message || '?') + '): se conserva el respaldo para reintentar.', res.error);
+        return;
+      }
+      try { localStorage.removeItem('attendance_pending_checkout'); } catch (_) {}
     }
 
     // Silent auto check-in on login — no modal, no user action
@@ -160,9 +198,32 @@
         totalMinutes = Math.min(totalMinutes, 240); // Cap session at 4 hours
 
         if (supabaseClient) {
-          await supabaseClient.from('attendance')
-            .update({ check_out: checkOutTime.toISOString(), total_minutes: totalMinutes })
-            .eq('id', currentAttendanceId);
+          // 🔴 Este update no se revisaba: si la base lo rechazaba, la UI igual se
+          // reseteaba a "salida registrada" y las horas de esa sesión se perdían sin
+          // dejar rastro NI respaldo. Ahora, si falla, se deja el respaldo que
+          // `_processPendingCheckout()` reintenta en el próximo arranque.
+          var _out = null;
+          try {
+            _out = await supabaseClient.from('attendance')
+              .update({ check_out: checkOutTime.toISOString(), total_minutes: totalMinutes })
+              .eq('id', currentAttendanceId);
+          } catch (e) {
+            _out = { error: { message: (e && e.message) || 'fallo de red' } };
+          }
+          if (_out && _out.error) {
+            console.warn('[Attendance] no se guardó la salida de ' + currentAttendanceId + ' (' +
+                         (_out.error.message || '?') + '): queda en respaldo para reintentar.', _out.error);
+            try {
+              localStorage.setItem('attendance_pending_checkout', JSON.stringify({
+                id: currentAttendanceId,
+                checkOut: checkOutTime.toISOString(),
+                totalMinutes: totalMinutes
+              }));
+            } catch (_) {}
+            if (typeof window.showToast === 'function') {
+              window.showToast(_t('ci_checkout_pending', 'No pude registrar tu salida ahora. Se reintentará sola al volver a entrar.'), 'warning');
+            }
+          }
         }
 
         clearInterval(attendanceTimerInterval);
@@ -307,13 +368,24 @@
             var totalMinutes = pc.totalMinutes || Math.round((checkOutTime - new Date(pc.checkIn)) / 60000);
             totalMinutes = Math.min(totalMinutes, 240); // Cap session at 4 hours
 
-            await supabaseClient.from('attendance')
-              .update({ check_out: checkOutTime.toISOString(), total_minutes: totalMinutes })
-              .eq('id', pc.id)
-              .is('check_out', null); // Only update if still open
-
-            console.log('[Attendance] Auto-checkout from previous session:', pc.id, totalMinutes + 'min');
-            localStorage.removeItem('attendance_pending_checkout');
+            // 🔴 Mismo patrón: el `removeItem` corría aunque el update fallara, así que
+            // el respaldo de la salida se destruía y las horas ya no se podían recuperar.
+            var _auto = null;
+            try {
+              _auto = await supabaseClient.from('attendance')
+                .update({ check_out: checkOutTime.toISOString(), total_minutes: totalMinutes })
+                .eq('id', pc.id)
+                .is('check_out', null); // Only update if still open
+            } catch (e) {
+              _auto = { error: { message: (e && e.message) || 'fallo de red' } };
+            }
+            if (_auto && _auto.error) {
+              console.warn('[Attendance] auto-salida de ' + pc.id + ' RECHAZADA (' +
+                           (_auto.error.message || '?') + '): se conserva el respaldo para reintentar.', _auto.error);
+            } else {
+              console.log('[Attendance] Auto-checkout from previous session:', pc.id, totalMinutes + 'min');
+              localStorage.removeItem('attendance_pending_checkout');
+            }
           }
         }
 

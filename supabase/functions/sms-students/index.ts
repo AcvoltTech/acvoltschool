@@ -31,6 +31,31 @@ function json(d: unknown, status = 200) {
   return new Response(JSON.stringify(d), { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 }
 
+// ── Lector paginado (rompe el tope de 1,000 filas de PostgREST) ──
+// 🔴 RAÍZ: PostgREST corta TODA consulta en 1,000 filas (max_rows = 1000, del SERVIDOR).
+// Sin error, sin aviso: HTTP 200 con exactamente 1,000 filas; el síntoma es un total que
+// nunca se mueve. 🪤 `.limit(20000)` NO sirve — el tope no lo pone el cliente. Se pagina.
+// 🪤 Se ordena por `id` (ÚNICO): con una columna con empates una página repite filas y se
+// salta otras → a unos les llegan dos SMS (y se cobran dos) y a otros ninguno.
+// 🪤 supabase-js NUNCA tira excepción: hay que leer `error` en CADA página y decir la
+// verdad (PARCIAL) en lugar de seguir callado con una lista corta.
+const PAGE_SIZE = 1000;
+const MAX_PAGES = 100; // tope de seguridad (100k filas) para no caer en un bucle eterno
+async function fetchAllPaged<T>(
+  build: (from: number, to: number) => PromiseLike<{ data: unknown[] | null; error: { message?: string } | null }>,
+): Promise<{ rows: T[]; error: string | null }> {
+  const rows: T[] = [];
+  for (let page = 0; page < MAX_PAGES; page++) {
+    const offset = page * PAGE_SIZE;
+    const { data, error } = await build(offset, offset + PAGE_SIZE - 1);
+    if (error) return { rows, error: error.message || String(error) };
+    const batch = (data || []) as T[];
+    rows.push(...batch);
+    if (batch.length < PAGE_SIZE) return { rows, error: null };
+  }
+  return { rows, error: `Se alcanzó el tope de ${MAX_PAGES} páginas (${MAX_PAGES * PAGE_SIZE} filas)` };
+}
+
 function normPhone(raw: string | null): string | null {
   if (!raw) return null;
   const digits = String(raw).replace(/\D/g, '');
@@ -94,24 +119,33 @@ serve(async (req) => {
     }
 
     // Estudiantes registrados con teléfono (excluye cuentas internas/sintéticas)
-    const { data: users, error: uErr } = await sb
-      .from('users')
-      .select('id, telefono, email')
-      .not('telefono', 'is', null)
-      .not('email', 'ilike', '%synthetic%')
-      .not('email', 'ilike', '%@maestrohvacr.com')
-      .not('email', 'ilike', '%@acvolt%')
-      .limit(20000);
-    if (uErr) throw uErr;
+    // 🔴 RAÍZ (medido 2026-09-10): los destinatarios reales son 4,778, pero esto devolvía
+    // 1,000. Síntoma real: la factura de Twilio y `sms_send_log` mostraban ~1,000 envíos
+    // y 3,778 estudiantes se quedaban SIN aviso, sin una sola señal de error. Ahora se
+    // pagina: 4,778 teléfonos (antes 1,000).
+    const { rows: users, error: uErr } = await fetchAllPaged<{ telefono: string | null }>(
+      (from, to) => sb
+        .from('users')
+        .select('id, telefono, email')
+        .not('telefono', 'is', null)
+        .not('email', 'ilike', '%synthetic%')
+        .not('email', 'ilike', '%@maestrohvacr.com')
+        .not('email', 'ilike', '%@acvolt%')
+        .order('id', { ascending: true })
+        .range(from, to),
+    );
+    // 🪤 Sin nada leído no hay a quién mandarle: error duro. Leído a medias: se avisa.
+    if (uErr && users.length === 0) return json({ error: 'No se pudo leer la lista de estudiantes: ' + uErr }, 500);
 
     const seen = new Set<string>();
     const phones: string[] = [];
-    for (const u of (users || []) as { telefono: string | null }[]) {
+    for (const u of users) {
       const p = normPhone(u.telefono);
       if (p && !seen.has(p)) { seen.add(p); phones.push(p); }
     }
 
-    if (dry_run) return json({ dry_run: true, target: phones.length });
+    const partial = uErr ? { partial: true, audience_read_error: uErr } : {};
+    if (dry_run) return json({ dry_run: true, target: phones.length, ...partial });
 
     const broadcastKey = 'live-students-' + Date.now();
     const sendAll = async () => {
@@ -126,13 +160,13 @@ serve(async (req) => {
           });
         } catch (_) { /* best effort */ }
       }
-      console.log('[sms-students] done', { sent, failed, total: phones.length });
+      console.log('[sms-students] done', { sent, failed, total: phones.length, audience_read_error: uErr || null });
     };
 
     if (typeof EdgeRuntime !== 'undefined' && EdgeRuntime.waitUntil) EdgeRuntime.waitUntil(sendAll());
     else sendAll().catch((e) => console.error('[sms-students] async:', e));
 
-    return json({ started: true, target: phones.length, broadcast_key: broadcastKey });
+    return json({ started: true, target: phones.length, broadcast_key: broadcastKey, ...partial });
   } catch (err) {
     console.error('[sms-students]', err);
     return json({ error: (err as Error).message || 'Internal error' }, 500);

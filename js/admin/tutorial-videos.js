@@ -1448,32 +1448,82 @@ async function tvDeleteVideo(id) {
 // VIDEO PLAYER (with tier gating for students)
 // ============================================
 
+// ══════════════════════════════════════════════════════════════════════════════
+// 🔴 EL ADMIN SE QUEDÓ EN LOS MP4 VIEJOS (10-sep-2026)
+// ══════════════════════════════════════════════════════════════════════════════
+// MEDIDO hoy en `tutorial_videos`: 176 filas, 175 con `cf_stream_uid` y
+// `cf_migrated_at` — o sea, TODO está ya en Cloudflare Stream. Pero `video_url`
+// todavía apunta a los MP4 viejos de Supabase (0 filas con URL de Stream), y esta
+// función solo miraba `v.video_url`. Hoy "funciona" de milagro: Mario revisa un
+// video distinto del que ven los alumnos (el lado del alumno,
+// js/video-tutoriales.js, ya se cambió a Stream), y el día que se borren los
+// 226 GB de MP4 este reproductor se queda MUDO Y NEGRO de golpe.
+// 🪤 Y hay una trampa doble: un `<iframe>` NO tiene `.play()`, `.pause()`,
+// `.currentTime` ni los eventos `loadedmetadata`/`timeupdate`. Meter el iframe sin
+// separar las ramas convertiría este arreglo en un TypeError que se lleva el resto
+// de la función (fue justo el bug del botón de cerrar en el lado del alumno).
 function tvPlayVideo(id) {
   var v = _tvVideos.find(function(x) { return x.id === id; });
-  if (!v || !v.video_url) return;
+  if (!v) return;
+
+  var videoUrl = v.video_url || '';
+  // Prefiere Stream cuando la migración ya está sellada (uid + fecha).
+  var vfUid = (v.cf_stream_uid && v.cf_migrated_at) ? String(v.cf_stream_uid) : '';
+  // Y si alguien ya guardó una URL de Stream en `video_url`, meterla en
+  // <source type="video/mp4"> da un rectángulo negro mudo: va por iframe.
+  var esStreamUrl = /cloudflarestream\.com\//i.test(videoUrl) || /videodelivery\.net\//i.test(videoUrl);
+  var usaIframe = !!vfUid || esStreamUrl;
+
+  if (!videoUrl && !vfUid) {
+    console.warn('[TutorialVideos] el video ' + id + ' no tiene ni video_url ni cf_stream_uid');
+    if (typeof window.showToast === 'function') window.showToast(_t('adm_tv_no_source', 'Ese video no tiene fuente: ni MP4 ni uid de Stream.'), 'warning');
+    return;
+  }
 
   var overlay = document.createElement('div');
   overlay.className = 'tv-player-overlay';
   overlay.id = 'tvPlayerOverlay';
 
   var saved = _tvGetProgress(id);
+  // 🪤 El iframe va SIN `src` y marcado con `data-vf-uid`: los videos migrados
+  // llevan `requireSignedURLs: true`, así que la URL con el uid pelón devuelve 401
+  // (negro y mudo). `MaestroVideoFirma.firmarPendientes()` le pone el src ya firmado.
+  var mediaHtml = usaIframe
+    ? (vfUid && window.MaestroVideoFirma
+        ? '<iframe id="tvVideoEl" data-vf-uid="' + _escHtml(vfUid) + '" allow="autoplay;fullscreen;picture-in-picture" allowfullscreen style="width:100%;height:100%;border:0;background:#000;"></iframe>'
+        : '<iframe id="tvVideoEl" src="' + _escHtml(videoUrl || ('https://iframe.videodelivery.net/' + encodeURIComponent(vfUid))) + '" allow="autoplay;fullscreen;picture-in-picture" allowfullscreen style="width:100%;height:100%;border:0;background:#000;"></iframe>')
+    // 🪤 `crossorigin="anonymous"` SOLO cuando de verdad hay subtítulos: pedir CORS
+    // en un MP4 grande servido por rangos deja el video pegado en 00:00 sin un solo
+    // error (mismo arreglo que ya lleva el lado del alumno).
+    : '<video id="tvVideoEl" controls controlslist="nodownload" preload="metadata"' +
+        (v.subtitle_url_en ? ' crossorigin="anonymous"' : '') + '>' +
+        '<source src="' + _escHtml(videoUrl) + '" type="video/mp4">' +
+        (v.subtitle_url_en ? '<track kind="subtitles" src="' + _escHtml(v.subtitle_url_en) + '" srclang="en" label="English" default>' : '') +
+        _t('adm_tv_html5_unsupported') +
+      '</video>';
+
   overlay.innerHTML =
     '<button class="tv-player-close" onclick="tvClosePlayer()">&times;</button>' +
     '<div class="tv-player-title">' + _escHtml(v.title) + '</div>' +
-    '<video id="tvVideoEl" controls controlslist="nodownload" preload="metadata" crossorigin="anonymous">' +
-      '<source src="' + _escHtml(v.video_url) + '" type="video/mp4">' +
-      (v.subtitle_url_en ? '<track kind="subtitles" src="' + _escHtml(v.subtitle_url_en) + '" srclang="en" label="English" default>' : '') +
-      _t('adm_tv_html5_unsupported') +
-    '</video>';
+    mediaHtml;
   document.body.appendChild(overlay);
 
-  var vid = document.getElementById('tvVideoEl');
-  if (vid) {
-    vid.onloadedmetadata = function() {
-      if (saved > 0 && saved < vid.duration - 2) vid.currentTime = saved;
+  var el = document.getElementById('tvVideoEl');
+  if (el && el.tagName === 'IFRAME') {
+    // Pedir la firma ya con el iframe en el DOM.
+    if (window.MaestroVideoFirma && typeof window.MaestroVideoFirma.firmarPendientes === 'function') {
+      window.MaestroVideoFirma.firmarPendientes(overlay);
+    }
+    // 🪤 Sin el SDK de Stream un iframe no reporta avance, así que aquí NO se
+    // guarda progreso ni se salta al minuto guardado. Es la vista de revisión de
+    // Mario, no la del alumno (esa sí lo hace, con Stream(iframe)).
+  } else if (el) {
+    el.onloadedmetadata = function() {
+      if (saved > 0 && saved < el.duration - 2) el.currentTime = saved;
     };
-    vid.ontimeupdate = function() { _tvSaveProgress(id, vid.currentTime); };
-    vid.play().catch(function() {});
+    el.ontimeupdate = function() { _tvSaveProgress(id, el.currentTime); };
+    var p = el.play();
+    if (p && typeof p.catch === 'function') p.catch(function() {});
   }
 
   overlay.addEventListener('click', function(e) {
@@ -1483,11 +1533,19 @@ function tvPlayVideo(id) {
 
 function tvClosePlayer() {
   var ov = document.getElementById('tvPlayerOverlay');
-  if (ov) {
-    var vid = ov.querySelector('video');
-    if (vid) { vid.pause(); vid.src = ''; }
-    ov.remove();
+  if (!ov) return;
+  // 🔴 Antes esto buscaba solo `ov.querySelector('video')`. Con un iframe de Stream
+  // devuelve null, así que ni se pausaba ni se limpiaba el src: el overlay se
+  // quitaba pero el video SEGUÍA SONANDO por detrás. Y llamar `.pause()` sobre el
+  // iframe tampoco es opción: no existe y tira TypeError.
+  var el = ov.querySelector('video, iframe');
+  if (el) {
+    if (el.tagName === 'VIDEO') {
+      try { el.pause(); } catch (e) { console.warn('[TutorialVideos] no se pudo pausar:', e.message || e); }
+    }
+    el.src = '';   // en el iframe esto sí corta la reproducción
   }
+  ov.remove();
 }
 
 function _tvGetProgress(id) {

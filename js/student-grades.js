@@ -1,4 +1,33 @@
     var _tc = typeof _t === 'function' ? _t : function(k, fb) { return fb || k; };
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // 🔴 "NO PUDE LEER" SE VEÍA IGUAL QUE "NO TIENES NADA" (10-sep-2026)
+    // En `loadStudentTasks` el error SÍ se detectaba (`if (error) throw error`) y
+    // luego el `catch` pintaba "No tienes tareas asignadas": el alumno con 8 tareas
+    // pendientes leía que no debía nada, y nadie se enteraba del fallo.
+    // En la barra de "Tareas" ni siquiera se leía `error` (`const { data }`), así
+    // que un 400 borraba la barra completa sin dejar rastro.
+    // Ahora se distingue: vacío = vacío, fallo = "no pude cargar · Reintentar".
+    // 🪤 `html_retry` ya existe en i18n.js (es: Reintentar / en: Retry); se reusa
+    // porque i18n.js está cerrado a claves nuevas.
+    // ══════════════════════════════════════════════════════════════════════════
+    function _sgCajaNoPudeCargar(texto, detalle, reintentoJs) {
+      return '<div style="text-align:center;padding:16px;color:#b45309;font-size:13px;">' +
+        '<div style="font-size:22px;margin-bottom:4px;">⚠️</div>' +
+        '<div style="font-weight:700;">' + texto + '</div>' +
+        (detalle ? '<div style="font-size:11px;color:#888;margin-top:4px;">' + _escHtml(detalle) + '</div>' : '') +
+        '<button onclick="' + reintentoJs + '" style="margin-top:10px;padding:7px 16px;background:#3498db;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;">🔄 ' +
+        _tc('html_retry', 'Reintentar') + '</button></div>';
+    }
+
+    function _sgFallo(donde, err) {
+      var msg = (err && err.message) || 'consulta rechazada';
+      console.warn('[StudentGrades] ' + donde + ': ' + msg, err);
+      if (typeof window.showToast === 'function') {
+        window.showToast(_tc('sg_no_pude_cargar_toast', 'No pude cargar tus tareas. Intenta de nuevo.'), 'error');
+      }
+    }
+
     async function loadStudentProgress() {
       const container = document.getElementById('studentProgressBars');
       if (!container) return;
@@ -29,11 +58,20 @@
       try {
         const email = localStorage.getItem('tecnico_email') || '';
         if (email && supabaseClient) {
-          const { data: gradedTasks } = await supabaseClient.from('submitted_tasks')
+          // 🔴 Antes: `const { data: gradedTasks }` sin leer `error`. supabase-js no
+          // lanza, así que un fallo dejaba `gradedTasks` en undefined y la barra de
+          // "Tareas" desaparecía sin una sola pista — ni en pantalla ni en consola.
+          const resTareas = await supabaseClient.from('submitted_tasks')
             .select('grade, admin_override_grade')
             .eq('student_email', email)
             .not('grade', 'is', null);
-          if (gradedTasks && gradedTasks.length > 0) {
+          const gradedTasks = resTareas.data || [];
+          if (resTareas.error) {
+            _sgFallo('barra de tareas de ' + email, resTareas.error);
+            html += '<div style="margin-top:8px;padding-top:8px;border-top:1px dashed #ddd;">' +
+              _sgCajaNoPudeCargar(_tc('sg_barra_tareas_no_pude', 'No pude cargar tu avance de tareas.'), resTareas.error.message, 'loadStudentProgress()') +
+              '</div>';
+          } else if (gradedTasks.length > 0) {
             var totalTasks = gradedTasks.length;
             var passed = 0, scoreSum = 0;
             gradedTasks.forEach(function(t) {
@@ -55,7 +93,12 @@
             html += '</div>';
           }
         }
-      } catch(e) { console.log('Task progress error:', e); }
+      } catch(e) {
+        _sgFallo('barra de tareas', e);
+        html += '<div style="margin-top:8px;padding-top:8px;border-top:1px dashed #ddd;">' +
+          _sgCajaNoPudeCargar(_tc('sg_barra_tareas_no_pude', 'No pude cargar tu avance de tareas.'), e && e.message, 'loadStudentProgress()') +
+          '</div>';
+      }
 
       container.innerHTML = html;
     }
@@ -69,8 +112,16 @@
       try {
         const { data, error } = await supabaseClient.from('student_tasks')
           .select('*').eq('student_email', email).order('created_at', {ascending: false});
-        
-        if (error) throw error;
+
+        // 🔴 El `throw error` de aquí caía en el mismo `catch` que pintaba "No
+        // tienes tareas asignadas": detectar el fallo no sirve de nada si después
+        // se cuenta la misma mentira. Se corta aquí, con su aviso y su reintento.
+        if (error) {
+          _sgFallo('tareas asignadas de ' + email, error);
+          container.innerHTML = _sgCajaNoPudeCargar(_tc('sg_tareas_no_pude', 'No pude cargar tus tareas asignadas.'), error.message, 'loadStudentTasks()');
+          if (select) select.innerHTML = '<option value="">' + _tc('sg_select_task', 'Seleccionar tarea...') + '</option>';
+          return;
+        }
         if (!data || data.length === 0) {
           container.innerHTML = '<p style="text-align: center; color: #aaa;">' + _tc('sg_no_tasks_assigned', 'No tienes tareas asignadas') + '</p>';
           return;
@@ -92,7 +143,9 @@
         container.innerHTML = html;
         if (select) select.innerHTML = selectHtml;
       } catch(e) {
-        container.innerHTML = '<p style="text-align: center; color: #aaa;">' + _tc('sg_no_tasks_assigned', 'No tienes tareas asignadas') + '</p>';
+        // Cualquier otra falla (cliente sin arrancar, red caída) tampoco es "no tienes tareas".
+        _sgFallo('tareas asignadas de ' + email, e);
+        container.innerHTML = _sgCajaNoPudeCargar(_tc('sg_tareas_no_pude', 'No pude cargar tus tareas asignadas.'), e && e.message, 'loadStudentTasks()');
       }
     }
 

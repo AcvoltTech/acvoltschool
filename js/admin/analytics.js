@@ -92,6 +92,18 @@ if (typeof _addTranslations === 'function') _addTranslations({
   adm_an_scr_certs: { es: 'Certificados', en: 'Certificates' },
   // Feature names in featureMap (Feature Usage tab)
   adm_an_feat_quizzes: { es: 'Quizzes', en: 'Quizzes' },
+  // Avisos de "no pude medir" (10-sep-2026). Ver la LEY arriba de _anFallo().
+  adm_an_fail_title: { es: 'No pude cargar estos datos', en: 'Could not load this data' },
+  adm_an_fail_hint: { es: 'La consulta falló. Esto NO quiere decir que sea cero.', en: 'The query failed. This does NOT mean it is zero.' },
+  adm_an_retry: { es: 'Reintentar', en: 'Retry' },
+  adm_an_partial: { es: '⚠️ Lectura incompleta: la tabla se cortó antes de terminar, los números de abajo son un MÍNIMO, no el total.', en: '⚠️ Incomplete read: the table was cut short, the numbers below are a MINIMUM, not the total.' },
+  adm_an_loading_big: { es: 'Leyendo la tabla completa en páginas de 1,000. Puede tardar unos segundos...', en: 'Reading the full table in pages of 1,000. This may take a few seconds...' },
+  adm_an_src_missing: { es: 'Fuente de datos no disponible', en: 'Data source unavailable' },
+  adm_an_src_missing_exams: { es: 'Exámenes y Asistencia: no hay de dónde leerlos en esta base. NO es que el estudiante no tenga nada.', en: 'Exams and Attendance: there is no source for them in this database. It does NOT mean the student has nothing.' },
+  adm_an_quiz_empty: { es: 'quiz_results está VACÍA (0 filas medidas el 10-sep-2026): no hay actividad de quiz que medir todavía.', en: 'quiz_results is EMPTY (0 rows measured 2026-09-10): there is no quiz activity to measure yet.' },
+  adm_an_plan: { es: 'Plan', en: 'Plan' },
+  adm_an_no_plan: { es: 'Sin plan', en: 'No plan' },
+  adm_an_unknown: { es: '?', en: '?' }
 });
 
 var _anCache = {};
@@ -214,6 +226,85 @@ function _anWeekStart(d) {
   return new Date(d.getFullYear(), d.getMonth(), diff);
 }
 
+// ==================== LEER SIN QUE ME MIENTAN ====================
+// 🔴 RAÍZ (10-sep-2026): PostgREST corta TODO `.select()` en 1,000 filas y contesta
+// HTTP 200. No hay error, no hay aviso, no hay excepción. La firma del bug es un
+// número que NUNCA se mueve. `screen_events` tiene 387,372 filas MEDIDAS hoy, y las
+// cinco gráficas de este panel leían de ahí sin paginar:
+//   14 días  → 12,995 filas reales, se veían 1,000  (chispa de DAU)
+//   30 días  → 33,895 filas reales, se veían 1,000  (barras por pantalla)
+//   28 días  → 30,770 filas reales, se veían 1,000  (tendencia de abandono)
+//   60 días  → 99,992 filas reales, se veían 1,000  (adopción de features)
+//   63 días  → 105,821 filas reales, se veían 1,000 (retención por cohorte)
+// 🪤 La de 14 días era la PEOR: ordenaba `entered_at` ASCENDENTE, así que las 1,000
+// filas que sobrevivían eran las MÁS VIEJAS de la ventana. La chispa dibujaba tráfico
+// de hace dos semanas y caía a CERO en el borde derecho — "hoy nadie entró", falso.
+// Las otras cuatro ni siquiera ordenaban: qué 1,000 filas llegaban era azar del servidor.
+// Consecuencia real: la retención parecía un acantilado, el abandono marcaba "cayendo"
+// a gente que entra a diario, y la adopción de features leía ~0% en todo menos el top.
+// Ahora todo pasa por MaestroPagina (js/utils.js, tier 0), que pagina por `id` y
+// devuelve { data, error, completo } — y NUNCA finge que un fallo es una lista vacía.
+async function _anPaginar(tabla, columnas, afinar) {
+  if (!window.MaestroPagina || typeof window.MaestroPagina.todo !== 'function') {
+    // 🔒 "todavía no cargó la herramienta" NO es "no hay datos".
+    return { data: [], error: { message: 'MaestroPagina no está cargado (js/utils.js, tier 0)' }, completo: false };
+  }
+  return window.MaestroPagina.todo(tabla, columnas, afinar);
+}
+
+// 🔒 LEY: una pantalla NUNCA pinta 0 / vacío / "no tienes nada" cuando la consulta
+// FALLÓ. Tiene que decir que no pudo cargar y ofrecer Reintentar. "No pude medir" no
+// es "es cero": con un cero el admin cierra el caso; con un "no pude" vuelve a mirar.
+function _anFallo(el, contexto, err, reintentar) {
+  var msg = (err && err.message) || 'consulta rechazada';
+  console.warn('[Analytics] ' + contexto + ': ' + msg, err);
+  try { if (typeof window.showToast === 'function') window.showToast(_t('adm_an_fail_title', 'No pude cargar estos datos'), 'error'); } catch (_) {}
+  if (!el) return;
+  el.innerHTML = '<div style="background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:16px;text-align:center;">' +
+    '<div style="font-size:13px;color:#991b1b;font-weight:700;margin-bottom:4px;">⚠️ ' + _t('adm_an_fail_title', 'No pude cargar estos datos') + '</div>' +
+    '<div style="font-size:11px;color:#b91c1c;margin-bottom:8px;">' + _t('adm_an_fail_hint', 'La consulta falló. Esto NO quiere decir que sea cero.') + '</div>' +
+    '<div style="font-size:10px;color:#7f1d1d;margin-bottom:10px;font-family:monospace;">' + _escHtml(contexto + ' · ' + msg) + '</div>' +
+    '<button onclick="' + reintentar + '" style="background:#dc2626;color:#fff;border:none;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:11px;font-weight:600;">' + _t('adm_an_retry', 'Reintentar') + '</button>' +
+    '</div>';
+}
+
+// Aviso de lectura CORTA: llegó sin error pero MaestroPagina avisó que no terminó
+// (tope de seguridad). Los números son un mínimo y hay que decirlo, no maquillarlo.
+function _anAvisoParcial(completo) {
+  if (completo !== false) return '';
+  return '<div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:8px 10px;margin-bottom:8px;font-size:10px;color:#92400e;">' +
+    _t('adm_an_partial', '⚠️ Lectura incompleta: la tabla se cortó antes de terminar, los números de abajo son un MÍNIMO, no el total.') + '</div>';
+}
+
+function _anCargando(el, texto) {
+  if (!el) return;
+  el.innerHTML = '<div style="text-align:center;padding:40px;color:#94a3b8;">' + texto +
+    '<div style="font-size:10px;color:#cbd5e1;margin-top:6px;">' + _t('adm_an_loading_big', 'Leyendo la tabla completa en páginas de 1,000. Puede tardar unos segundos...') + '</div></div>';
+}
+
+// 🪤 Este bloque estaba COPIADO 5 veces (una por pestaña) y las 5 copias hacían
+// `r.data || []`: si la edge `users-data` contestaba error, cada pestaña se quedaba con
+// CERO usuarios y pintaba un tablero perfectamente sano lleno de ceros. Una sola copia,
+// que devuelve el error, y `id` en los campos porque `certificates` se busca por
+// `user_id` (esa tabla NO tiene user_email — verificado contra el esquema vivo).
+async function _anCargarUsuarios() {
+  if (_anCache.users) return { data: _anCache.users, error: null };
+  var todos = [], off = 0, hay = true;
+  while (hay) {
+    var r = await usersDataAdmin('admin_list', { offset: off, limit: 1000, fields: ['id', 'ultimo_acceso', 'nombre', 'email', 'fecha_registro'] });
+    if (r && r.error) return { data: todos, error: r.error };
+    var lote = (r && r.data) || [];
+    todos = todos.concat(lote);
+    if (lote.length < 1000) hay = false; else off += 1000;
+  }
+  _anCache.users = todos;
+  return { data: todos, error: null };
+}
+
+function _anNormEmail(e) {
+  return String(e || '').toLowerCase().trim();
+}
+
 // ==================== TAB 1: VISTA GENERAL ====================
 async function _anLoadOverview() {
   var el = document.getElementById('anTabContent');
@@ -227,32 +318,33 @@ async function _anLoadOverview() {
     var monthAgo = new Date(now - 30 * 24 * 60 * 60 * 1000).toISOString();
 
     // Fetch users
-    if (!_anCache.users) {
-      var _anAll = [], _anOff = 0, _anMore = true;
-      while (_anMore) {
-        var r = await usersDataAdmin('admin_list', { offset: _anOff, limit: 1000, fields: ["ultimo_acceso","nombre","email","fecha_registro"] });
-        var _anBatch = r.data || [];
-        _anAll = _anAll.concat(_anBatch);
-        if (_anBatch.length < 1000) _anMore = false; else _anOff += 1000;
-      }
-      _anCache.users = _anAll;
-    }
-    var users = _anCache.users;
+    var ru = await _anCargarUsuarios();
+    if (ru.error) { _anFallo(el, 'Vista General · users-data (admin_list)', ru.error, '_anLoadOverview()'); return; }
+    var users = ru.data;
 
     var dau = users.filter(function(u) { return u.ultimo_acceso && u.ultimo_acceso.startsWith(todayStr); }).length;
     var wau = users.filter(function(u) { return u.ultimo_acceso && u.ultimo_acceso >= weekAgo; }).length;
     var mau = users.filter(function(u) { return u.ultimo_acceso && u.ultimo_acceso >= monthAgo; }).length;
 
     // Fetch screen events for last 14 days for sparkline + session stats
+    // 🔴 Aquí vivía el peor corte de los 1,000: `.order('entered_at', ascending)` dejaba
+    // las filas MÁS VIEJAS de 12,995 reales, así que la chispa de DAU pintaba tráfico de
+    // hace dos semanas y se iba a CERO en "Hoy". Ahora se paginan las 12,995 (13 vueltas).
     var twoWeeksAgo = new Date(now - 14 * 24 * 60 * 60 * 1000).toISOString();
+    var completoEventos = true;
     if (!_anCache.recentEvents) {
-      var r2 = await supabaseClient.from('screen_events')
-        .select('user_email, screen_id, entered_at, duration_sec, session_id')
-        .gte('entered_at', twoWeeksAgo)
-        .order('entered_at', { ascending: true });
-      _anCache.recentEvents = (r2.data || []);
+      _anCargando(el, _t('adm_an_loading', 'Cargando datos...'));
+      var r2 = await _anPaginar('screen_events', 'user_email, screen_id, entered_at, duration_sec, session_id', function(q) {
+        return q.gte('entered_at', twoWeeksAgo);
+      });
+      // 🔒 Un fallo NO se guarda en el caché: si se guardara, el admin vería "0 DAU"
+      // para siempre hasta recargar todo el panel, creyendo que nadie usa el app.
+      if (r2.error) { _anFallo(el, 'Vista General · screen_events (14 días)', r2.error, '_anLoadOverview()'); return; }
+      _anCache.recentEvents = r2.data;
+      _anCache.recentEventsCompleto = r2.completo;
     }
     var events = _anCache.recentEvents;
+    completoEventos = _anCache.recentEventsCompleto !== false;
 
     // DAU sparkline (14 days)
     var dailyCounts = {};
@@ -306,7 +398,7 @@ async function _anLoadOverview() {
     var topScreens = Object.entries(screenHits).sort(function(a, b) { return b[1] - a[1]; }).slice(0, 8);
 
     // Build HTML
-    var html = '';
+    var html = _anAvisoParcial(completoEventos);
     // KPI cards
     html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;margin-bottom:12px;">';
     var kpis = [
@@ -364,35 +456,42 @@ async function _anLoadRetention() {
   el.innerHTML = '<div style="text-align:center;padding:40px;color:#94a3b8;">' + _t('adm_an_loading_cohorts', 'Cargando cohortes...') + '</div>';
 
   try {
-    if (!_anCache.users) {
-      var _anAll = [], _anOff = 0, _anMore = true;
-      while (_anMore) {
-        var r = await usersDataAdmin('admin_list', { offset: _anOff, limit: 1000, fields: ["ultimo_acceso","nombre","email","fecha_registro"] });
-        var _anBatch = r.data || [];
-        _anAll = _anAll.concat(_anBatch);
-        if (_anBatch.length < 1000) _anMore = false; else _anOff += 1000;
-      }
-      _anCache.users = _anAll;
-    }
-    var users = _anCache.users;
+    var ru = await _anCargarUsuarios();
+    if (ru.error) { _anFallo(el, 'Retención · users-data (admin_list)', ru.error, '_anLoadRetention()'); return; }
+    var users = ru.data;
 
     // Get screen events for last ~9 weeks
+    // 🔴 Sin paginar llegaban 1,000 de 105,821 filas reales, y SIN `.order()`: cuáles
+    // 1,000 era azar del servidor. Por eso la rejilla se veía como un acantilado —
+    // casi nadie "regresaba" en S1..S8 porque su actividad simplemente no venía en el
+    // paquete. 106 vueltas al servidor: caro, pero es un panel de admin y la
+    // alternativa es una gráfica que miente.
     var now = new Date();
     var nineWeeksAgo = new Date(now - 63 * 24 * 60 * 60 * 1000).toISOString();
+    var completoEventos = true;
     if (!_anCache.retentionEvents) {
-      var r2 = await supabaseClient.from('screen_events')
-        .select('user_email, entered_at')
-        .gte('entered_at', nineWeeksAgo);
-      _anCache.retentionEvents = (r2.data || []);
+      _anCargando(el, _t('adm_an_loading_cohorts', 'Cargando cohortes...'));
+      var r2 = await _anPaginar('screen_events', 'user_email, entered_at', function(q) {
+        return q.gte('entered_at', nineWeeksAgo);
+      });
+      if (r2.error) { _anFallo(el, 'Retención · screen_events (63 días)', r2.error, '_anLoadRetention()'); return; }
+      _anCache.retentionEvents = r2.data;
+      _anCache.retentionEventsCompleto = r2.completo;
     }
     var events = _anCache.retentionEvents;
+    completoEventos = _anCache.retentionEventsCompleto !== false;
 
     // Build email->set of active weeks
+    // 🪤 Este es un JOIN a mano entre `screen_events.user_email` y `users.email`. Sin
+    // normalizar, un "Juan@X.com" en una tabla y "juan@x.com" en la otra NO se encuentran
+    // y ese usuario cuenta como "no volvió" — más acantilado falso encima del corte de
+    // las 1,000 filas.
     var emailWeeks = {};
     events.forEach(function(e) {
-      if (!emailWeeks[e.user_email]) emailWeeks[e.user_email] = new Set();
+      var k = _anNormEmail(e.user_email);
+      if (!emailWeeks[k]) emailWeeks[k] = new Set();
       var ws = _anWeekStart(new Date(e.entered_at));
-      emailWeeks[e.user_email].add(_anDateStr(ws));
+      emailWeeks[k].add(_anDateStr(ws));
     });
 
     // Build cohorts (weekly based on fecha_registro)
@@ -401,13 +500,14 @@ async function _anLoadRetention() {
       if (!u.fecha_registro) return;
       var regWeek = _anDateStr(_anWeekStart(new Date(u.fecha_registro)));
       if (!cohorts[regWeek]) cohorts[regWeek] = [];
-      cohorts[regWeek].push(u.email);
+      cohorts[regWeek].push(_anNormEmail(u.email));
     });
 
     // Sort cohorts by week (newest first), take last 8
     var cohortKeys = Object.keys(cohorts).sort().reverse().slice(0, 8).reverse();
 
-    var html = '<div style="font-size:11px;color:#475569;font-weight:600;margin-bottom:8px;">' + _t('adm_an_cohort_title', 'Retenci\u00F3n por Cohorte Semanal') + '</div>';
+    var html = _anAvisoParcial(completoEventos);
+    html += '<div style="font-size:11px;color:#475569;font-weight:600;margin-bottom:8px;">' + _t('adm_an_cohort_title', 'Retenci\u00F3n por Cohorte Semanal') + '</div>';
     html += '<div style="overflow-x:auto;">';
     html += '<table style="width:100%;border-collapse:collapse;font-size:10px;">';
     html += '<tr style="background:#f1f5f9;"><th style="padding:6px 8px;text-align:left;color:#475569;border:1px solid #e2e8f0;">' + _t('adm_an_cohort', 'Cohorte') + '</th><th style="padding:6px;text-align:center;color:#475569;border:1px solid #e2e8f0;">' + _t('adm_an_users', 'Usuarios') + '</th>';
@@ -471,13 +571,22 @@ async function _anLoadScreenEngagement() {
     var now = new Date();
     var monthAgo = new Date(now - 30 * 24 * 60 * 60 * 1000).toISOString();
 
+    // 🔴 Sin paginar: 1,000 de 33,895 filas reales (30 días, medido 10-sep-2026). Las
+    // barras de "visitas" y la "tasa de salida" salían de una muestra al azar del 3%, así
+    // que una pantalla poco usada podía aparecer con 0 visitas y otra con la salida al
+    // 100%. Cifras así se usan para decidir qué zona se recorta: mentir aquí cuesta caro.
+    var completoEventos = true;
     if (!_anCache.screenEvents30d) {
-      var r = await supabaseClient.from('screen_events')
-        .select('user_email, screen_id, duration_sec, session_id, entered_at')
-        .gte('entered_at', monthAgo);
-      _anCache.screenEvents30d = (r.data || []);
+      _anCargando(el, _t('adm_an_loading_screens', 'Cargando datos de pantallas...'));
+      var r = await _anPaginar('screen_events', 'user_email, screen_id, duration_sec, session_id, entered_at', function(q) {
+        return q.gte('entered_at', monthAgo);
+      });
+      if (r.error) { _anFallo(el, 'Pantallas · screen_events (30 días)', r.error, '_anLoadScreenEngagement()'); return; }
+      _anCache.screenEvents30d = r.data;
+      _anCache.screenEvents30dCompleto = r.completo;
     }
     var events = _anCache.screenEvents30d;
+    completoEventos = _anCache.screenEvents30dCompleto !== false;
 
     // Aggregate per screen
     var screens = {};
@@ -519,7 +628,8 @@ async function _anLoadScreenEngagement() {
     });
     screenList.sort(function(a, b) { return b.visits - a.visits; });
 
-    var html = '<div style="font-size:11px;color:#475569;font-weight:600;margin-bottom:8px;">' + _t('adm_an_screen_title', 'Engagement por Pantalla (\u00FAltimos 30 d\u00EDas)') + '</div>';
+    var html = _anAvisoParcial(completoEventos);
+    html += '<div style="font-size:11px;color:#475569;font-weight:600;margin-bottom:8px;">' + _t('adm_an_screen_title', 'Engagement por Pantalla (\u00FAltimos 30 d\u00EDas)') + '</div>';
 
     // Sort controls
     html += '<div style="display:flex;gap:4px;margin-bottom:8px;flex-wrap:wrap;">';
@@ -581,17 +691,12 @@ async function _anLoadStudentProfile(selectedEmail) {
   if (!el) return;
 
   // Ensure users are loaded
-  if (!_anCache.users) {
-      var _anAll = [], _anOff = 0, _anMore = true;
-      while (_anMore) {
-        var r = await usersDataAdmin('admin_list', { offset: _anOff, limit: 1000, fields: ["ultimo_acceso","nombre","email","fecha_registro"] });
-        var _anBatch = r.data || [];
-        _anAll = _anAll.concat(_anBatch);
-        if (_anBatch.length < 1000) _anMore = false; else _anOff += 1000;
-      }
-      _anCache.users = _anAll;
+  var ru = await _anCargarUsuarios();
+  if (ru.error) {
+    _anFallo(el, 'Perfil Estudiante · users-data (admin_list)', ru.error, '_anLoadStudentProfile(' + (selectedEmail ? "'" + String(selectedEmail).replace(/'/g, "\\'") + "'" : '') + ')');
+    return;
   }
-  var users = _anCache.users;
+  var users = ru.data;
 
   if (!selectedEmail) {
     // Show search/selector
@@ -625,21 +730,42 @@ async function _anLoadStudentProfile(selectedEmail) {
       return;
     }
 
-    // Parallel queries
+    // 🔴 RAÍZ (verificado contra el esquema VIVO el 10-sep-2026): 4 de los 5 paneles de
+    // este perfil estaban MUERTOS y NADIE se enteraba, porque los 5 leían `results[n].data
+    // || []` y un 400 de PostgREST se convierte en lista vacía. El admin abría a un
+    // estudiante y veía quizzes 0, exámenes 0, certificados 0 y asistencia 0 — y concluía
+    // que ese estudiante no había hecho NADA. Lo que fallaba:
+    //   · quiz_results  → la columna es `email`, no `user_email`; y `level`, no `nivel`.
+    //   · certificates  → tiene `user_id` (apunta a users.id). NO tiene `user_email`.
+    //   · exam_submissions → 🪤 LA TABLA NO EXISTE en esta base.
+    //   · attendance_log   → 🪤 LA TABLA NO EXISTE en esta base.
+    // Las dos que no existen NO se inventan con un sustituto: el panel dice que no hay
+    // de dónde leerlas. Un dato inventado es peor que un hueco confesado.
+    // 🪤 quiz_results tiene 0 filas HOY (medido), así que su panel puede salir en cero de
+    // verdad — por eso se distingue "vacío" (0) de "falló" (?) más abajo.
     var promises = [
       supabaseClient.from('screen_events').select('screen_id, entered_at, duration_sec, session_id').eq('user_email', selectedEmail).order('entered_at', { ascending: false }).limit(200),
-      supabaseClient.from('quiz_results').select('score, nivel, created_at').eq('user_email', selectedEmail).order('created_at', { ascending: false }).limit(50),
-      supabaseClient.from('exam_submissions').select('id, created_at, nivel, status').eq('user_email', selectedEmail).order('created_at', { ascending: false }).limit(20),
-      supabaseClient.from('certificates').select('id, nivel, fecha_obtenido, certificate_number').eq('user_email', selectedEmail),
-      supabaseClient.from('attendance_log').select('id, fecha, status').eq('user_email', selectedEmail).order('fecha', { ascending: false }).limit(30)
+      supabaseClient.from('quiz_results').select('score, level, created_at').eq('email', selectedEmail).order('created_at', { ascending: false }).limit(50),
+      // Sin `id` del usuario no hay forma de amarrar sus certificados: se dice, no se pinta 0.
+      user.id
+        ? supabaseClient.from('certificates').select('id, nivel, fecha_obtenido, certificate_number').eq('user_id', user.id)
+        : Promise.resolve({ data: null, error: { message: 'el usuario llegó sin id: no puedo amarrar certificates.user_id' } })
     ];
 
     var results = await Promise.all(promises);
+    var fallaEventos = !!(results[0] && results[0].error);
+    var fallaQuiz = !!(results[1] && results[1].error);
+    var fallaCerts = !!(results[2] && results[2].error);
+    if (fallaEventos) console.warn('[Analytics] Perfil · screen_events: ' + (results[0].error.message || 'consulta rechazada'), results[0].error);
+    if (fallaQuiz) console.warn('[Analytics] Perfil · quiz_results: ' + (results[1].error.message || 'consulta rechazada'), results[1].error);
+    if (fallaCerts) console.warn('[Analytics] Perfil · certificates: ' + (results[2].error.message || 'consulta rechazada'), results[2].error);
     var screenEvts = results[0].data || [];
     var quizzes = results[1].data || [];
-    var exams = results[2].data || [];
-    var certs = results[3].data || [];
-    var attendance = results[4].data || [];
+    var certs = results[2].data || [];
+
+    // 🔒 Si la lectura de eventos falló no hay perfil que enseñar: cada métrica de abajo
+    // (sesiones, tiempo, racha, engagement) saldría en 0 y el admin leería "no entra nunca".
+    if (fallaEventos) { _anFallo(el, 'Perfil Estudiante · screen_events', results[0].error, '_anLoadStudentProfile(\'' + String(selectedEmail).replace(/'/g, "\\'") + '\')'); return; }
 
     // Calculate metrics
     var sessions = new Set();
@@ -699,9 +825,11 @@ async function _anLoadStudentProfile(selectedEmail) {
       { label: _t('adm_an_sessions', 'Sesiones'), value: sessions.size, color: '#3b82f6' },
       { label: _t('adm_an_total_time', 'Tiempo Total'), value: Math.round(totalDur / 60) + 'm', color: '#8b5cf6' },
       { label: _t('adm_an_streak', 'Racha Actual'), value: streak + 'd', color: '#f59e0b' },
-      { label: _t('adm_an_avg_score', 'Score Prom.'), value: avgQuizScore + '%', color: '#10b981' },
-      { label: _t('adm_an_quizzes', 'Quizzes'), value: quizzes.length, color: '#06b6d4' },
-      { label: _t('adm_an_certificates', 'Certificados'), value: certs.length, color: '#ec4899' },
+      { label: _t('adm_an_avg_score', 'Score Prom.'), value: fallaQuiz ? _t('adm_an_unknown', '?') : (avgQuizScore + '%'), color: fallaQuiz ? '#94a3b8' : '#10b981' },
+      // 🔒 "no pude medir" ≠ "es cero": si la consulta falló va '?', nunca un 0 que
+      // hace creer al admin que el estudiante no ha hecho ni un quiz / sacado un cartón.
+      { label: _t('adm_an_quizzes', 'Quizzes'), value: fallaQuiz ? _t('adm_an_unknown', '?') : quizzes.length, color: fallaQuiz ? '#94a3b8' : '#06b6d4' },
+      { label: _t('adm_an_certificates', 'Certificados'), value: fallaCerts ? _t('adm_an_unknown', '?') : certs.length, color: fallaCerts ? '#94a3b8' : '#ec4899' },
       { label: _t('adm_an_engagement', 'Engagement'), value: engScore + '/100', color: engScore >= 60 ? '#22c55e' : (engScore >= 30 ? '#f59e0b' : '#ef4444') }
     ];
     metrics.forEach(function(m) {
@@ -722,10 +850,9 @@ async function _anLoadStudentProfile(selectedEmail) {
       timeline.push({ type: 'screen', label: _anScreenLabel(e.screen_id), date: e.entered_at, dur: e.duration_sec });
     });
     quizzes.slice(0, 10).forEach(function(q) {
-      timeline.push({ type: 'quiz', label: 'Quiz ' + (q.nivel || '') + ': ' + q.score + ' pts', date: q.created_at });
-    });
-    exams.slice(0, 5).forEach(function(x) {
-      timeline.push({ type: 'exam', label: 'Examen ' + (x.nivel || '') + ' (' + (x.status || 'enviado') + ')', date: x.created_at });
+      // 🪤 `q.nivel` NO existe en quiz_results — la columna es `level`. Leerlo daba
+      // "Quiz : 8 pts" con el nivel en blanco en cada renglón de la línea de tiempo.
+      timeline.push({ type: 'quiz', label: 'Quiz ' + (q.level || '') + ': ' + q.score + ' pts', date: q.created_at });
     });
     certs.forEach(function(c) {
       timeline.push({ type: 'cert', label: 'Certificado: ' + (c.nivel || '') + ' #' + (c.certificate_number || ''), date: c.fecha_obtenido });
@@ -746,6 +873,22 @@ async function _anLoadStudentProfile(selectedEmail) {
     if (timeline.length === 0) {
       html += '<div style="text-align:center;color:#94a3b8;font-size:11px;padding:12px;">' + _t('adm_an_no_activity', 'Sin actividad registrada') + '</div>';
     }
+    html += '</div>';
+
+    // 🪤 Lo que esta base NO puede contestar, dicho de frente. Antes esto salía como
+    // "0 exámenes, 0 asistencias" y el admin lo leía como abandono del estudiante.
+    // exam_submissions y attendance_log NO EXISTEN en public (verificado 10-sep-2026);
+    // si algún día se crean, aquí es donde se enchufan.
+    var huecos = [];
+    huecos.push('exam_submissions + attendance_log — ' + _t('adm_an_src_missing_exams', 'Exámenes y Asistencia: no hay de dónde leerlos en esta base. NO es que el estudiante no tenga nada.'));
+    if (fallaQuiz) huecos.push('quiz_results — ' + ((results[1].error && results[1].error.message) || 'consulta rechazada'));
+    else if (quizzes.length === 0) huecos.push('quiz_results — ' + _t('adm_an_quiz_empty', 'quiz_results está VACÍA (0 filas medidas el 10-sep-2026): no hay actividad de quiz que medir todavía.'));
+    if (fallaCerts) huecos.push('certificates — ' + ((results[2].error && results[2].error.message) || 'consulta rechazada'));
+    html += '<div style="background:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:10px 12px;margin-bottom:8px;">' +
+      '<div style="font-size:10px;color:#92400e;font-weight:700;margin-bottom:4px;">🪤 ' + _t('adm_an_src_missing', 'Fuente de datos no disponible') + '</div>';
+    huecos.forEach(function(h) {
+      html += '<div style="font-size:10px;color:#a16207;margin:2px 0;">· ' + _escHtml(h) + '</div>';
+    });
     html += '</div></div>';
 
     // Pantallas más visitadas
@@ -790,66 +933,90 @@ async function _anLoadChurnRisk() {
   el.innerHTML = '<div style="text-align:center;padding:40px;color:#94a3b8;">' + _t('adm_an_loading_risk', 'Analizando riesgo...') + '</div>';
 
   try {
-    if (!_anCache.users) {
-      var _anAll = [], _anOff = 0, _anMore = true;
-      while (_anMore) {
-        var r = await usersDataAdmin('admin_list', { offset: _anOff, limit: 1000, fields: ["ultimo_acceso","nombre","email","fecha_registro"] });
-        var _anBatch = r.data || [];
-        _anAll = _anAll.concat(_anBatch);
-        if (_anBatch.length < 1000) _anMore = false; else _anOff += 1000;
-      }
-      _anCache.users = _anAll;
-    }
-    var users = _anCache.users;
+    var ru = await _anCargarUsuarios();
+    if (ru.error) { _anFallo(el, 'Riesgo Abandono · users-data (admin_list)', ru.error, '_anLoadChurnRisk()'); return; }
+    var users = ru.data;
 
     // Get quiz activity in last 14 days
+    // 🔴 La columna es `email`, NO `user_email` (verificado contra el esquema vivo el
+    // 10-sep-2026). Ese 400 se comía con `(r2.data || [])`, `recentQuizEmails` quedaba
+    // vacío, `hasRecentQuiz` salía falso para TODOS y el engagement de la lista completa
+    // quedaba deprimido — el panel marcaba "en riesgo" a gente que sí está estudiando.
+    // 🪤 OJO: quiz_results tiene 0 filas HOY, así que el conjunto puede salir vacío de
+    // verdad. Por eso la diferencia importa: vacío se muestra, fallo se grita.
     var now = new Date();
     var twoWeeksAgo = new Date(now - 14 * 24 * 60 * 60 * 1000).toISOString();
     if (!_anCache.recentQuizzes) {
-      var r2 = await supabaseClient.from('quiz_results').select('user_email, created_at').gte('created_at', twoWeeksAgo);
-      _anCache.recentQuizzes = (r2.data || []);
+      var r2 = await _anPaginar('quiz_results', 'email, created_at', function(q) {
+        return q.gte('created_at', twoWeeksAgo);
+      });
+      if (r2.error) { _anFallo(el, 'Riesgo Abandono · quiz_results (14 días)', r2.error, '_anLoadChurnRisk()'); return; }
+      _anCache.recentQuizzes = r2.data;
     }
     var recentQuizEmails = new Set();
-    (_anCache.recentQuizzes || []).forEach(function(q) { recentQuizEmails.add(q.user_email); });
+    (_anCache.recentQuizzes || []).forEach(function(q) { recentQuizEmails.add(_anNormEmail(q.email)); });
 
     // Get memberships
+    // 🔴 `memberships` NO tiene `user_email` NI `plan_name` (columnas reales: id, user_id,
+    // tipo, fecha_inicio, fecha_vencimiento, activa, email, amount, price, payment_status,
+    // student_status, source, admin_revoked, ...). Pedir columnas inexistentes = HTTP 400
+    // SILENCIOSO, que `(r3.data || [])` volvía "no hay membresías": TODO estudiante salía
+    // como si no pagara, y clientes al corriente aparecían en la lista de "en riesgo, sin
+    // plan" — el material con el que se manda el "tu pago falló" a quien sí pagó.
+    // 🔒 Y si la edge falla NO se cachea el vacío: un fallo cacheado hace exactamente el
+    // mismo daño que el 400, pero además sobrevive a los cambios de pestaña.
     if (!_anCache.memberships) {
-      var r3 = await MaestroMemberships.list('user_email, activa, plan_name');
-      _anCache.memberships = (r3.data || []);
+      var r3 = await MaestroMemberships.list('email, activa, tipo, amount');
+      if (!r3 || r3.error) { _anFallo(el, 'Riesgo Abandono · memberships (admin-memberships)', (r3 && r3.error) || { message: 'sin respuesta' }, '_anLoadChurnRisk()'); return; }
+      _anCache.memberships = r3.data || [];
     }
     var membershipMap = {};
     (_anCache.memberships || []).forEach(function(m) {
-      membershipMap[m.user_email || m.email] = m;
+      // 🪤 Los correos vienen con mayúsculas y espacios de tres orígenes distintos
+      // (Stripe, RevenueCat, alta a mano): sin normalizar, "Juan@X.com" no encontraba
+      // su propia membresía y volvía a caer en "sin plan".
+      var k = _anNormEmail(m && (m.email || m.user_email));
+      if (k) membershipMap[k] = m;
     });
 
     // Get weekly session counts per user from screen_events (last 4 weeks)
+    // 🔴 1,000 de 30,770 filas reales y sin `.order()`. De ahí salía `declining`
+    // (3 semanas seguidas a la baja): con una muestra al azar del 3%, casi cualquiera
+    // "va cayendo". Marcaba en declive a usuarios que entran todos los días.
     var fourWeeksAgo = new Date(now - 28 * 24 * 60 * 60 * 1000).toISOString();
+    var completoEventos = true;
     if (!_anCache.churnEvents) {
-      var r4 = await supabaseClient.from('screen_events')
-        .select('user_email, entered_at, session_id')
-        .gte('entered_at', fourWeeksAgo);
-      _anCache.churnEvents = (r4.data || []);
+      _anCargando(el, _t('adm_an_loading_risk', 'Analizando riesgo...'));
+      var r4 = await _anPaginar('screen_events', 'user_email, entered_at, session_id', function(q) {
+        return q.gte('entered_at', fourWeeksAgo);
+      });
+      if (r4.error) { _anFallo(el, 'Riesgo Abandono · screen_events (28 días)', r4.error, '_anLoadChurnRisk()'); return; }
+      _anCache.churnEvents = r4.data;
+      _anCache.churnEventsCompleto = r4.completo;
     }
     var churnEvents = _anCache.churnEvents || [];
+    completoEventos = _anCache.churnEventsCompleto !== false;
 
     // Weekly sessions per user
     var userWeeklySessions = {};
     churnEvents.forEach(function(e) {
-      if (!userWeeklySessions[e.user_email]) userWeeklySessions[e.user_email] = [{}, {}, {}, {}];
+      var k = _anNormEmail(e.user_email);
+      if (!userWeeklySessions[k]) userWeeklySessions[k] = [{}, {}, {}, {}];
       var weeksAgo = Math.floor((now - new Date(e.entered_at)) / (7 * 24 * 60 * 60 * 1000));
       if (weeksAgo >= 0 && weeksAgo < 4 && e.session_id) {
-        userWeeklySessions[e.user_email][weeksAgo][e.session_id] = true;
+        userWeeklySessions[k][weeksAgo][e.session_id] = true;
       }
     });
 
     // Build risk list
     var riskList = users.map(function(u) {
+      var correo = _anNormEmail(u.email);
       var daysInactive = u.ultimo_acceso ? _anDaysBetween(new Date(u.ultimo_acceso), now) : 999;
-      var hasRecentQuiz = recentQuizEmails.has(u.email);
-      var membership = membershipMap[u.email];
+      var hasRecentQuiz = recentQuizEmails.has(correo);
+      var membership = membershipMap[correo];
 
       // Weekly trend
-      var weeklySess = (userWeeklySessions[u.email] || [{}, {}, {}, {}]).map(function(w) { return Object.keys(w).length; });
+      var weeklySess = (userWeeklySessions[correo] || [{}, {}, {}, {}]).map(function(w) { return Object.keys(w).length; });
       var declining = weeklySess[0] < weeklySess[1] && weeklySess[1] < weeklySess[2];
 
       var risk = _anCalcRiskLevel(u, []);
@@ -871,7 +1038,13 @@ async function _anLoadChurnRisk() {
         engScore: engScore,
         hasRecentQuiz: hasRecentQuiz,
         declining: declining,
-        hasMembership: membership && membership.activa
+        hasMembership: !!(membership && membership.activa),
+        // 🪤 `hasMembership` se calculaba desde 2024 y NUNCA se pintaba: nadie podía ver
+        // que el 400 de `plan_name` lo tenía en falso para los 714 registros de la tabla.
+        // Un dato que no se enseña no se puede desmentir. Ahora sale en su columna.
+        planLabel: (membership && membership.activa)
+          ? String(membership.tipo || 'activa')
+          : (membership ? String((membership.tipo || '') + ' ✕').trim() : '')
       };
     });
 
@@ -889,7 +1062,8 @@ async function _anLoadChurnRisk() {
     var counts = { active: 0, at_risk: 0, inactive: 0, lost: 0 };
     riskList.forEach(function(r) { counts[r.risk] = (counts[r.risk] || 0) + 1; });
 
-    var html = '<div style="font-size:11px;color:#475569;font-weight:600;margin-bottom:8px;">' + _t('adm_an_risk_title', 'Riesgo de Abandono') + '</div>';
+    var html = _anAvisoParcial(completoEventos);
+    html += '<div style="font-size:11px;color:#475569;font-weight:600;margin-bottom:8px;">' + _t('adm_an_risk_title', 'Riesgo de Abandono') + '</div>';
 
     // Summary cards
     html += '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:12px;">';
@@ -914,6 +1088,7 @@ async function _anLoadChurnRisk() {
       '<th style="padding:6px;text-align:center;color:#475569;border:1px solid #e2e8f0;">' + _t('adm_an_last_access', '\u00DAltimo Acceso') + '</th>' +
       '<th style="padding:6px;text-align:center;color:#475569;border:1px solid #e2e8f0;">' + _t('adm_an_days_inactive', 'D\u00EDas Inactivo') + '</th>' +
       '<th style="padding:6px;text-align:center;color:#475569;border:1px solid #e2e8f0;">' + _t('adm_an_risk', 'Riesgo') + '</th>' +
+      '<th style="padding:6px;text-align:center;color:#475569;border:1px solid #e2e8f0;">' + _t('adm_an_plan', 'Plan') + '</th>' +
       '<th style="padding:6px;text-align:center;color:#475569;border:1px solid #e2e8f0;">' + _t('adm_an_engagement', 'Engagement') + '</th>' +
       '<th style="padding:6px;text-align:center;color:#475569;border:1px solid #e2e8f0;">' + _t('adm_an_actions', 'Acciones') + '</th></tr>';
 
@@ -926,6 +1101,7 @@ async function _anLoadChurnRisk() {
         '<td style="padding:6px;text-align:center;color:#475569;border:1px solid #e2e8f0;">' + lastStr + '</td>' +
         '<td style="padding:6px;text-align:center;color:#475569;border:1px solid #e2e8f0;">' + daysStr + '</td>' +
         '<td style="padding:6px;text-align:center;border:1px solid #e2e8f0;"><span style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:9px;font-weight:600;color:white;background:' + (riskColors[r.risk] || '#94a3b8') + ';">' + (riskLabels[r.risk] || r.risk) + '</span></td>' +
+        '<td style="padding:6px;text-align:center;border:1px solid #e2e8f0;font-size:9px;color:' + (r.hasMembership ? '#166534' : '#94a3b8') + ';font-weight:' + (r.hasMembership ? '700' : '400') + ';">' + (r.hasMembership ? '💳 ' : '') + _escHtml(r.planLabel || _t('adm_an_no_plan', 'Sin plan')) + '</td>' +
         '<td style="padding:6px;text-align:center;color:#475569;border:1px solid #e2e8f0;">' + r.engScore + '</td>' +
         '<td style="padding:6px;text-align:center;border:1px solid #e2e8f0;">' +
         '<button onclick="_anActiveTab=\'profile\';_anRenderTabs(document.getElementById(\'analyticsRoot\'));_anLoadStudentProfile(\'' + r.email.replace(/'/g, "\\'") + '\')" style="background:#3b82f6;color:#fff;border:none;padding:3px 8px;border-radius:4px;cursor:pointer;font-size:9px;">' + _t('adm_an_view', 'Ver') + '</button>' +
@@ -951,26 +1127,27 @@ async function _anLoadFeatureUsage() {
     var monthAgo = new Date(now - 30 * 24 * 60 * 60 * 1000).toISOString();
     var twoMonthsAgo = new Date(now - 60 * 24 * 60 * 60 * 1000).toISOString();
 
-    if (!_anCache.users) {
-      var _anAll = [], _anOff = 0, _anMore = true;
-      while (_anMore) {
-        var r = await usersDataAdmin('admin_list', { offset: _anOff, limit: 1000, fields: ["ultimo_acceso","nombre","email","fecha_registro"] });
-        var _anBatch = r.data || [];
-        _anAll = _anAll.concat(_anBatch);
-        if (_anBatch.length < 1000) _anMore = false; else _anOff += 1000;
-      }
-      _anCache.users = _anAll;
-    }
-    var totalStudents = _anCache.users.length || 1;
+    var ru = await _anCargarUsuarios();
+    if (ru.error) { _anFallo(el, 'Uso Features · users-data (admin_list)', ru.error, '_anLoadFeatureUsage()'); return; }
+    var totalStudents = ru.data.length || 1;
 
     // Get events last 30 days and previous 30 days
+    // 🔴 Este era el más ridículo de los cinco: el denominador eran ~11 mil estudiantes
+    // y el numerador salía de 1,000 filas de las 99,992 reales (60 días). Con eso NINGUNA
+    // feature podía pasar de ~9% aunque la usara todo el mundo, y las de abajo leían 0%.
+    // Se han cortado zonas del app mirando esta gráfica. 100 vueltas al servidor.
+    var completoEventos = true;
     if (!_anCache.featureEvents) {
-      var r2 = await supabaseClient.from('screen_events')
-        .select('user_email, screen_id, entered_at')
-        .gte('entered_at', twoMonthsAgo);
-      _anCache.featureEvents = (r2.data || []);
+      _anCargando(el, _t('adm_an_loading_features', 'Cargando uso de features...'));
+      var r2 = await _anPaginar('screen_events', 'user_email, screen_id, entered_at', function(q) {
+        return q.gte('entered_at', twoMonthsAgo);
+      });
+      if (r2.error) { _anFallo(el, 'Uso Features · screen_events (60 días)', r2.error, '_anLoadFeatureUsage()'); return; }
+      _anCache.featureEvents = r2.data;
+      _anCache.featureEventsCompleto = r2.completo;
     }
     var events = _anCache.featureEvents;
+    completoEventos = _anCache.featureEventsCompleto !== false;
 
     // Features to track (map display label -> screen_ids). Labels go through _t for i18n.
     var featureMap = {};
@@ -1024,7 +1201,8 @@ async function _anLoadFeatureUsage() {
     // Sort by adoption
     featureList.sort(function(a, b) { return b.pct - a.pct; });
 
-    var html = '<div style="font-size:11px;color:#475569;font-weight:600;margin-bottom:8px;">' + _t('adm_an_adoption_title', 'Adopci\u00F3n de Features (\u00FAltimos 30 d\u00EDas)') + '</div>';
+    var html = _anAvisoParcial(completoEventos);
+    html += '<div style="font-size:11px;color:#475569;font-weight:600;margin-bottom:8px;">' + _t('adm_an_adoption_title', 'Adopci\u00F3n de Features (\u00FAltimos 30 d\u00EDas)') + '</div>';
     html += '<div style="font-size:9px;color:#94a3b8;margin-bottom:12px;">' + totalStudents + _t('adm_an_total_students', ' estudiantes totales | Comparaci\u00F3n vs mes anterior') + '</div>';
 
     featureList.forEach(function(f) {

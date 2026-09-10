@@ -207,7 +207,11 @@
           if (userData.experiencia) updateFields.experiencia = userData.experiencia;
           // epa, osha, hvace are admin-writable only — skipped here intentionally
           // (cert claims need verification, not self-claim — see Sprint B notes)
-          await window._usersData('upsert_self', { email: emailKey, data: updateFields });
+          // 🔴 Mismo patrón: _usersData JAMÁS truena, devuelve { error }. Sin leerlo,
+          // el nombre/teléfono/ciudad que el técnico acaba de corregir se perdía en
+          // silencio y "se me regresó mi nombre" la siguiente vez que abría el app.
+          var upRes = await window._usersData('upsert_self', { email: emailKey, data: updateFields });
+          if (upRes && upRes.error) console.warn('[Registro] users.upsert_self NO guardó los datos de ' + emailKey + ': ' + (upRes.error.message || upRes.error), upRes.error);
           return supabaseUserId;
         }
         var registerRes = await window._usersData('upsert_self', {
@@ -224,17 +228,46 @@
       } catch (e) { console.error('Supabase register exception:', e); return null; }
     }
 
+    // 🔴 RAÍZ: supabase-js NUNCA truena. Un upsert rechazado (RLS, columna que no
+    // existe, red) DEVUELVE { data:null, error:{...} } y la promesa se resuelve
+    // NORMAL. Por eso el `try/catch` que envolvía este Promise.all era CÓDIGO
+    // MUERTO: no se ejecutó jamás. Este es EL camino donde se persiste el avance
+    // del estudiante (niveles completados, aciertos) — se daba por guardado y se
+    // quedaba nada más en el teléfono. Ese es el clásico "mi progreso se borró"
+    // al reinstalar el app o cambiar de teléfono.
+    // 🪤 `user_progress` SOLO tiene (id, user_id, nivel, completed, score, total,
+    // porcentaje, fecha_inicio, fecha_completado) — NO hay `created_at`. Mandar
+    // una columna que no existe = 400 de PostgREST, y antes de este arreglo era
+    // invisible. Aquí NO ponemos toast a propósito (esto corre en segundo plano y
+    // no debe interrumpir al estudiante), pero sí deja rastro en consola y ahora
+    // DEVUELVE LA VERDAD para que quien llame deje de fingir que se guardó.
     async function supabaseSaveProgress(progressData) {
-      if (!supabaseClient || !isOnline || !supabaseUserId) return;
-      try {
-        await Promise.all(Object.entries(progressData).map(([nivel, data]) => {
-          const porcentaje = data.total > 0 ? ((data.score / data.total) * 100).toFixed(2) : 0;
-          return supabaseClient.from('user_progress').upsert({
-            user_id: supabaseUserId, nivel, completed: data.completed, score: data.score,
-            total: data.total, porcentaje, fecha_completado: data.completed >= data.total ? new Date().toISOString() : null
+      if (!supabaseClient || !isOnline || !supabaseUserId) return { ok: false, guardados: 0, fallidos: 0, motivo: 'sin-sesion' };
+      var niveles = Object.entries(progressData || {});
+      var resultados = await Promise.all(niveles.map(async function (par) {
+        var nivel = par[0], data = par[1] || {};
+        var porcentaje = data.total > 0 ? ((data.score / data.total) * 100).toFixed(2) : 0;
+        try {
+          var res = await supabaseClient.from('user_progress').upsert({
+            user_id: supabaseUserId, nivel: nivel, completed: data.completed, score: data.score,
+            total: data.total, porcentaje: porcentaje,
+            fecha_completado: data.completed >= data.total ? new Date().toISOString() : null
           }, { onConflict: 'user_id,nivel' });
-        }));
-      } catch (e) { console.error('Supabase save progress error:', e); }
+          if (res && res.error) {
+            console.warn('[Progreso] user_progress NO guardó el nivel "' + nivel + '" (user ' + supabaseUserId + '): ' + (res.error.message || res.error), res.error);
+            return false;
+          }
+          return true;
+        } catch (e) {
+          // Sólo cae aquí una falla real de red; el rechazo del servidor viene en res.error.
+          console.warn('[Progreso] user_progress falló de red en el nivel "' + nivel + '":', (e && e.message) || e);
+          return false;
+        }
+      }));
+      var guardados = resultados.filter(Boolean).length;
+      var fallidos = resultados.length - guardados;
+      if (fallidos) console.warn('[Progreso] ' + fallidos + ' de ' + resultados.length + ' niveles NO llegaron al servidor (user ' + supabaseUserId + ')');
+      return { ok: fallidos === 0, guardados: guardados, fallidos: fallidos };
     }
 
     // Guarda el cert vía edge function save-certificate (service role, salta RLS).
@@ -320,21 +353,65 @@
       } catch (e) { console.warn('[Cert] sync error:', e && e.message); }
     };
 
-    async function supabaseSaveQuizAttempt(attemptData) {
-      if (!supabaseClient || !isOnline || !supabaseUserId) return;
+    // 🪤 ¿El servidor rechazó porque la columna NO existe? PostgREST lo dice con
+    // PGRST204 ("Could not find the 'x' column") o con el 42703 de Postgres.
+    function _esColumnaDesconocida(err) {
+      if (!err) return false;
+      var code = String(err.code || '');
+      if (code === 'PGRST204' || code === '42703') return true;
+      var msg = String(err.message || '');
+      return /could not find the .* column|column .* does not exist/i.test(msg);
+    }
+
+    // Un solo insert normalizado: si supabase-js truena de red lo convertimos en
+    // { error } para que TODO el camino se lea igual (nunca con try/catch mudo).
+    async function _insertQuizAttempt(insertData) {
       try {
-        var insertData = {
-          user_id: supabaseUserId, nivel: attemptData.nivel, total_questions: attemptData.totalQuestions,
-          correct_answers: attemptData.correctAnswers, wrong_answers: attemptData.wrongAnswers,
-          porcentaje: attemptData.porcentaje, tiempo_segundos: attemptData.tiempoSegundos || null,
-          aprobado: attemptData.aprobado
-        };
-        // Include server-verified count if available (for audit trail)
-        if (typeof attemptData.serverVerified === 'number') {
-          insertData.server_verified = attemptData.serverVerified;
-        }
-        await supabaseClient.from('quiz_attempts').insert(insertData);
-      } catch (e) { console.error('Supabase save quiz attempt error:', e); }
+        var res = await supabaseClient.from('quiz_attempts').insert(insertData);
+        return res || {};
+      } catch (e) {
+        return { error: { message: (e && e.message) || String(e) } };
+      }
+    }
+
+    // 🔴 RAÍZ DOBLE en esta función.
+    // (1) supabase-js NUNCA truena: el insert devolvía { error } y el `try/catch`
+    //     ni se enteraba. El examen se veía calificado en la pantalla del
+    //     estudiante y JAMÁS llegaba al servidor: "hice el examen y no aparece".
+    // 🪤 (2) Encima mandaba `server_verified`, columna que NO EXISTE en
+    //     `quiz_attempts` (id, user_id, nivel, total_questions, correct_answers,
+    //     wrong_answers, porcentaje, tiempo_segundos, aprobado, fecha, app), y
+    //     `serverVerified` SIEMPRE llega como número desde certificates.js — o
+    //     sea que TODOS los inserts se caían con 400. Medido 2026-09-10: la tabla
+    //     no recibe una sola fila desde el 19-mar-2026 (44 filas en total),
+    //     mientras `user_progress` sigue creciendo. Por eso el historial de
+    //     exámenes y el conteo del leaderboard llevan medio año congelados.
+    // Arreglo: si el rechazo es por columna desconocida, reintentamos SIN ella
+    // (el examen sí se guarda) y lo gritamos en consola. El día que la columna
+    // exista, el primer intento pasa y vuelve el rastro de auditoría.
+    // Sin toast: es guardado en segundo plano, pero devuelve la verdad.
+    async function supabaseSaveQuizAttempt(attemptData) {
+      if (!supabaseClient || !isOnline || !supabaseUserId) return { ok: false, motivo: 'sin-sesion' };
+      var insertData = {
+        user_id: supabaseUserId, nivel: attemptData.nivel, total_questions: attemptData.totalQuestions,
+        correct_answers: attemptData.correctAnswers, wrong_answers: attemptData.wrongAnswers,
+        porcentaje: attemptData.porcentaje, tiempo_segundos: attemptData.tiempoSegundos || null,
+        aprobado: attemptData.aprobado
+      };
+      var conAuditoria = (typeof attemptData.serverVerified === 'number');
+      if (conAuditoria) insertData.server_verified = attemptData.serverVerified;
+
+      var res = await _insertQuizAttempt(insertData);
+      if (res.error && conAuditoria && _esColumnaDesconocida(res.error)) {
+        console.warn('[Examen] quiz_attempts no tiene la columna server_verified — reintentando SIN el rastro de auditoría para no perder el examen:', res.error.message || res.error);
+        delete insertData.server_verified;
+        res = await _insertQuizAttempt(insertData);
+      }
+      if (res.error) {
+        console.warn('[Examen] quiz_attempts NO guardó el intento (user ' + supabaseUserId + ', nivel ' + attemptData.nivel + '): ' + (res.error.message || res.error), res.error);
+        return { ok: false, error: res.error };
+      }
+      return { ok: true };
     }
 
     async function supabaseSaveTechnicianNumber(techNumber, techDate) {
@@ -364,8 +441,12 @@
       try {
         var email = (currentUser && currentUser.email) || localStorage.getItem('tecnico_email') || '';
         if (!email) return;
-        await window._usersData('update_self_level', { email: email, nivel_actual: nivel });
-      } catch (e) { console.error('Supabase update nivel error:', e); }
+        // 🔴 El resultado se tiraba a la basura: si la edge rechazaba, el técnico
+        // subía de nivel en la pantalla y al recargar seguía en el nivel viejo.
+        var res = await window._usersData('update_self_level', { email: email, nivel_actual: nivel });
+        if (res && res.error) { console.warn('[Nivel] update_self_level NO guardó el nivel "' + nivel + '" de ' + email + ': ' + (res.error.message || res.error), res.error); return false; }
+        return true;
+      } catch (e) { console.error('Supabase update nivel error:', e); return false; }
     }
 
     async function supabaseLoadUserData() {
@@ -375,17 +456,28 @@
           supabaseClient.from('user_progress').select('*').eq('user_id', supabaseUserId),
           supabaseClient.from('certificates').select('*').eq('user_id', supabaseUserId)
         ]);
-        return { progress: progressRes.data, certificates: certsRes.data };
+        // 🔴 Un select rechazado (RLS) también devuelve { data:null, error } sin
+        // tronar: sin leer `.error` se veía idéntico a "este técnico no tiene nada"
+        // y el app le mostraba el progreso VACÍO como si nunca hubiera estudiado.
+        if (progressRes && progressRes.error) console.warn('[Progreso] no se pudo LEER user_progress (user ' + supabaseUserId + '): ' + (progressRes.error.message || progressRes.error), progressRes.error);
+        if (certsRes && certsRes.error) console.warn('[Cert] no se pudo LEER certificates (user ' + supabaseUserId + '): ' + (certsRes.error.message || certsRes.error), certsRes.error);
+        return { progress: progressRes.data, certificates: certsRes.data, error: (progressRes && progressRes.error) || (certsRes && certsRes.error) || null };
       } catch (e) { console.error('Supabase load error:', e); return null; }
     }
 
+    // 🔴 Antes SIEMPRE imprimía "Synced to Supabase ✅" aunque nada se hubiera
+    // guardado — mentirle a la consola es cómo pasaron meses sin que nadie viera
+    // el problema. Ahora el ✅ sólo sale cuando el servidor de verdad confirmó.
     async function syncToSupabase() {
-      if (!supabaseClient || !isOnline || !supabaseUserId) return;
+      if (!supabaseClient || !isOnline || !supabaseUserId) return { ok: false, motivo: 'sin-sesion' };
       try {
-        await Promise.all([
-          supabaseSaveProgress(progress),
-          ...certificates.map(cert => supabaseSaveCertificate(cert))
-        ]);
+        var resProg = await supabaseSaveProgress(progress);
+        await Promise.all(certificates.map(cert => supabaseSaveCertificate(cert)));
+        if (resProg && resProg.ok === false) {
+          console.warn('[MaestroAC] Sync INCOMPLETO: ' + resProg.fallidos + ' niveles de progreso no llegaron al servidor');
+          return { ok: false, progreso: resProg };
+        }
         console.log('[MaestroAC] Synced to Supabase ✅');
-      } catch (e) { console.error('Sync error:', e); }
+        return { ok: true, progreso: resProg };
+      } catch (e) { console.error('Sync error:', e); return { ok: false, error: e }; }
     }

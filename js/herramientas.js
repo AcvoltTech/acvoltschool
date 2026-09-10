@@ -5918,7 +5918,11 @@
     h += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">';
     h += _htELInput('htELRange', _th('ht_el_range','Estufa/Horno (kW)'), S.rangeKW, 'number');
     h += _htELInput('htELNumRanges', _th('ht_el_num_ranges','# Estufas'), S.numRanges, 'number');
-    h += _htELInput('htELDryer', _th('ht_el_dryer','Secadora (kW)'), S.dryerKW, 'number');
+    // 🪤 `ht_el_dryer` estaba DUPLICADA en i18n.js y ganaba la segunda ('Secadora', sin unidad),
+    // así que este campo se rotulaba solo "Secadora": el técnico no sabía si teclear W o kW.
+    // La llave se quedó BARE a propósito porque el desglose (línea ~6680) le pega su propio
+    // " (220.54) mín 5kW"; aquí la unidad se agrega explícita, como en los demás campos del grid.
+    h += _htELInput('htELDryer', _th('ht_el_dryer','Secadora') + ' (kW)', S.dryerKW, 'number');
     h += _htELInput('htELDW', _th('ht_el_dishwasher','Lavavajillas (kW)'), S.dwKW, 'number');
     h += _htELInput('htELDisposal', _th('ht_el_disposal','Triturador (kW)'), S.dispKW, 'number');
     h += _htELInput('htELMicro', _th('ht_el_microwave','Microondas (kW)'), S.microKW, 'number');

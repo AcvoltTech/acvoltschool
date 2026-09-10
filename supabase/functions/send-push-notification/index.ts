@@ -1,3 +1,24 @@
+// ╔══════════════════════════════════════════════════════════════════════════╗
+// ║ ⚠️ COPIA LOCAL ATRASADA — NO LA DESPLIEGUES SIN BAJAR EL FUENTE REAL     ║
+// ╚══════════════════════════════════════════════════════════════════════════╝
+// Medido el 10-sep-2026: desplegada 2026-09-07 · esta copia local 2026-07-02.
+//
+// 🔴 BUG CONFIRMADO EN LA VERSIÓN VIVA: se bajó su fuente desplegado el
+// 10-sep-2026 y NO CONTIENE UN SOLO `.range(`. La audiencia de `__all__` se
+// resuelve con `.from("push_subscriptions").select("user_email").eq("active", true)`
+// sin paginar, y PostgREST corta en 1,000 filas SIN AVISAR (HTTP 200, sin error).
+// MEDIDO hoy: 5,838 filas activas / 5,718 correos distintos con push.
+// Síntoma real: "Enviar a Todos" le llega SIEMPRE a los mismos ~1,000 y el 83%
+// de la base jamás recibe un aviso — y la respuesta se ve perfectamente sana.
+// Es exactamente el mismo bug que se arregló hoy en el app grande.
+//
+// 🪤 Y los lotes de más de 100 destinatarios FALLAN MUDOS (200 con 0/0): hay que
+// mandar de 50 en 50.
+//
+// Para arreglarlo: baja primero el fuente REAL desplegado
+// (GET /v1/projects/<ref>/functions/send-push-notification/body → ESZIP2.3),
+// reemplaza este archivo, y HASTA ENTONCES edita. Parchar esta copia de julio a
+// ciegas borraría los cambios del 7-sep que sí están vivos.
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import webpush from "npm:web-push@3.6.7";

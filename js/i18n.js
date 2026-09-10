@@ -19,6 +19,18 @@
   // ── Translation dictionary ──────────────────────────────────────
   // Keys are grouped by module prefix for organization.
   // { key: { es: 'Spanish', en: 'English' } }
+  //
+  // 🪤 TRAMPA (barrido 10-sep-2026): en un objeto JS gana la ÚLTIMA definición.
+  // Una llave duplicada NO es un error de sintaxis — la primera simplemente nunca
+  // aparece en pantalla, en silencio. Había 34 duplicadas aquí (más 1 en
+  // js/admin/gatekeeper.js y 3 en js/admin/live-stream-admin.js) y el texto que
+  // veía el usuario era el de abajo, no el que uno leía arriba al buscar la llave.
+  // Síntomas reales que producía: "FALLA" donde el par correcto de PASA es "NO PASA";
+  // "El live streaming ha terminado" (anglicismo) en vez de "La transmisión ha terminado";
+  // "Tu membresía no incluye el grupo Mar/Mié" en vez de "Martes y Miércoles";
+  // y el campo de la secadora rotulado "Secadora" sin la unidad (kW).
+  // 🔒 `no-dupe-keys` está en ESLint como ERROR: `npm run lint` las vuelve a cazar.
+  // Al agregar una llave, NO la pegues al final sin buscarla antes.
   var _translations = {
 
     // ── General / Shared ──
@@ -461,7 +473,6 @@
     html_confirm_email: { es: 'Confirma tu Correo', en: 'Confirm Your Email' },
     html_sent_link: { es: 'Te enviamos un link de confirmación a tu correo.', en: 'We sent a confirmation link to your email.' },
     html_no_email: { es: '⚠️ ¿No encuentras el correo?', en: '⚠️ Can\'t find the email?' },
-    html_check_spam: { es: 'Revisa tu carpeta de SPAM o Correo no deseado', en: 'Check your SPAM or Junk folder' },
     html_magic_link_btn: { es: '✨ Recibir Link de Acceso Directo', en: '✨ Receive Direct Access Link' },
     html_days: { es: 'días', en: 'days' },
     html_register_free: { es: '🎓 Regístrate Gratis', en: '🎓 Register Free' },
@@ -484,7 +495,6 @@
     loc_and_step2: { es: 'Cuando Chrome pregunte, toca <strong>"Permitir"</strong> (Allow)', en: 'When Chrome asks, tap <strong>"Allow"</strong>' },
     loc_and_step3: { es: 'Si ya lo negaste: <strong>Configuración → Apps → Chrome → Permisos → Ubicación → Permitir</strong>', en: 'If you denied it: <strong>Settings → Apps → Chrome → Permissions → Location → Allow</strong>' },
     loc_desktop_step: { es: 'Cuando el navegador pida tu ubicación, haz clic en <strong>"Permitir"</strong> para activar el clima local y herramientas HVAC', en: 'When the browser asks for your location, click <strong>"Allow"</strong> to enable local weather and HVAC tools' },
-    html_back: { es: '← Volver', en: '← Back' },
     html_back_menu: { es: '← Volver al Menú', en: '← Back to Menu' },
     html_back_login: { es: '← Volver al Login', en: '← Back to Login' },
     html_back_home: { es: '← Volver al Inicio', en: '← Back to Home' },
@@ -595,7 +605,6 @@
     html_clases_vivo: { es: 'Clases en Vivo', en: 'Live Classes' },
     html_mis_grabaciones: { es: 'Mis Grabaciones', en: 'My Recordings' },
     html_mis_examenes: { es: 'Mis Exámenes', en: 'My Exams' },
-    html_mi_progreso: { es: 'Mi Progreso', en: 'My Progress' },
     html_dash_podcast: { es: 'Podcast', en: 'Podcast' },
     html_dash_podcast_sub: { es: 'Nivel 33', en: 'Nivel 33' },
     // ── Dashboard Identity Hero (premium wordmark) ──
@@ -664,7 +673,6 @@
     html_conoce_mas: { es: '📖 Conoce más sobre Maestro HVACR →', en: '📖 Learn more about Maestro HVACR →' },
     html_register_subtitle: { es: 'Solo necesitas correo y contraseña', en: 'You only need email and password' },
     html_ya_tienes_cuenta_q: { es: '¿Ya tienes cuenta?', en: 'Already have an account?' },
-    html_repeat_password: { es: 'Repite tu nueva contraseña', en: 'Repeat your new password' },
 
     // ── HTML: Email Confirmation ──
     html_revisa_correo: { es: '¡Revisa tu correo electrónico!', en: 'Check your email!' },
@@ -1065,7 +1073,6 @@
     ht_el_laundry_circuits: { es: 'Circuitos Lavandería', en: 'Laundry Circuits' },
     ht_el_range: { es: 'Estufa/Horno (kW)', en: 'Range/Oven (kW)' },
     ht_el_num_ranges: { es: '# Estufas', en: '# Ranges' },
-    ht_el_dryer: { es: 'Secadora (kW)', en: 'Dryer (kW)' },
     ht_el_dishwasher: { es: 'Lavavajillas (kW)', en: 'Dishwasher (kW)' },
     ht_el_disposal: { es: 'Triturador (kW)', en: 'Disposal (kW)' },
     ht_el_microwave: { es: 'Microondas (kW)', en: 'Microwave (kW)' },
@@ -1112,13 +1119,11 @@
     ht_el_appliances: { es: 'Electrodomésticos', en: 'Appliances' },
     ht_el_laundry: { es: 'Lavandería', en: 'Laundry' },
     ht_el_gen_subtotal: { es: 'Subtotal General', en: 'General Subtotal' },
-    ht_el_after_demand: { es: 'Después de Factor de Demanda (220.42)', en: 'After Demand Factor (220.42)' },
     ht_el_range_label: { es: 'Estufa/Horno (220.55)', en: 'Range/Oven (220.55)' },
     ht_el_dryer_label: { es: 'Secadora (220.54) mín 5kW', en: 'Dryer (220.54) min 5kW' },
     ht_el_hvac_cooling: { es: 'Enfriamiento', en: 'Cooling' },
     ht_el_hvac_heating: { es: 'Calefacción', en: 'Heating' },
     ht_el_fixed_apps: { es: 'Electrodomésticos Fijos', en: 'Fixed Appliances' },
-    ht_el_special_loads: { es: 'Cargas Especiales (EV/Alberca/Navidad/Nieve)', en: 'Special Loads (EV/Pool/Christmas/Snow)' },
     ht_el_service_wiring: { es: 'ACOMETIDA Y CABLEADO (NEC 310.12)', en: 'SERVICE ENTRANCE & WIRING (NEC 310.12)' },
     ht_el_neutral: { es: 'NEUTRO', en: 'NEUTRAL' },
     ht_el_copper_cond: { es: 'CONDUCTOR COBRE', en: 'COPPER CONDUCTOR' },
@@ -1343,15 +1348,12 @@
     feed_error: { es: 'Error cargando el feed', en: 'Error loading the feed' },
     profile_upload_error: { es: 'Error', en: 'Error' },
     profile_upload_failed: { es: 'Fallo al subir', en: 'Upload failed' },
-    profile_connection_error: { es: 'Error de conexión', en: 'Connection error' },
     profile_try_again: { es: 'Intenta de nuevo', en: 'Try again' },
     auth_connection_error: { es: 'Error de conexión.', en: 'Connection error.' },
     auth_verify_internet: { es: 'Verifica tu internet. Si el problema continúa, intenta con el link de acceso abajo.', en: 'Check your internet. If the problem continues, try the access link below.' },
     auth_no_server: { es: 'Sin conexión al servidor.', en: 'No server connection.' },
     auth_verify_reload: { es: 'Verifica tu internet y recarga la página.', en: 'Check your internet and reload the page.' },
     auth_reload_page: { es: '🔄 Recargar Página', en: '🔄 Reload Page' },
-    auth_passwords_mismatch: { es: 'Las contraseñas no coinciden', en: 'Passwords do not match' },
-    auth_password_min_8: { es: 'La contraseña debe tener mínimo 8 caracteres', en: 'Password must be at least 8 characters' },
     auth_email_blacklisted: { es: 'Este correo no puede ser registrado. Contacta soporte.', en: 'This email cannot be registered. Contact support.' },
     auth_email_registered: { es: 'Este correo ya está registrado. Inicia sesión.', en: 'This email is already registered. Log in.' },
     auth_email_has_account: { es: 'Este correo ya tiene cuenta.', en: 'This email already has an account.' },
@@ -1919,7 +1921,6 @@
     auth_level_platinum: { es: 'Platino', en: 'Platinum' },
     auth_hide_password: { es: 'Ocultar contraseña', en: 'Hide password' },
     auth_show_password: { es: 'Mostrar contraseña', en: 'Show password' },
-    auth_account_suspended_short: { es: 'Esta cuenta ha sido suspendida.', en: 'This account has been suspended.' },
     auth_login_activity: { es: 'Inicio de sesión', en: 'Login' },
     auth_login_welcome: { es: '🔓 Sesión iniciada — ¡Bienvenido', en: '🔓 Logged in — Welcome' },
     auth_wait_60_seconds: { es: 'Espera 60 segundos antes de intentar de nuevo.', en: 'Wait 60 seconds before trying again.' },
@@ -2047,7 +2048,6 @@
     cert_terms_membership: { es: 'Cuento con una membresía activa con la antigüedad mínima requerida', en: 'I have an active membership with the minimum required tenure' },
     cert_terms_membership_detail: { es: ' (Básica $119: 1 año / Profesional $299 o Premium $699: 6 meses).', en: ' (Basic $119: 1 year / Professional $299 or Premium $699: 6 months).' },
     cert_your_info: { es: '📋 Tu Información', en: '📋 Your Information' },
-    cert_not_registered: { es: 'No registrado', en: 'Not registered' },
     cert_start_label: { es: 'Inicio', en: 'Start' },
     cert_step1_title: { es: '💳 PASO 1: Pagar el Examen', en: '💳 STEP 1: Pay for the Exam' },
     cert_pay_with_card: { es: 'Pagar', en: 'Pay' },
@@ -2080,7 +2080,6 @@
     cert_print: { es: 'Imprimir Certificado', en: 'Print Certificate' },
 
     // Notifications and misc
-    cert_not_completed: { es: 'no completado', en: 'not completed' },
     cert_notif_completed_prefix: { es: '¡', en: '' },
     cert_notif_completed: { es: 'completó Nivel', en: 'completed Level' },
     cert_share_text: { es: '¡Obtuve mi Certificado HVAC Nivel', en: 'I earned my HVAC Certificate Level' },
@@ -3272,7 +3271,6 @@
     ai_chars_exhausted2: { es: '. Se renuevan el próximo mes.', en: '. They renew next month.' },
     ai_welcome_premium: { es: '🎉 ¡Bienvenido a AI Premium, ', en: '🎉 Welcome to AI Premium, ' },
     ai_welcome_premium2: { es: '! Tienes 50,000 caracteres de AI este mes. Úsalos para preguntas que realmente no entiendas. Las explicaciones escritas son gratis — usa AI cuando ocupes que te lo explique más a fondo. 🧠', en: '! You have 50,000 AI characters this month. Use them for questions you really don\'t understand. Written explanations are free — use AI when you need a deeper explanation. 🧠' },
-    ls_stream_ended: { es: 'El live streaming ha terminado', en: 'The live stream has ended' },
     ls_waiting_confirm: { es: 'Esperando confirmación...', en: 'Waiting for confirmation...' },
     ls_live_ended: { es: 'La transmision en vivo ha terminado', en: 'The live broadcast has ended' },
     ls_playback_unavailable: { es: 'URL de playback no disponible', en: 'Playback URL not available' },
@@ -3324,10 +3322,8 @@
     profile_uploading_id: { es: 'Subiendo tu identificación...', en: 'Uploading your ID...' },
     profile_id_sent: { es: 'Identificación enviada. Pendiente de revisión.', en: 'ID submitted. Pending review.' },
     profile_id_pending: { es: 'Tu ID está pendiente de revisión. Te notificaremos cuando sea aprobada.', en: 'Your ID is pending review. We will notify you when it is approved.' },
-    profile_upload_failed: { es: 'Fallo al subir', en: 'Upload failed' },
     profile_retry: { es: 'Reintentar', en: 'Retry' },
     profile_connection_error: { es: 'Error de conexión:', en: 'Connection error:' },
-    profile_try_again: { es: 'Intenta de nuevo', en: 'Try again' },
     perf_there_are: { es: 'Hay', en: 'There are' },
 
     // ── Dashboard & cert course screen strings ──
@@ -3529,7 +3525,6 @@
     staff_role_master: { es: '\ud83d\udc51 Master (acceso total)', en: '\ud83d\udc51 Master (full access)' },
 
     // ── Password Visibility ──
-    html_show_password: { es: 'Mostrar contraseña', en: 'Show password' },
 
     // ── Blocked Account ──
     blocked_title: { es: 'Tu Cuenta Está Pausada', en: 'Your Account Is Paused' },
@@ -3642,8 +3637,6 @@
     ht_mm_degraded: { es: 'DEGRADADO', en: 'DEGRADED' },
 
     // ── Herramientas: Pass/Fail ──
-    ht_pass: { es: 'PASA', en: 'PASS' },
-    ht_fail: { es: 'FALLA', en: 'FAIL' },
     ht_complies: { es: 'CUMPLE', en: 'COMPLIES' },
     ht_not_complies: { es: 'NO CUMPLE', en: 'DOES NOT COMPLY' },
     ht_fail_solar: { es: 'FALLA — reduce solar o sube panel', en: 'FAIL — reduce solar or upgrade panel' },
@@ -3656,9 +3649,7 @@
     ht_mm_hz_standard: { es: '60 Hz ESTÁNDAR', en: '60 Hz STANDARD' },
 
     // ── Herramientas: Thermal Load ──
-    ht_ct_rooms: { es: 'Habitaciones', en: 'Rooms' },
     ht_ct_zone: { es: 'zona', en: 'zone' },
-    ht_ct_zones: { es: 'zonas', en: 'zones' },
     ht_ct_minisplit_rec: { es: 'Considere mini-split dedicado para esta zona', en: 'Consider a dedicated mini-split for this zone' },
 
     // ── Herramientas: System/Metering Labels ──
@@ -3784,8 +3775,6 @@
     ls_push_live_now: { es: 'Maestro Mario est\u00e1 transmitiendo ahora. \u00a1Entra a ver!', en: 'Maestro Mario is live now. Come watch!' },
     ls_check_recordings: { es: 'Revisa las grabaciones o vuelve despu\u00e9s', en: 'Check the recordings or come back later' },
     ls_group_all: { es: 'Todos', en: 'All' },
-    ls_group_tue_wed: { es: 'Mar/Mi\u00e9', en: 'Tue/Wed' },
-    ls_group_sat_sun: { es: 'S\u00e1b/Dom', en: 'Sat/Sun' },
     ls_unlock_7days: { es: '\ud83d\udd12 Toca para desbloquear \u2014 7 d\u00edas gratis', en: '\ud83d\udd12 Tap to unlock \u2014 7 days free' },
     ls_watch_recording: { es: '\u25b6 Ver grabaci\u00f3n', en: '\u25b6 Watch recording' },
     ls_preparing: { es: 'El instructor est\u00e1 preparando la transmisi\u00f3n', en: 'The instructor is preparing the stream' },
@@ -3816,9 +3805,6 @@
     ds_correct_13: { es: '\u00a1Dominas el tema!', en: 'You master the topic!' },
 
     // ── Desafio wrong phrases ──
-    ds_wrong_1: { es: 'No te preocupes, la pr\u00f3xima es tuya', en: 'Don\'t worry, the next one is yours' },
-    ds_wrong_2: { es: 'As\u00ed se aprende, sigue adelante', en: 'That\'s how you learn, keep going' },
-    ds_wrong_3: { es: '\u00c1nimo, vas por buen camino', en: 'Cheer up, you\'re on the right track' },
     ds_wrong_4: { es: 'Revisa el tema y lo dominas', en: 'Review the topic and you\'ll master it' },
     ds_wrong_5: { es: 'No fue esta vez, pero sigues en la pelea', en: 'Not this time, but you\'re still in the fight' },
     ds_wrong_6: { es: 'El error es parte del aprendizaje', en: 'Mistakes are part of learning' },
@@ -3876,8 +3862,6 @@
     // ── Herramientas electrical ──
     ht_wire_copper_common: { es: 'Cobre, 75\u00b0C (THWN-2) \u2014 M\u00e1s com\u00fan en residencial', en: 'Copper, 75\u00b0C (THWN-2) \u2014 Most common in residential' },
     ht_el_lighting: { es: 'Iluminaci\u00f3n General', en: 'General Lighting' },
-    ht_el_appliances: { es: 'Electrodom\u00e9sticos', en: 'Appliances' },
-    ht_el_laundry: { es: 'Lavander\u00eda', en: 'Laundry' },
     ht_el_after_demand: { es: 'Despu\u00e9s de Factor de Demanda', en: 'After Demand Factor' },
     ht_el_stove: { es: 'Estufa/Horno', en: 'Stove/Oven' },
     ht_el_stoves: { es: 'estufas', en: 'stoves' },
@@ -3886,11 +3870,9 @@
     ht_el_heating: { es: 'Calefacci\u00f3n', en: 'Heating' },
     ht_el_fixed_appliances: { es: 'Electrodom\u00e9sticos Fijos', en: 'Fixed Appliances' },
     ht_el_special_loads: { es: 'Cargas Especiales', en: 'Special Loads' },
-    ht_el_bonding_jumper: { es: 'Puente de Uni\u00f3n', en: 'Bonding Jumper' },
     ht_el_same_as_gec: { es: 'Igual que GEC', en: 'Same as GEC' },
 
     // ── HTML Loading States ──
-    html_loading: { es: 'Cargando...', en: 'Loading...' },
     html_loading_books: { es: 'Cargando libros...', en: 'Loading books...' },
     html_loading_payments: { es: 'Cargando pagos...', en: 'Loading payments...' },
     html_loading_tickets: { es: 'Cargando tickets...', en: 'Loading tickets...' },
@@ -3906,10 +3888,8 @@
     html_loading_exams_admin: { es: 'Cargando exámenes...', en: 'Loading exams...' },
     html_loading_eval_history: { es: 'Cargando historial de evaluaciones...', en: 'Loading evaluation history...' },
     html_loading_materials: { es: 'Cargando materiales...', en: 'Loading materials...' },
-    html_loading_products: { es: 'Cargando productos...', en: 'Loading products...' },
     html_loading_leads: { es: 'Cargando leads...', en: 'Loading leads...' },
     html_loading_challenge: { es: 'Cargando desafío...', en: 'Loading challenge...' },
-    html_loading_quiz: { es: 'Cargando quiz...', en: 'Loading quiz...' },
     html_loading_emoji: { es: '⏳ Cargando...', en: '⏳ Loading...' },
 
     // ── HTML UI Elements ──
@@ -3919,8 +3899,6 @@
     html_verify_enter: { es: '🔓 Verificar y Entrar', en: '🔓 Verify and Enter' },
 
     // ── Schedule Day Abbreviations ──
-    html_day_sun: { es: 'Dom', en: 'Sun' },
-    html_day_mon: { es: 'Lun', en: 'Mon' },
     html_day_tue: { es: 'Mar', en: 'Tue' },
     html_day_wed: { es: 'Mié', en: 'Wed' },
     html_day_thu: { es: 'Jue', en: 'Thu' },

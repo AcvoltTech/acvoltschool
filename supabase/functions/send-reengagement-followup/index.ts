@@ -66,6 +66,31 @@ function emailHTML(name: string): string {
 }
 const SMS_BODY = 'Ya lo pasado pasado. Descarga Maestro HVACR, pruébala y nos das tu opinión honesta. Después no te volvemos a molestar. https://maestrohvacr.com/get?s=reengage STOP=baja';
 
+// ── Lector paginado (rompe el tope de 1,000 filas de PostgREST) ──
+// 🔴 RAÍZ: PostgREST corta TODA consulta en 1,000 filas (max_rows = 1000, del SERVIDOR).
+// Sin error, sin aviso: HTTP 200 con exactamente 1,000 filas; el síntoma es un total que
+// nunca se mueve. 🪤 `.limit(5000)` NO sirve — el tope no lo pone el cliente. Se pagina.
+// 🪤 Se ordena por `id` (ÚNICO): con una columna con empates una página repite filas y se
+// salta otras → a unos les llega dos veces la campaña y a otros nunca.
+// 🪤 supabase-js NUNCA tira excepción: hay que leer `error` en CADA página y reportar
+// PARCIAL con lo que sí se leyó, nunca seguir callado con una lista corta.
+const PAGE_SIZE = 1000;
+const MAX_PAGES = 100; // tope de seguridad (100k filas) para no caer en un bucle eterno
+async function fetchAllPaged<T>(
+  build: (from: number, to: number) => PromiseLike<{ data: unknown[] | null; error: { message?: string } | null }>,
+): Promise<{ rows: T[]; error: string | null }> {
+  const rows: T[] = [];
+  for (let page = 0; page < MAX_PAGES; page++) {
+    const offset = page * PAGE_SIZE;
+    const { data, error } = await build(offset, offset + PAGE_SIZE - 1);
+    if (error) return { rows, error: error.message || String(error) };
+    const batch = (data || []) as T[];
+    rows.push(...batch);
+    if (batch.length < PAGE_SIZE) return { rows, error: null };
+  }
+  return { rows, error: `Se alcanzó el tope de ${MAX_PAGES} páginas (${MAX_PAGES * PAGE_SIZE} filas)` };
+}
+
 interface UserRow { id: string; nombre: string | null; email: string | null; telefono: string | null; ultimo_acceso: string | null; }
 
 function normPhone(raw: string | null): string | null {
@@ -110,25 +135,37 @@ serve(async (req) => {
     const maxDate = new Date(Date.now() - min_days * 86400 * 1000).toISOString();
     const minDate = new Date(Date.now() - max_days * 86400 * 1000).toISOString();
 
-    const { data: users, error: uErr } = await sb
-      .from('users')
-      .select('id, nombre, email, telefono, ultimo_acceso, reengagement_sent_at')
-      .not('ultimo_acceso', 'is', null)
-      .lt('ultimo_acceso', maxDate)
-      .gte('ultimo_acceso', minDate)
-      .is('reengagement_sent_at', null)
-      .not('email', 'ilike', '%synthetic%')
-      .not('email', 'ilike', '%@maestrohvacr.com')
-      .not('email', 'ilike', '%@acvolt%')
-      .limit(5000);
-    if (uErr) throw uErr;
+    // 🔴 RAÍZ (medido 2026-09-10): el bucket `critical` tiene 8,725 elegibles de verdad,
+    // pero esto devolvía 1,000. Síntoma real: el `dry_run` reportaba `target_size: 1000` y
+    // Mario creía que el grupo dormido era de mil personas cuando son 8,725 — y el envío
+    // real solo tocaba a esos mil. (`warning` son 430, ese sí cabía y por eso nunca se notó.)
+    // 🪤 El `.limit(5000)` de antes no hacía absolutamente nada: el tope es del servidor.
+    const { rows: users, error: uErr } = await fetchAllPaged<UserRow & { id: string }>(
+      (from, to) => sb
+        .from('users')
+        .select('id, nombre, email, telefono, ultimo_acceso, reengagement_sent_at')
+        .not('ultimo_acceso', 'is', null)
+        .lt('ultimo_acceso', maxDate)
+        .gte('ultimo_acceso', minDate)
+        .is('reengagement_sent_at', null)
+        .not('email', 'ilike', '%synthetic%')
+        .not('email', 'ilike', '%@maestrohvacr.com')
+        .not('email', 'ilike', '%@acvolt%')
+        .order('id', { ascending: true })
+        .range(from, to),
+    );
+    // 🪤 Sin nadie leído no hay campaña: error duro. Leído a medias: se dice PARCIAL, nunca
+    // se presenta un cohorte recortado como si fuera el total.
+    if (uErr && users.length === 0) return json({ error: 'No se pudo leer el cohorte: ' + uErr }, 500);
+    const partial = uErr ? { partial: true, audience_read_error: uErr } : {};
 
-    const eligible = (users || []) as (UserRow & { id: string })[];
+    const eligible = users;
 
     if (dry_run) {
       return json({
         dry_run: true,
         bucket,
+        ...partial,
         target_size: eligible.length,
         with_email: eligible.filter(u => !!u.email).length,
         with_phone: eligible.filter(u => !!normPhone(u.telefono)).length,
@@ -139,11 +176,32 @@ serve(async (req) => {
     // CRITICAL: mark all eligible IDs as "sent" SYNCHRONOUSLY before background
     // send starts. Otherwise a fast 2nd call picks up the same cohort and
     // sends duplicates. Mario 2026-05-29: lesson learned the hard way.
+    // 🪤 Lotes de 100, no de 500: un `.in()` con 500 UUIDs arma una URL de ~19 KB que el
+    // servidor rechaza — y como supabase-js NUNCA tira excepción, el error se ignoraba en
+    // silencio y NADIE quedaba marcado → la siguiente corrida volvía a mandarle a los
+    // mismos. Con 8,725 elegibles (antes 1,000 por el tope) esto ya pasa de verdad.
+    // 🪤 Si el marcado falla, ABORTAMOS: mandar sin marcar = duplicados garantizados.
     const nowIso = new Date().toISOString();
     const ids = eligible.map(u => u.id);
-    for (let i = 0; i < ids.length; i += 500) {
-      const chunk = ids.slice(i, i + 500);
-      await sb.from('users').update({ reengagement_sent_at: nowIso }).in('id', chunk);
+    let marked = 0;
+    for (let i = 0; i < ids.length; i += 100) {
+      const chunk = ids.slice(i, i + 100);
+      const { error: markErr } = await sb.from('users').update({ reengagement_sent_at: nowIso }).in('id', chunk);
+      if (markErr) {
+        console.error('[send-reengagement-followup] falló el marcado, se aborta antes de enviar:', markErr.message);
+        return json({
+          error: 'No se pudo marcar el cohorte como enviado; se abortó ANTES de enviar para no duplicar.',
+          details: markErr.message,
+          // 🪤 Los `marked` primeros YA quedaron marcados sin recibir nada. Para
+          // devolverlos al cohorte: update users set reengagement_sent_at = null
+          // where reengagement_sent_at = '<nowIso de abajo>'.
+          marked,
+          marked_at: nowIso,
+          target_size: ids.length,
+          ...partial,
+        }, 500);
+      }
+      marked += chunk.length;
     }
 
     const sendAll = async () => {
@@ -190,7 +248,7 @@ serve(async (req) => {
         }
       }
 
-      console.log('[send-reengagement-followup] done', { bucket, emails_sent, emails_failed, sms_sent, sms_failed, marked: ids.length });
+      console.log('[send-reengagement-followup] done', { bucket, emails_sent, emails_failed, sms_sent, sms_failed, marked, audience_read_error: uErr || null });
     };
 
     if (typeof EdgeRuntime !== 'undefined' && EdgeRuntime.waitUntil) EdgeRuntime.waitUntil(sendAll());
@@ -200,7 +258,9 @@ serve(async (req) => {
       dry_run: false,
       bucket,
       started: true,
+      ...partial,
       target_size: eligible.length,
+      marked,
       message: 'Background send started.',
     });
   } catch (err) {

@@ -871,6 +871,12 @@ function chatUpdateMuteIcon() {
 // ============================================================
 // PUSH NOTIFICATIONS FOR CHAT MESSAGES
 // ============================================================
+// 🪤 TRAMPA MEDIDA (10-sep-2026): la edge `send-push-notification` recorre los correos
+// UNO POR UNO, y por cada uno hace su propia consulta a `push_subscriptions` + el envío.
+// Mandarle miles en una sola llamada la revienta por tiempo y el fallo NO se ve: responde
+// 200 y no sale ni un push. Por eso se manda de LOTE_PUSH en LOTE_PUSH, en serie.
+var CHAT_LOTE_PUSH = 50;
+
 function notifyChatSubscribers(senderEmail, senderName, messageText, messageType) {
   try {
     var title = '\u{1F4AC} ' + senderName;
@@ -883,29 +889,82 @@ function notifyChatSubscribers(senderEmail, senderName, messageText, messageType
       body = (messageText || '').length > 80 ? messageText.substring(0, 80) + '...' : (messageText || '');
     }
 
-    supabaseClient.from('push_subscriptions').select('user_email').eq('active', true).then(function(res) {
-      if (res.error || !res.data) return;
+    // 🔴 RAÍZ (10-sep-2026): aquí había un `.select('user_email').eq('active', true)` PELÓN.
+    // PostgREST corta todo select en 1,000 filas sin avisar (HTTP 200, sin error), así que
+    // cada mensaje del chat avisaba SIEMPRE a las mismas 1,000 personas arbitrarias.
+    // MEDIDO ese día: 5,838 suscripciones activas / 5,718 correos distintos → ~4,718 técnicos
+    // JAMÁS se enteraron de que había chat. MaestroPagina.todo() lee la tabla COMPLETA y,
+    // a diferencia del `|| []` de antes, distingue "falló" de "no hay nadie".
+    var pagina = (window.MaestroPagina && window.MaestroPagina.todo)
+      ? window.MaestroPagina.todo('push_subscriptions', 'id, user_email', function(q) { return q.eq('active', true); })
+      : Promise.resolve({ data: [], error: { message: 'MaestroPagina no está cargado' }, completo: false });
+
+    pagina.then(function(res) {
+      if (res.error) {
+        // 🔒 No pude leer la lista ≠ no hay a quién avisar. El mensaje SÍ se publicó, pero
+        // nadie recibió aviso: quien escribió tiene que saberlo, no quedarse creyendo que sí.
+        console.warn('[TechChat] lista de push: ' + (res.error.message || 'consulta rechazada'), res.error);
+        chatShowToast(_t('tc_push_list_failed', 'Tu mensaje se envió, pero no pude avisar a los demás.'), 'error');
+        return;
+      }
+
+      // 🪤 El mismo técnico tiene varios dispositivos (5,838 filas vs 5,718 correos): sin
+      // deduplicar, la edge le manda el mismo push 2-3 veces y el lote se infla de a gratis.
+      // Se normaliza a minúsculas porque los correos entran con mayúsculas mezcladas.
       var emailSet = {};
-      res.data.forEach(function(r) { if (r.user_email) emailSet[r.user_email] = true; });
-      var recipientEmails = Object.keys(emailSet)
-        .filter(function(e) { return e !== senderEmail; });
+      var yo = (senderEmail || '').toLowerCase();
+      (res.data || []).forEach(function(r) {
+        var e = (r && r.user_email ? String(r.user_email).trim().toLowerCase() : '');
+        if (e && e !== yo) emailSet[e] = true;
+      });
+      var recipientEmails = Object.keys(emailSet);
 
       if (recipientEmails.length === 0) return;
+      if (!res.completo) {
+        // Lista truncada: el número es un PISO, no el total. Se avisa en consola para que
+        // el alcance reportado no se confunda con "ya avisé a todos".
+        console.warn('[TechChat] lista de push incompleta: se avisará a AL MENOS ' + recipientEmails.length + ' técnicos, no a todos.');
+      }
 
-      supabaseClient.functions.invoke('send-push-notification', {
-        body: {
-          recipient_emails: recipientEmails,
-          title: title,
-          body: body,
-          type: 'tech_chat',
-          url: './',
-          admin_email: getAdminEmail()
-        }
-      }).catch(function(err) {
-        console.warn('[TechChat] Push notification error:', err);
-      });
+      _chatEnviarPushPorLotes(recipientEmails, title, body);
     });
   } catch(e) {
     console.warn('[TechChat] notifyChatSubscribers error:', e);
   }
+}
+
+// Manda la lista en tandas de 50, EN SERIE (no Promise.all: 115 llamadas a la vez ahogan
+// la edge igual que una sola llamada gigante). Un lote que truena no cancela los demás.
+function _chatEnviarPushPorLotes(emails, title, body) {
+  var i = 0;
+  var fallidos = 0;
+
+  function siguiente() {
+    if (i >= emails.length) {
+      if (fallidos) console.warn('[TechChat] push del chat: ' + fallidos + ' de ' + Math.ceil(emails.length / CHAT_LOTE_PUSH) + ' lotes fallaron.');
+      return;
+    }
+    var lote = emails.slice(i, i + CHAT_LOTE_PUSH);
+    i += CHAT_LOTE_PUSH;
+
+    supabaseClient.functions.invoke('send-push-notification', {
+      body: {
+        recipient_emails: lote,
+        title: title,
+        body: body,
+        type: 'tech_chat',
+        url: './',
+        admin_email: getAdminEmail()
+      }
+    }).then(function(resp) {
+      if (resp && resp.error) { fallidos++; console.warn('[TechChat] lote de push rechazado:', resp.error); }
+      siguiente();
+    }).catch(function(err) {
+      fallidos++;
+      console.warn('[TechChat] Push notification error:', err);
+      siguiente();
+    });
+  }
+
+  siguiente();
 }

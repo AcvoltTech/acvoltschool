@@ -853,31 +853,65 @@
         // Track new account creation — Meta CompleteRegistration + TikTok + CAPI
         try { if (typeof trackConversion === 'function') trackConversion('signup_complete', { email: email, content_name: 'maestrohvacr_signup' }); } catch(_) {}
 
-        // Save minimal data to users table
+        // ══════════════════════════════════════════════════════════════════════
+        // 🔴 RAÍZ (10-sep-2026): el alta quedaba SOLO en el teléfono.
+        // ══════════════════════════════════════════════════════════════════════
+        // Arriba ya se puso `tecnico_authenticated = 'true'` (línea ~847), o sea que
+        // el usuario "ya se registró" ANTES de que la base lo confirmara. Y este
+        // upsert nunca se revisaba: como supabase-js NO LANZA, un rechazo (RLS, red,
+        // 400) se resolvía normal y el `catch` era CÓDIGO MUERTO.
+        // Síntoma real: la persona entra a la app y todo se ve bien, pero NO EXISTE
+        // fila en `users` — es invisible para el CRM y para el roster de admin, no
+        // aparece en ningún conteo, y al reinstalar pierde el perfil completo.
+        // 🪤 Peor con el referido: `removeItem('maestroac_referral_code')` corría
+        // aunque el insert fallara, así que el crédito del embajador se TIRABA sin
+        // haberse registrado nunca y ya no había forma de recuperarlo.
+        // 🪤 Nota de esquema: `users` NO tiene `created_at` — la columna es
+        // `fecha_registro` (ésta sí está bien).
+        var _upUser = null;
         try {
-          await supabaseClient.from('users').upsert({
+          _upUser = await supabaseClient.from('users').upsert({
             email: email,
             nombre: tempName,
             fecha_registro: new Date().toISOString()
           }, { onConflict: 'email' });
+        } catch (e) {
+          _upUser = { error: { message: (e && e.message) || 'fallo de red' } };
+        }
 
-          // Save referral if exists
-          var savedRefCode = localStorage.getItem('maestroac_referral_code');
-          if (savedRefCode) {
-            try {
-              await supabaseClient.from('referrals').insert({
-                referral_code: savedRefCode,
-                referred_email: email,
-                referred_name: tempName,
-                referred_date: new Date().toISOString(),
-                status: 'registered'
-              });
-              localStorage.removeItem('maestroac_referral_code');
-              localStorage.removeItem('maestroac_referral_date');
-              console.log('[MaestroAC] Referral saved for new user');
-            } catch(refErr) { console.log('[Referral] Save error:', refErr); }
+        if (_upUser && _upUser.error) {
+          console.warn('[Auth] ⚠️ el alta de ' + email + ' NO se guardó en `users`: ' +
+                       (_upUser.error.message || '?') + ' — queda pendiente de reintento.', _upUser.error);
+          // Se deja constancia para que el próximo arranque lo reintente en vez de
+          // que la persona quede fantasma para siempre.
+          try { localStorage.setItem('maestroac_pending_user_row', JSON.stringify({ email: email, nombre: tempName })); } catch (_) {}
+        }
+
+        // Save referral if exists
+        var savedRefCode = localStorage.getItem('maestroac_referral_code');
+        if (savedRefCode) {
+          var _refRes = null;
+          try {
+            _refRes = await supabaseClient.from('referrals').insert({
+              referral_code: savedRefCode,
+              referred_email: email,
+              referred_name: tempName,
+              referred_date: new Date().toISOString(),
+              status: 'registered'
+            });
+          } catch (refErr) {
+            _refRes = { error: { message: (refErr && refErr.message) || 'fallo de red' } };
           }
-        } catch(e) { console.log('[MaestroAC] Save technician error:', e); }
+          if (_refRes && _refRes.error) {
+            // 🔒 NO se borra el código: sin fila en `referrals` el embajador no cobra.
+            console.warn('[Referral] el referido de ' + email + ' con código ' + savedRefCode +
+                         ' NO se guardó (' + (_refRes.error.message || '?') + '): se conserva para reintentar.', _refRes.error);
+          } else {
+            localStorage.removeItem('maestroac_referral_code');
+            localStorage.removeItem('maestroac_referral_date');
+            console.log('[MaestroAC] Referral saved for new user');
+          }
+        }
 
         // Clear password fields after successful registration
         var _regPassField = document.getElementById('regPassword');

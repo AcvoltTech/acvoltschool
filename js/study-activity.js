@@ -30,6 +30,33 @@
   var STUDY_SCREEN_IDS = Object.keys(STUDY_SCREENS);
   var _t_ = typeof _t === 'function' ? _t : function(k, fb) { return fb || k; };
 
+  // ══════════════════════════════════════════════════════════════════════════
+  // 🔴 "NO PUDE MEDIR" NO ES "NO HAY DATOS" (10-sep-2026)
+  // Las dos pantallas de este archivo pintaban EL MISMO vacío cuando la consulta
+  // FALLABA: supabase-js nunca lanza, el fallo llega en `res.error`, y el
+  // `if (!res.data)` de siempre lo convertía en "Aún no tienes actividad de
+  // estudio. ¡Explora los módulos!". SÍNTOMA MEDIDO: un alumno con 60 horas
+  // registradas leía que nunca había estudiado — y se iba.
+  // Ahora el fallo se DICE y se puede reintentar.
+  // 🪤 No se usa `_escHtml` de config.js: este archivo es un IIFE propio y no
+  // tiene por qué depender del ámbito de un módulo hermano (ver MaestroLoader).
+  // ══════════════════════════════════════════════════════════════════════════
+  function _esc(s) {
+    return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+  }
+
+  // `reintentoJs` es el JS del botón. `html_retry` ya existe en i18n.js
+  // (es: Reintentar / en: Retry): se reusa porque i18n.js está cerrado a claves nuevas.
+  function _cajaNoPudeCargar(texto, detalle, reintentoJs) {
+    return '<div style="text-align:center;padding:16px;color:#b45309;font-size:12px;">' +
+      '<div style="font-size:22px;margin-bottom:4px;">⚠️</div>' +
+      '<div style="font-weight:700;">' + texto + '</div>' +
+      (detalle ? '<div style="font-size:10px;color:#57574F;margin-top:4px;">' + _esc(detalle) + '</div>' : '') +
+      '<button onclick="' + reintentoJs + '" style="margin-top:10px;padding:7px 16px;background:#38bdf8;color:#0f172a;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;">🔄 ' +
+      _t_('html_retry', 'Reintentar') + '</button></div>';
+  }
+
   function _formatTime(sec) {
     if (!sec || sec <= 0) return '0 min';
     var h = Math.floor(sec / 3600);
@@ -45,21 +72,41 @@
     var email = localStorage.getItem('tecnico_email');
     if (!email || !window.supabaseClient) { container.innerHTML = ''; return; }
 
-    supabaseClient.from('screen_events')
-      .select('screen_id, duration_sec, entered_at')
-      .eq('user_email', email)
-      .in('screen_id', STUDY_SCREEN_IDS)
-      .order('entered_at', { ascending: false })
-      .then(function(res) {
-        if (!res.data || res.data.length === 0) {
-          container.innerHTML = '<div style="text-align:center;padding:16px;color:#3D3D3A;font-size:12px;">' + _t_('study_no_activity', 'A\u00fan no tienes actividad de estudio. \u00a1Explora los m\u00f3dulos!') + '</div>';
-          return;
-        }
-        _renderStudyProgress(container, res.data);
-      }).catch(function() { container.innerHTML = ''; });
+    // 🔴 TRUNCADO: esta lectura no tenía `.limit()` y PostgREST corta en 1,000 filas
+    // sin avisar (HTTP 200, sin error). MEDIDO: 74 usuarios pasan de 1,000
+    // `screen_events` (el máximo son 12,288). SÍNTOMA: justo al alumno MÁS
+    // constante se le recortaba el total de por vida a sus 1,000 sesiones más
+    // recientes — mientras más estudiaba, más le mentía la tarjeta.
+    // MaestroPagina la trae completa y devuelve el `error` en vez de esconderlo.
+    var pag = window.MaestroPagina;
+    if (!pag) {
+      // 🔒 "todavía no cargó la herramienta" tampoco es "no hay datos".
+      console.warn('[StudyActivity] actividad de ' + email + ': MaestroPagina no est\u00e1 cargado');
+      container.innerHTML = _cajaNoPudeCargar(_t_('study_no_pude_medir', 'No pude cargar tu actividad de estudio.'), '', 'loadStudyActivity()');
+      return;
+    }
+
+    pag.todo('screen_events', 'screen_id, duration_sec, entered_at', function(q) {
+      return q.eq('user_email', email).in('screen_id', STUDY_SCREEN_IDS);
+    }).then(function(r) {
+      if (r.error) {
+        console.warn('[StudyActivity] actividad de ' + email + ': ' + (r.error.message || 'consulta rechazada'), r.error);
+        container.innerHTML = _cajaNoPudeCargar(_t_('study_no_pude_medir', 'No pude cargar tu actividad de estudio.'), r.error.message, 'loadStudyActivity()');
+        return;
+      }
+      if (r.data.length === 0) {
+        // Aquí SÍ se midió y de verdad no hay nada.
+        container.innerHTML = '<div style="text-align:center;padding:16px;color:#3D3D3A;font-size:12px;">' + _t_('study_no_activity', 'A\u00fan no tienes actividad de estudio. \u00a1Explora los m\u00f3dulos!') + '</div>';
+        return;
+      }
+      _renderStudyProgress(container, r.data, r.completo);
+    }).catch(function(err) {
+      console.warn('[StudyActivity] actividad de ' + email + ': ' + ((err && err.message) || 'falla inesperada'), err);
+      container.innerHTML = _cajaNoPudeCargar(_t_('study_no_pude_medir', 'No pude cargar tu actividad de estudio.'), err && err.message, 'loadStudyActivity()');
+    });
   };
 
-  function _renderStudyProgress(container, events) {
+  function _renderStudyProgress(container, events, completo) {
     var totalSessions = events.length;
     var totalTimeSec = 0;
     var moduleVisits = {};
@@ -79,6 +126,11 @@
     var modulesStudied = Object.keys(moduleVisits).length;
 
     var html = '';
+    // Si la lista llegó incompleta (tope de paginado), el total es un MÍNIMO y hay que decirlo.
+    if (completo === false) {
+      html += '<div style="text-align:center;padding:6px;margin-bottom:8px;color:#b45309;font-size:10px;">⚠️ ' +
+        _t_('study_totales_parciales', 'Totales parciales: no pude traer todo tu historial.') + '</div>';
+    }
     // Summary grid
     html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px;">';
     html += _statCard(totalSessions, _t_('study_sessions', 'Sesiones'), '#38bdf8', 'rgba(56,189,248,');
@@ -122,19 +174,38 @@
     container.innerHTML = '<div style="text-align:center;padding:40px 20px;color:rgba(148,163,184,0.7);font-size:14px;">' + _t_('study_loading_ranking', 'Cargando ranking de estudio...') + '</div>';
     var myEmail = localStorage.getItem('tecnico_email');
 
-    supabaseClient.from('screen_events')
-      .select('user_email, screen_id, duration_sec')
-      .in('screen_id', STUDY_SCREEN_IDS)
-      .limit(50000)
-      .then(function(res) {
-        if (!res.data || res.data.length === 0) {
+    // 🔴 `.limit(50000)` ERA INERTE: el tope de 1,000 filas lo pone el servidor, no
+    // el cliente, y pedir más no trae más. MEDIDO 10-sep-2026: 81,936 filas de
+    // pantallas de estudio en `screen_events`; el ranking se armaba con 1,000 de
+    // ellas. SÍNTOMA: el orden del ranking era prácticamente al azar (dependía de
+    // qué 1,000 filas devolviera el servidor) y los tiempos salían decenas de veces
+    // más bajos que la realidad.
+    // 🪤 Traerlas todas cuesta ~82 vueltas al servidor. Se aguanta porque esto sólo
+    // corre cuando el usuario ABRE la pestaña de Estudio, nunca al arrancar el app.
+    var pag = window.MaestroPagina;
+    if (!pag) {
+      console.warn('[StudyActivity] ranking: MaestroPagina no est\u00e1 cargado');
+      container.innerHTML = _cajaNoPudeCargar(_t_('study_ranking_no_pude', 'No pude cargar el ranking de estudio.'), '', 'renderStudyLeaderboard(\'' + containerId + '\')');
+      return;
+    }
+
+    pag.todo('screen_events', 'user_email, screen_id, duration_sec', function(q) {
+      return q.in('screen_id', STUDY_SCREEN_IDS);
+    }).then(function(r) {
+        if (r.error) {
+          // 🔒 Un ranking a medias miente igual que uno vacío: aquí se dice, no se pinta.
+          console.warn('[StudyActivity] ranking: ' + (r.error.message || 'consulta rechazada'), r.error);
+          container.innerHTML = _cajaNoPudeCargar(_t_('study_ranking_no_pude', 'No pude cargar el ranking de estudio.'), r.error.message, 'renderStudyLeaderboard(\'' + containerId + '\')');
+          return;
+        }
+        if (r.data.length === 0) {
           container.innerHTML = '<div style="text-align:center;padding:40px;color:#94a3b8;">' + _t_('study_no_data', 'No hay datos de estudio a\u00fan.') + '</div>';
           return;
         }
 
         // Aggregate by user
         var stats = {};
-        res.data.forEach(function(ev) {
+        r.data.forEach(function(ev) {
           if (!ev.user_email) return;
           var key = ev.user_email.toLowerCase();
           if (key === 'floresmario30@gmail.com') return;
@@ -165,8 +236,9 @@
             });
             _renderStudyRanking(container, sorted.slice(0, 10), {}, myEmail);
           });
-      }).catch(function() {
-        container.innerHTML = '<div style="text-align:center;padding:40px;color:rgba(239,68,68,0.7);">Error cargando ranking</div>';
+      }).catch(function(err) {
+        console.warn('[StudyActivity] ranking: ' + ((err && err.message) || 'falla inesperada'), err);
+        container.innerHTML = _cajaNoPudeCargar(_t_('study_ranking_no_pude', 'No pude cargar el ranking de estudio.'), err && err.message, 'renderStudyLeaderboard(\'' + containerId + '\')');
       });
   };
 

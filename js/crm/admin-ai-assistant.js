@@ -383,11 +383,24 @@ async function _getAdminAIContext(tab) {
       });
       ctx = 'MATERIAL (' + d.length + ' total):\nPor tipo: ' + JSON.stringify(byType) + '\nPor categoría: ' + JSON.stringify(byCat);
     } else if (tab === 'mercado') {
-      var res = await supabaseClient.from('market_products').select('name,category,price,active');
+      // 🔴 LAS CUATRO COLUMNAS ESTABAN EN INGLÉS Y LA TABLA ES EN ESPAÑOL
+      // (10-sep-2026). `name,category,price,active` no existen: las reales son
+      // `id, nombre, descripcion, precio, categoria, imagen_url, estado,
+      // enlace_externo, created_at`. PostgREST devolvía 400, el `res.data || []`
+      // lo volvía lista vacía y el asistente le informaba al admin "0 productos,
+      // 0 activos" con toda seguridad — sin haber leído nada.
+      // 🪤 Hoy la tabla mide 0 filas de verdad, así que el cero PARECÍA correcto:
+      // por eso nadie lo cachó. Un cero sólo vale si vino de una lectura que sirvió.
+      var res = await supabaseClient.from('market_products').select('nombre,categoria,precio,estado');
+      if (res.error) {
+        console.warn('[AdminAI] mercado: ' + (res.error.message || 'consulta rechazada'), res.error);
+        return 'MERCADO: no pude leer la tabla de productos (' + (res.error.message || 'consulta rechazada') + '). NO afirmes cuántos productos hay: el dato no se pudo medir.';
+      }
       var d = res.data || [];
-      var active = d.filter(function(p){return p.active;}).length;
+      // `estado` es texto ('activo'/'inactivo'), no un booleano `active`.
+      var active = d.filter(function(p){ return String(p.estado || '').toLowerCase() === 'activo'; }).length;
       var byCat = {};
-      d.forEach(function(p) { byCat[p.category||'sin categoría'] = (byCat[p.category||'sin categoría']||0) + 1; });
+      d.forEach(function(p) { byCat[p.categoria||'sin categoría'] = (byCat[p.categoria||'sin categoría']||0) + 1; });
       ctx = 'MERCADO (' + d.length + ' productos, ' + active + ' activos):\nPor categoría: ' + JSON.stringify(byCat);
     }
     return ctx || _t('aai_no_data');
@@ -435,11 +448,16 @@ async function _getAdminAISectionContext(section) {
     } else if (section === 'alertas') {
       ctx = 'SECCIÓN: Alertas de Inactividad — Aquí se gestionan estudiantes inactivos.';
     } else if (section === 'pipeline') {
-      var res = await supabaseClient.from('pipeline_leads').select('name,stage,value').order('created_at', { ascending: false }).limit(20);
-      var d = res.data || [];
-      var byStage = {};
-      d.forEach(function(l) { byStage[l.stage || 'nuevo'] = (byStage[l.stage || 'nuevo'] || 0) + 1; });
-      ctx = 'PIPELINE (' + d.length + ' leads):\nPor etapa: ' + JSON.stringify(byStage);
+      // 🪤 LA TABLA `pipeline_leads` NO EXISTE EN ESTA BASE (comprobado 10-sep-2026
+      // contra information_schema: `to_regclass('public.pipeline_leads')` = null).
+      // La consulta devolvía 404/400, el `res.data || []` lo volvía lista vacía y
+      // la tarjeta del pipeline de ventas quedaba permanentemente en "0 leads",
+      // como si no hubiera prospectos, no como si no hubiera fuente.
+      // 🚫 A PROPÓSITO no se sustituye por otra tabla: adivinar la fuente de los
+      // leads sería inventarle números al dueño. Cuando exista el origen real
+      // (tabla o edge function), se conecta aquí y se borra este bloque.
+      ctx = 'PIPELINE: no hay fuente de datos conectada — la tabla `pipeline_leads` no existe en esta base. ' +
+            'NO inventes ni estimes leads ni etapas: dile al admin que el pipeline todavía no tiene origen de datos.';
     } else {
       ctx = 'Sección: ' + (_adminAISectionLabel(section) || section) + '. No hay datos específicos disponibles para esta sección, pero puedo ayudarte con consultas generales de administración.';
     }

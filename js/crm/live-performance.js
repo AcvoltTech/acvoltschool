@@ -53,6 +53,20 @@ if (typeof _addTranslations === 'function') _addTranslations({
   perf_loading_data: { es: 'Cargando datos...', en: 'Loading data...' },
   perf_db_unavail: { es: 'Base de datos no disponible', en: 'Database not available' },
   perf_ungraded_confirm: { es: 'estudiante(s) sin calificar. Los no calificados se guardarán con 0%. ¿Finalizar?', en: 'ungraded student(s). Ungraded entries will be saved as 0%. Finalize?' },
+  // 🔒 LEY: una pantalla NUNCA dice "0 / no hay nada" cuando la consulta falló.
+  // Estos textos son para el caso "no pude medir", que es distinto de "no hay".
+  perf_load_failed: { es: 'No pude cargar las evaluaciones', en: 'Could not load the evaluations' },
+  perf_retry: { es: 'Reintentar', en: 'Retry' },
+  perf_stats_unknown: { es: 'Los números de arriba no se pudieron medir.', en: 'The numbers above could not be measured.' },
+  perf_detail_load_failed: { es: 'No pude cargar las calificaciones de esta evaluación. NO están en cero — simplemente no las pude leer.', en: 'Could not load this evaluation\'s grades. They are NOT zero — they just could not be read.' },
+  perf_export_failed: { es: 'No pude leer las evaluaciones para exportar. No se descargó nada (un CSV vacío parecería que no hay datos).', en: 'Could not read the evaluations to export. Nothing was downloaded (an empty CSV would look like there is no data).' },
+  perf_save_partial: { es: 'NO se guardaron todas las calificaciones. Fallaron: ', en: 'Not all grades were saved. Failed: ' },
+  perf_save_keep_open: { es: 'La evaluación sigue abierta y las calificaciones siguen en pantalla. Vuelve a presionar Finalizar.', en: 'The evaluation is still open and the grades are still on screen. Press Finalize again.' },
+  perf_session_close_failed: { es: 'Las calificaciones SÍ se guardaron, pero no pude cerrar la sesión. Vuelve a presionar Finalizar.', en: 'Grades WERE saved, but the session could not be closed. Press Finalize again.' },
+  perf_cancel_failed: { es: 'No pude cancelar la evaluación en el servidor. Sigue activa — vuelve a intentar.', en: 'Could not cancel the evaluation on the server. It is still active — try again.' },
+  perf_delete_failed: { es: 'No pude eliminar la sesión. Sigue ahí — vuelve a intentar.', en: 'Could not delete the session. It is still there — try again.' },
+  perf_students_load_failed: { es: 'No pude cargar la lista de estudiantes (no es que no haya).', en: 'Could not load the student list (it is not that there are none).' },
+  perf_active_check_failed: { es: 'No pude confirmar tu evaluación en curso. NO se borró: revisa tu conexión y vuelve a entrar.', en: 'Could not confirm your evaluation in progress. It was NOT deleted: check your connection and come back.' },
 });
 
 async function loadStudentPerformance() {
@@ -60,11 +74,14 @@ async function loadStudentPerformance() {
   try {
     // Check for active session first
     var hasActive = await _checkActivePerfSession();
-    if (hasActive) return;
-    _showPerfDefaultView();
+    if (hasActive === true) return;
+    // 🔒 'unknown' = no pudimos confirmar si la evaluación en curso sigue viva. Se
+    // muestra la vista normal PERO sin borrar la copia local: las calificaciones ya
+    // tecleadas se quedan para el próximo intento (ver `_checkActivePerfSession`).
+    _showPerfDefaultView(hasActive === 'unknown');
     loadPerfSessionHistory();
   } catch(e) {
-    console.log('[Admin] Error loading perf:', e.message);
+    console.warn('[LivePerformance] no se pudo abrir Desempeño: ' + ((e && e.message) || e), e);
   }
 }
 
@@ -76,6 +93,27 @@ async function loadPerfSessionHistory() {
     var query = supabaseClient.from('zm_perf_sessions').select('*').order('started_at', { ascending: false }).limit(50);
     if (areaFilter !== 'all') query = query.eq('area', areaFilter);
     var res = await query;
+
+    // 🔴 ANTES: `var sessions = res.data || []`. supabase-js NO LANZA — una consulta
+    // rechazada (RLS, red, token vencido) RESUELVE con {data:null, error:{...}}, así que
+    // el `try/catch` de abajo era zona muerta y la falla se convertía en lista vacía.
+    // Síntoma real: el instructor abre Desempeño y lee "No hay evaluaciones aún" con las
+    // 4 tarjetas en 0 — cree que se le perdió el historial completo de la escuela, cuando
+    // en realidad ni se pudo preguntar.
+    // 🔒 "No pude cargar" ≠ "no hay nada". Se dice cuál de las dos es, con Reintentar.
+    if (res && res.error) {
+      console.warn('[LivePerformance] no se pudo leer zm_perf_sessions: ' + (res.error.message || '?'), res.error);
+      var _statIds = ['zmPerfTotalSessions', 'zmPerfTotalStudents', 'zmPerfGlobalAvg', 'zmPerfLastSession'];
+      _statIds.forEach(function(id) { var el = document.getElementById(id); if (el) el.textContent = '--'; });
+      container.innerHTML = '<div style="text-align:center;padding:26px 16px;color:#dc2626;font-size:13px;">' +
+        '<div style="font-size:30px;margin-bottom:8px;">⚠️</div>' +
+        '<div style="font-weight:600;">' + _t('perf_load_failed', 'No pude cargar las evaluaciones') + '</div>' +
+        '<div style="font-size:11px;color:#94a3b8;margin-top:4px;">' + _t('perf_stats_unknown', 'Los números de arriba no se pudieron medir.') + ' ' + _escHtml(res.error.message || '') + '</div>' +
+        '<button onclick="loadPerfSessionHistory()" style="margin-top:12px;padding:8px 18px;background:#2563eb;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;">🔄 ' + _t('perf_retry', 'Reintentar') + '</button>' +
+      '</div>';
+      return;
+    }
+
     var sessions = res.data || [];
 
     // Stats
@@ -129,7 +167,14 @@ async function loadPerfSessionHistory() {
     });
     container.innerHTML = html;
   } catch(e) {
-    container.innerHTML = '<div style="text-align:center;color:#e74c3c;padding:20px;font-size:12px;">Error: ' + _escHtml(e.message) + '</div>';
+    // 🪤 Este catch ya no cubre el fallo de la consulta (ese se lee en `res.error`
+    // arriba): queda para un error de pintado. Aun así lleva Reintentar — dejar al
+    // instructor con un "Error:" seco y sin salida es lo mismo que dejarlo ciego.
+    console.warn('[LivePerformance] no se pudo pintar el historial de evaluaciones: ' + ((e && e.message) || e), e);
+    container.innerHTML = '<div style="text-align:center;color:#e74c3c;padding:20px;font-size:12px;">' +
+      _t('perf_load_failed', 'No pude cargar las evaluaciones') + ': ' + _escHtml((e && e.message) || '') +
+      '<br><button onclick="loadPerfSessionHistory()" style="margin-top:10px;padding:6px 16px;background:#2563eb;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;">🔄 ' + _t('perf_retry', 'Reintentar') + '</button>' +
+    '</div>';
   }
 }
 
@@ -182,11 +227,27 @@ async function _loadStudentsForPerfSession() {
   if (!container) return;
   try {
     var res = await usersDataAdmin('admin_list', { fields: ['id','email','nombre'], order_by: 'nombre', ascending: true, limit: 5000 });
+    // 🔴 `usersDataAdmin` devuelve { data, error } y TAMPOCO lanza (ver js/users-data-client.js:
+    // hasta un HTTP 500 vuelve como `{error:'HTTP 500'}`). Con `res.data || []` el modal
+    // pintaba "No se encontraron estudiantes". Síntoma real: el instructor va a abrir una
+    // evaluación en vivo con el grupo enfrente, ve la lista vacía y cree que se borraron
+    // los 7,000 técnicos — cuando solo falló una llamada.
+    if (res && res.error) {
+      console.warn('[LivePerformance] no se pudo listar estudiantes: ' + (res.error.message || res.error), res.error);
+      container.innerHTML = '<div style="padding:12px;color:#dc2626;font-size:11px;text-align:center;">' +
+        _t('perf_students_load_failed', 'No pude cargar la lista de estudiantes (no es que no haya).') +
+        '<br><button onclick="_loadStudentsForPerfSession()" style="margin-top:8px;padding:6px 14px;background:#2563eb;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:11px;font-weight:600;">🔄 ' + _t('perf_retry', 'Reintentar') + '</button>' +
+      '</div>';
+      return;
+    }
     _perfAllStudents = (res.data || []).map(function(s) { return { id: s.id, email: s.email, full_name: s.nombre || s.email || '' }; });
     _perfSelectedStudents = new Set();
     _renderPerfStudents();
   } catch(e) {
-    container.innerHTML = '<div style="padding:8px;color:#e74c3c;font-size:11px;">' + _t('perf_load_stu_err') + '</div>';
+    console.warn('[LivePerformance] no se pudo cargar la lista de estudiantes: ' + ((e && e.message) || e), e);
+    container.innerHTML = '<div style="padding:12px;color:#dc2626;font-size:11px;text-align:center;">' + _t('perf_load_stu_err') +
+      '<br><button onclick="_loadStudentsForPerfSession()" style="margin-top:8px;padding:6px 14px;background:#2563eb;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:11px;font-weight:600;">🔄 ' + _t('perf_retry', 'Reintentar') + '</button>' +
+    '</div>';
   }
 }
 
@@ -337,7 +398,7 @@ function _showPerfActiveView(area) {
   _updatePerfGradingProgress();
 }
 
-function _showPerfDefaultView() {
+function _showPerfDefaultView(conservarSesionGuardada) {
   var defaultView = document.getElementById('zmPerfDefaultView');
   var activeView = document.getElementById('zmPerfActiveView');
   if (defaultView) defaultView.style.display = 'block';
@@ -348,7 +409,11 @@ function _showPerfDefaultView() {
   _perfTimerPaused = false;
   _perfActiveSessionId = null;
   _perfActiveGrades = [];
-  localStorage.removeItem('_perfActiveSession');
+  // 🪤 `conservarSesionGuardada` existe por una razón concreta: `_perfActiveSession` en
+  // localStorage es LA ÚNICA copia de las calificaciones que el instructor ya tecleó.
+  // Borrarla cuando solo sospechamos —pero no sabemos— que la sesión terminó, es tirar
+  // el trabajo de un grupo entero. Solo se borra cuando el servidor ya lo confirmó.
+  if (!conservarSesionGuardada) localStorage.removeItem('_perfActiveSession');
 }
 
 function _startPerfTimer() {
@@ -446,31 +511,86 @@ async function finalizePerfSession() {
   }
 
   try {
-    // Save each grade
+    // ══════════════════════════════════════════════════════════════════════════
+    // 🔴 RAÍZ (10-sep-2026): SE PERDÍAN LAS CALIFICACIONES DE UN GRUPO ENTERO.
+    // ══════════════════════════════════════════════════════════════════════════
+    // supabase-js NO LANZA: cada `update` rechazado (RLS, red, sesión vencida) RESUELVE
+    // con {data:null, error:{...}}. Este `try/catch` nunca se disparaba, así que el
+    // bucle "guardaba" 30 calificaciones sin guardar ninguna, se seguía derecho y
+    // `_showPerfDefaultView()` —que hace `localStorage.removeItem('_perfActiveSession')`
+    // y vacía `_perfActiveGrades`— BORRABA la única copia que quedaba.
+    // Síntoma real: el instructor termina un examen práctico en vivo con todo el grupo,
+    // la pantalla vuelve tan tranquila al listado como si todo hubiera quedado
+    // guardado, y las calificaciones de TODOS los estudiantes ya no existen en ningún
+    // lado. No hay forma de recuperarlas: hay que volver a examinar al grupo.
+    // 🔒 Ahora se revisa CADA escritura, se cuentan las que fallaron y, si falló
+    // aunque sea una, NO se navega, NO se limpia nada y se dice exactamente cuántas
+    // y de quién.
+    var fallidos = [];
     for (var i = 0; i < _perfActiveGrades.length; i++) {
       var g = _perfActiveGrades[i];
       var finalScore = g.score !== null ? g.score : 0;
-      await supabaseClient.from('zm_perf_grades')
-        .update({ score: finalScore, graded_at: new Date().toISOString() })
-        .eq('session_id', _perfActiveSessionId)
-        .eq('student_id', g.student_id);
+      var _gr = null;
+      try {
+        _gr = await supabaseClient.from('zm_perf_grades')
+          .update({ score: finalScore, graded_at: new Date().toISOString() })
+          .eq('session_id', _perfActiveSessionId)
+          .eq('student_id', g.student_id);
+      } catch (e1) {
+        _gr = { error: { message: (e1 && e1.message) || 'fallo de red' } };
+      }
+      if (!_gr || _gr.error) {
+        var _gm = (_gr && _gr.error && _gr.error.message) || 'fallo de red';
+        console.warn('[LivePerformance] no se guardó la calificación de ' + (g.student_name || g.student_id) + ' (sesión ' + _perfActiveSessionId + '): ' + _gm, _gr && _gr.error);
+        fallidos.push(g.student_name || g.student_email || g.student_id);
+      }
+    }
+
+    if (fallidos.length > 0) {
+      // 🔒 Ni una palabra de "guardado", ni un `_showPerfDefaultView()`: la evaluación
+      // se queda abierta con las calificaciones en pantalla y en localStorage, que es
+      // lo único que le permite al instructor volver a intentar sin re-examinar.
+      var _detalle = fallidos.slice(0, 8).join(', ') + (fallidos.length > 8 ? ' …(+' + (fallidos.length - 8) + ')' : '');
+      var _msgP = _t('perf_save_partial', 'NO se guardaron todas las calificaciones. Fallaron: ') +
+                  fallidos.length + '/' + _perfActiveGrades.length + ' — ' + _detalle + '\n\n' +
+                  _t('perf_save_keep_open', 'La evaluación sigue abierta y las calificaciones siguen en pantalla. Vuelve a presionar Finalizar.');
+      if (window.showToast) window.showToast(_msgP, 'error');
+      alert('⚠️ ' + _msgP);
+      return;
     }
 
     // Compute average
-    var scores = _perfActiveGrades.map(function(g) { return g.score !== null ? g.score : 0; });
+    var scores = _perfActiveGrades.map(function(g2) { return g2.score !== null ? g2.score : 0; });
     var avg = scores.length > 0 ? (scores.reduce(function(a, b) { return a + b; }, 0) / scores.length).toFixed(2) : 0;
 
-    // Update session
-    await supabaseClient.from('zm_perf_sessions').update({
-      status: 'completed',
-      ended_at: new Date().toISOString(),
-      duration_seconds: _perfTimerSeconds,
-      avg_score: avg
-    }).eq('id', _perfActiveSessionId);
+    // Update session. 🔴 Este update tampoco se revisaba: si fallaba, las
+    // calificaciones quedaban guardadas pero la sesión seguía 'active' para siempre —
+    // no aparecía en el historial ni se podía ver su detalle, y al recargar el CRM
+    // reabría la evaluación como si nunca hubiera terminado.
+    var _ses = null;
+    try {
+      _ses = await supabaseClient.from('zm_perf_sessions').update({
+        status: 'completed',
+        ended_at: new Date().toISOString(),
+        duration_seconds: _perfTimerSeconds,
+        avg_score: avg
+      }).eq('id', _perfActiveSessionId);
+    } catch (e2) {
+      _ses = { error: { message: (e2 && e2.message) || 'fallo de red' } };
+    }
+    if (!_ses || _ses.error) {
+      var _sm = (_ses && _ses.error && _ses.error.message) || 'fallo de red';
+      console.warn('[LivePerformance] las calificaciones se guardaron pero no se cerró la sesión ' + _perfActiveSessionId + ': ' + _sm, _ses && _ses.error);
+      if (window.showToast) window.showToast(_t('perf_session_close_failed', 'Las calificaciones SÍ se guardaron, pero no pude cerrar la sesión. Vuelve a presionar Finalizar.'), 'error');
+      alert('⚠️ ' + _t('perf_session_close_failed', 'Las calificaciones SÍ se guardaron, pero no pude cerrar la sesión. Vuelve a presionar Finalizar.'));
+      return;
+    }
 
+    // Recién aquí es verdad que quedó todo guardado: ya se puede soltar la copia local.
     _showPerfDefaultView();
     loadPerfSessionHistory();
   } catch(e) {
+    console.warn('[LivePerformance] error inesperado al finalizar la evaluación: ' + ((e && e.message) || e), e);
     alert(_t('perf_final_err') + e.message);
   }
 }
@@ -478,23 +598,82 @@ async function finalizePerfSession() {
 async function cancelPerfSession() {
   if (!confirm(_t('perf_confirm_cancel'))) return;
   try {
-    await supabaseClient.from('zm_perf_sessions').update({
-      status: 'cancelled',
-      ended_at: new Date().toISOString(),
-      duration_seconds: _perfTimerSeconds
-    }).eq('id', _perfActiveSessionId);
+    // 🔴 Sin revisar `.error` este update "cancelaba" sin cancelar: la sesión quedaba
+    // 'active' en la base mientras `_showPerfDefaultView()` borraba la copia local.
+    // Síntoma real: al volver a abrir el CRM, `_checkActivePerfSession` ya no tiene la
+    // copia local pero la sesión zombi sigue activa en la base, bloqueando el arranque
+    // de la siguiente evaluación con un grupo esperando.
+    var _c = null;
+    try {
+      _c = await supabaseClient.from('zm_perf_sessions').update({
+        status: 'cancelled',
+        ended_at: new Date().toISOString(),
+        duration_seconds: _perfTimerSeconds
+      }).eq('id', _perfActiveSessionId);
+    } catch (e1) {
+      _c = { error: { message: (e1 && e1.message) || 'fallo de red' } };
+    }
+    if (!_c || _c.error) {
+      var _cm = (_c && _c.error && _c.error.message) || 'fallo de red';
+      console.warn('[LivePerformance] no se pudo cancelar la sesión ' + _perfActiveSessionId + ': ' + _cm, _c && _c.error);
+      if (window.showToast) window.showToast(_t('perf_cancel_failed', 'No pude cancelar la evaluación en el servidor. Sigue activa — vuelve a intentar.'), 'error');
+      alert('⚠️ ' + _t('perf_cancel_failed', 'No pude cancelar la evaluación en el servidor. Sigue activa — vuelve a intentar.'));
+      return;
+    }
     _showPerfDefaultView();
     loadPerfSessionHistory();
   } catch(e) {
+    console.warn('[LivePerformance] error inesperado al cancelar la evaluación: ' + ((e && e.message) || e), e);
     alert(_t('perf_cancel_err') + e.message);
   }
+}
+
+// 🔒 Modal de "no pude leer" para el detalle: se ve DISTINTO de una evaluación sin
+// calificaciones, y trae Reintentar. Nunca una hoja en blanco haciéndose pasar por dato.
+function _showPerfDetailError(sessionId, detalle) {
+  var prev = document.getElementById('perfDetailOverlay');
+  if (prev) prev.remove();
+  var overlay = document.createElement('div');
+  overlay.id = 'perfDetailOverlay';
+  overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.6);z-index:10000;display:flex;align-items:center;justify-content:center;padding:20px;';
+  overlay.innerHTML = '<div style="background:#fff;border-radius:16px;max-width:460px;width:100%;padding:24px;text-align:center;">' +
+    '<div style="font-size:34px;margin-bottom:8px;">⚠️</div>' +
+    '<div style="color:#1e293b;font-size:14px;font-weight:600;margin-bottom:6px;">' + _t('perf_detail_load_failed', 'No pude cargar las calificaciones de esta evaluación. NO están en cero — simplemente no las pude leer.') + '</div>' +
+    '<div style="color:#94a3b8;font-size:11px;margin-bottom:14px;">' + _escHtml(detalle || '') + '</div>' +
+    '<button onclick="document.getElementById(\'perfDetailOverlay\').remove();viewPerfSessionDetail(\'' + _escHtml(String(sessionId)) + '\')" style="padding:9px 20px;background:#2563eb;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;margin-right:8px;">🔄 ' + _t('perf_retry', 'Reintentar') + '</button>' +
+    '<button onclick="document.getElementById(\'perfDetailOverlay\').remove()" style="padding:9px 20px;background:#f1f5f9;color:#475569;border:1px solid #e2e8f0;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;">✕</button>' +
+  '</div>';
+  overlay.onclick = function(ev) { if (ev.target === overlay) overlay.remove(); };
+  document.body.appendChild(overlay);
 }
 
 async function viewPerfSessionDetail(sessionId) {
   try {
     var res = await supabaseClient.from('zm_perf_grades').select('*').eq('session_id', sessionId).order('student_name');
+    // 🔴 ANTES: `var grades = res.data || []`. Si la lectura fallaba se abría el modal
+    // con la tabla de calificaciones VACÍA y el encabezado normal. Síntoma real: el
+    // instructor abre "Ver Detalle" de una evaluación ya calificada y ve una hoja en
+    // blanco — cree que se le borraron las calificaciones del grupo. Peor todavía si
+    // la lee frente a un estudiante que reclama su nota.
+    // 🔒 Hoja en blanco NO es una respuesta: o se muestran los datos, o se dice que no
+    // se pudieron leer y se ofrece Reintentar.
+    if (res && res.error) {
+      console.warn('[LivePerformance] no se pudieron leer las calificaciones de la sesión ' + sessionId + ': ' + (res.error.message || '?'), res.error);
+      if (window.showToast) window.showToast(_t('perf_detail_load_failed', 'No pude cargar las calificaciones de esta evaluación. NO están en cero — simplemente no las pude leer.'), 'error');
+      _showPerfDetailError(sessionId, res.error.message || '');
+      return;
+    }
     var grades = res.data || [];
     var sesRes = await supabaseClient.from('zm_perf_sessions').select('*').eq('id', sessionId).single();
+    // 🪤 Sin esto, un fallo aquí dejaba `session = {}` y el modal pintaba
+    // "Invalid Date", área en blanco y Promedio "--" sobre calificaciones reales:
+    // media verdad, que es peor que un error claro.
+    if (sesRes && sesRes.error) {
+      console.warn('[LivePerformance] no se pudo leer la sesión ' + sessionId + ': ' + (sesRes.error.message || '?'), sesRes.error);
+      if (window.showToast) window.showToast(_t('perf_detail_load_failed', 'No pude cargar las calificaciones de esta evaluación. NO están en cero — simplemente no las pude leer.'), 'error');
+      _showPerfDetailError(sessionId, sesRes.error.message || '');
+      return;
+    }
     var session = sesRes.data || {};
 
     var overlay = document.createElement('div');
@@ -544,12 +723,30 @@ async function viewPerfSessionDetail(sessionId) {
 function exportPerfSessionsCSV() {
   if (!supabaseClient) return;
   supabaseClient.from('zm_perf_sessions').select('*').eq('status', 'completed').order('started_at', { ascending: false }).then(function(res) {
+    // 🔴 ANTES: `res.data || []` y, con la lista vacía, el aviso "No hay sesiones
+    // completadas para exportar". Síntoma real: el instructor pide el respaldo de todo
+    // el semestre, la consulta falla y el CRM le asegura que NO EXISTE ninguna
+    // evaluación completada. Eso no es un cero, es un "no pude preguntar".
+    if (res && res.error) {
+      console.warn('[LivePerformance] no se pudieron leer las sesiones para exportar: ' + (res.error.message || '?'), res.error);
+      if (window.showToast) window.showToast(_t('perf_export_failed', 'No pude leer las evaluaciones para exportar. No se descargó nada (un CSV vacío parecería que no hay datos).'), 'error');
+      return;
+    }
     var sessions = res.data || [];
     if (sessions.length === 0) { alert(_t('perf_no_sessions_exp')); return; }
 
     // Fetch all grades for completed sessions
     var sessionIds = sessions.map(function(s) { return s.id; });
     supabaseClient.from('zm_perf_grades').select('*').in('session_id', sessionIds).order('student_name').then(function(grRes) {
+      // 🔴 Igual de grave del otro lado: si fallaba ESTA lectura se descargaba un CSV con
+      // puro encabezado. Un archivo que se abre bien y está vacío se archiva como si fuera
+      // la verdad — el respaldo del semestre queda en blanco y nadie lo nota hasta que lo
+      // necesita. 🔒 Mejor no entregar archivo que entregar uno que miente.
+      if (grRes && grRes.error) {
+        console.warn('[LivePerformance] no se pudieron leer las calificaciones para exportar: ' + (grRes.error.message || '?'), grRes.error);
+        if (window.showToast) window.showToast(_t('perf_export_failed', 'No pude leer las evaluaciones para exportar. No se descargó nada (un CSV vacío parecería que no hay datos).'), 'error');
+        return;
+      }
       var grades = grRes.data || [];
       var csv = 'Fecha,Área,Título,Estudiante,Email,Calificación,Duración (seg)\n';
       // CSV-safe escaping: double quotes inside values, strip formula injection chars
@@ -583,7 +780,25 @@ async function _checkActivePerfSession() {
   // Verify session is still active in DB
   try {
     var res = await supabaseClient.from('zm_perf_sessions').select('*').eq('id', stored.id).eq('status', 'active').single();
-    if (!res.data) {
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // 🔴 ANTES: `if (!res.data) localStorage.removeItem('_perfActiveSession')`.
+    // ══════════════════════════════════════════════════════════════════════════
+    // supabase-js NO LANZA: si la lectura era rechazada (red, RLS, token vencido)
+    // devolvía {data:null, error:{...}} y `!res.data` era verdadero. O sea: un parpadeo
+    // de conexión BORRABA la copia local de la evaluación en curso.
+    // Síntoma real: el instructor está calificando en vivo, se le va el WiFi un segundo,
+    // recarga el CRM y la evaluación —con las calificaciones ya tecleadas— desapareció.
+    // 🪤 `.single()` con CERO filas también trae `error`, con code 'PGRST116'. Ese SÍ es
+    // un "ya no está activa" legítimo y ahí sí se limpia. Cualquier otro error es
+    // "no pude preguntar" y NO se toca nada.
+    var _noExiste = res && res.error && (res.error.code === 'PGRST116' || /0 rows|multiple \(or no\) rows/i.test(res.error.message || ''));
+    if (res && res.error && !_noExiste) {
+      console.warn('[LivePerformance] no se pudo confirmar la evaluación en curso ' + stored.id + ': ' + (res.error.message || '?'), res.error);
+      if (window.showToast) window.showToast(_t('perf_active_check_failed', 'No pude confirmar tu evaluación en curso. NO se borró: revisa tu conexión y vuelve a entrar.'), 'warning');
+      return 'unknown';
+    }
+    if (!res || !res.data) {
       localStorage.removeItem('_perfActiveSession');
       return false;
     }
@@ -615,15 +830,35 @@ async function _checkActivePerfSession() {
     _updatePerfTimerDisplay();
     return true;
   } catch(e) {
-    localStorage.removeItem('_perfActiveSession');
-    return false;
+    // 🔴 Este catch BORRABA la evaluación en curso ante cualquier tropiezo — hasta un
+    // error de pintado dejaba al instructor sin las calificaciones que ya había puesto.
+    // 🔒 Duda = no destruir. Se conserva la copia local y se avisa.
+    console.warn('[LivePerformance] error inesperado al restaurar la evaluación en curso ' + stored.id + ': ' + ((e && e.message) || e), e);
+    if (window.showToast) window.showToast(_t('perf_active_check_failed', 'No pude confirmar tu evaluación en curso. NO se borró: revisa tu conexión y vuelve a entrar.'), 'warning');
+    return 'unknown';
   }
 }
 
 async function deletePerfSession(sessionId) {
   if (!confirm(_t('perf_confirm_del'))) return;
   try {
-    await supabaseClient.from('zm_perf_sessions').delete().eq('id', sessionId);
+    // 🔴 El delete tampoco se revisaba. Como supabase-js resuelve con {error}, un borrado
+    // rechazado por RLS pasaba por bueno y se repintaba el historial. Síntoma real: el
+    // admin borra una sesión, la fila reaparece ahí mismo sin explicación y él la vuelve
+    // a borrar en círculos, sin enterarse nunca de que no tiene permiso.
+    var _del = null;
+    try {
+      _del = await supabaseClient.from('zm_perf_sessions').delete().eq('id', sessionId);
+    } catch (e1) {
+      _del = { error: { message: (e1 && e1.message) || 'fallo de red' } };
+    }
+    if (!_del || _del.error) {
+      var _dm = (_del && _del.error && _del.error.message) || 'fallo de red';
+      console.warn('[LivePerformance] no se pudo eliminar la sesión ' + sessionId + ': ' + _dm, _del && _del.error);
+      if (window.showToast) window.showToast(_t('perf_delete_failed', 'No pude eliminar la sesión. Sigue ahí — vuelve a intentar.'), 'error');
+      alert('⚠️ ' + _t('perf_delete_failed', 'No pude eliminar la sesión. Sigue ahí — vuelve a intentar.'));
+      return;
+    }
     loadPerfSessionHistory();
   } catch(e) {
     alert(_t('perf_del_err') + e.message);

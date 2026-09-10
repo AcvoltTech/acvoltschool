@@ -257,6 +257,14 @@
       adm_ss_membership_299: { es: 'Membres\u00EDa $299', en: '$299 Membership' },
       adm_ss_col_name: { es: 'Nombre', en: 'Name' },
       adm_ss_col_group: { es: 'Grupo', en: 'Group' },
+      // 🔴 Llaves nuevas (10-sep-2026): antes el panel gritaba "✅ hecho" aunque la
+      // escritura hubiera fallado. Estas son las frases que dicen la VERDAD.
+      adm_ss_err_toggle_block: { es: 'NO se pudo {action} a {email}. Sigue como estaba.\nMotivo: {msg}', en: 'Could not {action} {email}. Nothing changed.\nReason: {msg}' },
+      adm_ss_bulk_failed_list: { es: 'NO se bloquearon (siguen con acceso):', en: 'NOT blocked (they still have access):' },
+      adm_ss_blocked_list_fail: { es: 'no pude cargar la lista de bloqueados', en: 'could not load the blocked list' },
+      adm_ss_retry: { es: 'Reintentar', en: 'Retry' },
+      adm_ss_err_survey_save: { es: 'NO se guard\u00F3 el survey.\nMotivo: {msg}\n\nLos datos siguen en el formulario: NO cierres la ventana, corrige e intenta otra vez.', en: 'The survey was NOT saved.\nReason: {msg}\n\nYour answers are still in the form: do NOT close the window, fix it and try again.' },
+      adm_ss_mem_unknown: { es: 'No pude consultar la membres\u00EDa', en: 'Could not check the membership' },
     });
 
     // ========== STUDENT SUCCESS FUNCTIONS ==========
@@ -552,16 +560,25 @@
       try {
         var _ud_user = await usersDataAdmin('admin_get', { email: email }); var user = _ud_user.data;
         var membership = null;
-        try {
-          var { data: memArr } = await MaestroMemberships.byEmail(email, { limit: 1 });
-          membership = memArr && memArr.length > 0 ? memArr[0] : null;
-        } catch(e) {}
+        // 🪤 byEmail() no truena: devuelve { error }. Ignorarlo hacía que una consulta caída
+        // se viera igual que "Sin membresía", y el agente le decía a un cliente que paga que
+        // no tenía nada. Si falla, se dice "no pude consultar".
+        var memErr = false;
+        var memRes = await MaestroMemberships.byEmail(email, { limit: 1 });
+        if (!memRes || memRes.error) {
+          memErr = true;
+          console.warn('[SS] membresía (ticket) de ' + email + ': ' + ((memRes && memRes.error && memRes.error.message) || 'sin respuesta'), memRes && memRes.error);
+        } else {
+          membership = memRes.data && memRes.data.length > 0 ? memRes.data[0] : null;
+        }
 
         var nombre = user ? (user.nombre || 'N/A') : _t('adm_ss_not_found');
         var tel = user ? (user.telefono || '') : '';
         var ciudad = user ? (user.ciudad || '') : '';
         var techNum = user ? (user.technician_number || 'N/A') : 'N/A';
-        var memStatus = membership ? (membership.activa ? '✅ ' + _t('adm_ss_active_mem') + ' — ' + (membership.plan_name || membership.tier || '') : '❌ ' + _t('adm_ss_inactive_mem')) : '⚠️ ' + _t('adm_ss_no_membership');
+        var memStatus = memErr
+          ? '⚠️ ' + _t('adm_ss_mem_unknown', 'No pude consultar la membresía')
+          : (membership ? (membership.activa ? '✅ ' + _t('adm_ss_active_mem') + ' — ' + (membership.plan_name || membership.tier || '') : '❌ ' + _t('adm_ss_inactive_mem')) : '⚠️ ' + _t('adm_ss_no_membership'));
         
         var content = '<div style="background:rgba(0,212,255,0.05);border:1px solid #00d4ff;border-radius:12px;padding:15px;">' +
           '<h3 style="color:var(--blue-light);margin:0 0 10px;">👤 ' + _escHtml(nombre) + '</h3>' +
@@ -590,15 +607,22 @@
       try {
         var _ud_user = await usersDataAdmin('admin_get', { email: email }); var user = _ud_user.data;
         var membership = null;
-        try {
-          var { data: memArr2 } = await MaestroMemberships.byEmail(email, { limit: 1 });
-          membership = memArr2 && memArr2.length > 0 ? memArr2[0] : null;
-        } catch(e) {}
+        // 🪤 Mismo caso: sin revisar .error, una consulta caída se pinta como "Sin membresía".
+        var memErr2 = false;
+        var memRes2 = await MaestroMemberships.byEmail(email, { limit: 1 });
+        if (!memRes2 || memRes2.error) {
+          memErr2 = true;
+          console.warn('[SS] membresía (survey) de ' + email + ': ' + ((memRes2 && memRes2.error && memRes2.error.message) || 'sin respuesta'), memRes2 && memRes2.error);
+        } else {
+          membership = memRes2.data && memRes2.data.length > 0 ? memRes2.data[0] : null;
+        }
         var { data: prevSurveys } = await supabaseClient.from('student_success_surveys').select('id').eq('student_email', email);
         var surveyCount = prevSurveys ? prevSurveys.length : 0;
         
         if (user) {
-          var memStatus = membership ? (membership.activa ? '✅ ' + _t('adm_ss_active_mem', 'Activa') : '❌ ' + _t('adm_ss_inactive_mem', 'Inactiva')) : '⚠️ ' + _t('adm_ss_no_membership', 'Sin membresía');
+          var memStatus = memErr2
+            ? '⚠️ ' + _t('adm_ss_mem_unknown', 'No pude consultar la membresía')
+            : (membership ? (membership.activa ? '✅ ' + _t('adm_ss_active_mem', 'Activa') : '❌ ' + _t('adm_ss_inactive_mem', 'Inactiva')) : '⚠️ ' + _t('adm_ss_no_membership', 'Sin membresía'));
           var memPlan = membership ? (membership.plan_name || membership.tier || 'N/A') : 'N/A';
           var memColor = membership && membership.activa ? '#27ae60' : '#e74c3c';
           
@@ -689,7 +713,16 @@
           notas_agente: document.getElementById('ssFormNotas').value.trim(),
           created_at: new Date().toISOString()
         };
-        await supabaseClient.from('student_success_surveys').insert(survey);
+        // 🔴 RAÍZ: supabase-js NO tira excepción — devuelve { error }. Aquí se ignoraba,
+        // se gritaba "✅ guardado" y ACTO SEGUIDO se limpiaba el formulario: el motivo de
+        // cancelación y las notas del agente de la llamada de retención se BORRABAN de la
+        // pantalla sin haber llegado nunca a la base. Ahora si falla no se limpia nada.
+        var _insSurvey = await supabaseClient.from('student_success_surveys').insert(survey);
+        if (_insSurvey && _insSurvey.error) {
+          console.warn('[SS] guardar survey de ' + email + ': ' + _insSurvey.error.message, _insSurvey.error);
+          alert('❌ ' + _t('adm_ss_err_survey_save', 'NO se guard\u00F3 el survey.\nMotivo: {msg}\n\nLos datos siguen en el formulario: NO cierres la ventana, corrige e intenta otra vez.').replace('{msg}', _insSurvey.error.message || 'desconocido'));
+          return;
+        }
         alert('✅ ' + _t('adm_ss_survey_saved'));
         // Reset form
         document.getElementById('ssFormEmail').value = '';
@@ -1286,7 +1319,13 @@
       _ssDashFiltered = data;
 
       // Update label
-      document.getElementById('ssDashReportLabel').innerHTML = (labels[_ssDashCurrentReport] || labels.all) + ' — <span id="ssDashCount">' + data.length + '</span> resultados';
+      // 🪤 Si no se pudo traer la lista de bloqueados, la columna de acciones NO es de fiar
+      // (pintaría 🚫 "Bloquear" sobre gente ya bloqueada). Se dice en pantalla, no se calla.
+      var avisoBloq = _ssDashBlockedFailed
+        ? ' <span style="color:#dc2626;font-size:11px;font-weight:600;">⚠️ ' + _t('adm_ss_blocked_list_fail', 'no pude cargar la lista de bloqueados') +
+          ' · <a href="javascript:void(0)" onclick="ssDashRetryBlocked()" style="color:#dc2626;text-decoration:underline;">' + _t('adm_ss_retry', 'Reintentar') + '</a></span>'
+        : '';
+      document.getElementById('ssDashReportLabel').innerHTML = (labels[_ssDashCurrentReport] || labels.all) + ' — <span id="ssDashCount">' + data.length + '</span> resultados' + avisoBloq;
 
       // Render summary KPIs (always from full data)
       var allActive = _ssDashData.filter(function(s) { return s.status === 'Active'; });
@@ -1390,16 +1429,35 @@
     }
     // ========== SS DASHBOARD: CONTACT, EXPORT & BLOCK ==========
     var _ssDashBlockedEmails = {};
+    // 🪤 Bandera para que la pantalla pueda decir "no sé" en vez de mentir con "nadie bloqueado".
+    var _ssDashBlockedFailed = false;
 
     // Load blocked emails from memberships table
+    // 🔴 RAÍZ: MaestroMemberships.list() NUNCA truena. Si la edge devuelve HTTP 500 o no hay
+    // sesión de admin, RESUELVE con { data:null, error:{...} } (ver js/admin/memberships-api.js).
+    // Este código solo miraba `data`, así que un fallo dejaba _ssDashBlockedEmails VACÍO y el
+    // tablero pintaba a TODOS los bloqueados como si tuvieran acceso: el admin veía el botón
+    // 🚫 "Bloquear" en alguien que YA estaba bloqueado, y creía que la lista estaba limpia.
+    // Ahora se revisa .error, se conserva lo último bueno que se supo, y la pantalla avisa.
     async function ssDashLoadBlocked() {
-      try {
-        var { data } = await MaestroMemberships.list('email,activa').then(function(r){ return { data: (r.data||[]).filter(function(x){ return x.activa === false; }) }; });
-        _ssDashBlockedEmails = {};
-        if (data) data.forEach(function(m) {
-          if (m.email) _ssDashBlockedEmails[m.email.toLowerCase().trim()] = true;
-        });
-      } catch(e) { console.log('[SSDash] Load blocked error:', e); }
+      var res = await MaestroMemberships.list('email,activa');
+      if (!res || res.error) {
+        _ssDashBlockedFailed = true;
+        console.warn('[SS] cargar lista de bloqueados: ' + ((res && res.error && res.error.message) || 'sin respuesta'), res && res.error);
+        return false;
+      }
+      _ssDashBlockedFailed = false;
+      _ssDashBlockedEmails = {};
+      (res.data || []).forEach(function(m) {
+        if (m && m.email && m.activa === false) _ssDashBlockedEmails[String(m.email).toLowerCase().trim()] = true;
+      });
+      return true;
+    }
+
+    // Reintento manual del aviso "no pude cargar la lista de bloqueados"
+    async function ssDashRetryBlocked() {
+      await ssDashLoadBlocked();
+      renderSSDashboard();
     }
 
     // Contact student via email/tel/whatsapp
@@ -1420,20 +1478,33 @@
       if (typeof isAdminAuthenticated === 'function' && !isAdminAuthenticated()) { alert(_t('adm_ss_access_denied', 'Acceso denegado')); return; }
       var action = block ? _t('adm_ss_block') : _t('adm_ss_unblock');
       if (!confirm(_t('adm_ss_confirm_block').replace('{action}', action).replace('{email}', email) + '\n\n' + (block ? _t('adm_ss_block_msg') : _t('adm_ss_unblock_msg')))) return;
+      // 🔴 RAÍZ (camino del DINERO): setActiva() NUNCA lanza excepción — devuelve
+      // { data:null, error:{...} } cuando la edge falla o no hay sesión de admin. El try/catch
+      // de abajo NO atrapaba nada, así que el "✅ Desbloqueado" salía IGUAL cuando la llamada
+      // fue rechazada: el estudiante que acababa de pagar seguía sin poder entrar, el admin le
+      // decía "limpia tu caché" y el caso se cerraba en falso. Al revés igual de grave: un
+      // "✅ Bloqueado" mentiroso deja al moroso con acceso completo.
+      // Ahora se revisa .error y SOLO se canta victoria (y se toca el caché local) si de verdad pasó.
+      var key = String(email).toLowerCase().trim();
       try {
-        if (block) {
-          await MaestroMemberships.setActiva(email, false);
-          _ssDashBlockedEmails[email] = true;
-        } else {
-          await MaestroMemberships.setActiva(email, true);
-          delete _ssDashBlockedEmails[email];
+        var res = await MaestroMemberships.setActiva(email, !block);
+        if (!res || res.error) {
+          var motivo = (res && res.error && res.error.message) || 'sin respuesta del servidor';
+          console.warn('[SS] setActiva(' + email + ', activa=' + (!block) + '): ' + motivo, res && res.error);
+          alert('❌ ' + _t('adm_ss_err_toggle_block', 'NO se pudo {action} a {email}. Sigue como estaba.\nMotivo: {msg}')
+            .replace('{action}', action).replace('{email}', email).replace('{msg}', motivo));
+          return;
         }
+        if (block) _ssDashBlockedEmails[key] = true;
+        else delete _ssDashBlockedEmails[key];
         if (typeof auditLog === 'function') auditLog('membership.toggle_block', { target_email: email, blocked: block });
         // Clear their local membership cache
         localStorage.removeItem('maestroac_membership_cache_' + email);
         alert('✅ ' + email + ' — ' + (block ? _t('adm_ss_blocked') : _t('adm_ss_unblocked')));
         renderSSDashboard();
       } catch(e) {
+        // Solo llega aquí por algo local (localStorage bloqueado, auditLog roto), NO por la red.
+        console.warn('[SS] toggle bloqueo local de ' + email + ': ' + (e && e.message), e);
         alert('❌ Error: ' + e.message);
       }
     }
@@ -1450,19 +1521,37 @@
         inactive = inactive.slice(0, BULK_LIMIT);
       }
       if (!confirm('⚠️ ' + _t('adm_ss_bulk_block_confirm').replace('{n}', inactive.length))) return;
+      // 🔴 RAÍZ: `blocked++` corría SIEMPRE y `errors` no podía subir nunca, porque setActiva()
+      // no lanza excepción: devuelve { error }. El resultado era el peor reporte posible —
+      // "✅ 200 bloqueados / 0 errores" con los 200 rechazados y todos con acceso intacto.
+      // Ahora solo cuenta (y solo marca la lista local) lo que de verdad se guardó, y nombra
+      // a los que quedaron fuera para poder reintentarlos a mano.
       var blocked = 0;
       var errors = 0;
+      var fallidos = [];
       for (var i = 0; i < inactive.length; i++) {
-        try {
-          var email = inactive[i].email;
-          await MaestroMemberships.setActiva(email, false);
-          _ssDashBlockedEmails[email] = true;
-          localStorage.removeItem('maestroac_membership_cache_' + email);
-          blocked++;
-        } catch(e) { errors++; }
+        var email = inactive[i].email;
+        var res = await MaestroMemberships.setActiva(email, false);
+        if (!res || res.error) {
+          errors++;
+          fallidos.push(email);
+          console.warn('[SS] bloqueo masivo, falló ' + email + ': ' + ((res && res.error && res.error.message) || 'sin respuesta'), res && res.error);
+          continue;
+        }
+        _ssDashBlockedEmails[String(email).toLowerCase().trim()] = true;
+        try { localStorage.removeItem('maestroac_membership_cache_' + email); } catch(_e) {}
+        blocked++;
       }
-      if (typeof auditLog === 'function') auditLog('membership.bulk_block_ss', { count: blocked, errors: errors });
-      alert('✅ ' + _t('adm_ss_blocked_count').replace('{n}', blocked) + (errors > 0 ? '\n❌ ' + _t('adm_ss_errors_count').replace('{n}', errors) : '') + '\n\n' + _t('adm_ss_blocked_see_msg'));
+      if (typeof auditLog === 'function') auditLog('membership.bulk_block_ss', { count: blocked, errors: errors, failed: fallidos.slice(0, 50) });
+      var resumen = (blocked > 0 ? '✅ ' : '') + _t('adm_ss_blocked_count').replace('{n}', blocked);
+      if (errors > 0) {
+        resumen += '\n❌ ' + _t('adm_ss_errors_count').replace('{n}', errors) +
+          '\n\n' + _t('adm_ss_bulk_failed_list', 'NO se bloquearon (siguen con acceso):') + '\n' +
+          fallidos.slice(0, 20).join('\n') +
+          (fallidos.length > 20 ? '\n… y ' + (fallidos.length - 20) + ' más (ver la consola)' : '');
+      }
+      resumen += '\n\n' + _t('adm_ss_blocked_see_msg');
+      alert(resumen);
       renderSSDashboard();
     }
 
@@ -1497,17 +1586,30 @@
     // ========== BLOCKED STUDENT OVERLAY FUNCTIONS ==========
 
     // Check if student is blocked (has inactive membership record)
+    // 🔴 RAÍZ: las dos consultas ignoraban .error y byEmail() NO truena — un fallo devolvía
+    // data:null, que aquí se leía como "no está bloqueado". Es un candado que FALLA ABIERTO
+    // sobre el paywall: con la edge caída o sin sesión de admin, cualquiera pasaba.
+    // 🪤 Ahora "no pude saber" es un estado propio y distinto de "no está bloqueado".
+    // DEVUELVE SIEMPRE un objeto (antes: membership | null):
+    //   { estado: 'bloqueado'|'libre'|'desconocido', membership: fila|null }
+    // Quien llame DEBE decidir qué hacer con 'desconocido' — nunca tratarlo como 'libre'.
     async function checkIfBlocked(email) {
-      if (!supabaseClient || !email) return null;
-      try {
-        // First check if there's an ACTIVE membership — if so, not blocked
-        var { data: activeRows } = await MaestroMemberships.byEmail(email, { select: 'id', activa: true, limit: 1 });
-        if (activeRows && activeRows.length > 0) return null;
-        // No active membership — check for blocked (activa=false)
-        var { data } = await MaestroMemberships.byEmail(email, { activa: false, limit: 1 });
-        if (data && data.length > 0) return data[0];
-        return null;
-      } catch(e) { console.log('[Blocked] Check error:', e); return null; }
+      if (!supabaseClient || !email) return { estado: 'desconocido', membership: null };
+      // First check if there's an ACTIVE membership — if so, not blocked
+      var act = await MaestroMemberships.byEmail(email, { select: 'id', activa: true, limit: 1 });
+      if (!act || act.error) {
+        console.warn('[SS] checkIfBlocked, membresía activa de ' + email + ': ' + ((act && act.error && act.error.message) || 'sin respuesta'), act && act.error);
+        return { estado: 'desconocido', membership: null };
+      }
+      if (act.data && act.data.length > 0) return { estado: 'libre', membership: null };
+      // No active membership — check for blocked (activa=false)
+      var blo = await MaestroMemberships.byEmail(email, { activa: false, limit: 1 });
+      if (!blo || blo.error) {
+        console.warn('[SS] checkIfBlocked, membresía bloqueada de ' + email + ': ' + ((blo && blo.error && blo.error.message) || 'sin respuesta'), blo && blo.error);
+        return { estado: 'desconocido', membership: null };
+      }
+      if (blo.data && blo.data.length > 0) return { estado: 'bloqueado', membership: blo.data[0] };
+      return { estado: 'libre', membership: null };
     }
 
     // Show blocked student overlay
@@ -2557,7 +2659,9 @@
     async function logExamRequest(examName, examPrice, nombre, email, techNumber, studentId, results) {
       try {
         if (!supabaseClient) return;
-        await supabaseClient.from('exam_requests').insert({
+        // 🪤 insert() no truena: devuelve { error }. Sin revisarlo, la solicitud de examen
+        // se perdía en silencio (solo quedaba la copia de localStorage de este teléfono).
+        var _insExam = await supabaseClient.from('exam_requests').insert({
           exam_name: examName,
           exam_price: examPrice,
           student_name: nombre,
@@ -2568,7 +2672,8 @@
           status: 'pending',
           requested_at: new Date().toISOString()
         });
-      } catch(e) { console.log('[Admin] Exam request log error:', e); }
+        if (_insExam && _insExam.error) console.warn('[SS] registrar solicitud de examen de ' + email + ': ' + _insExam.error.message, _insExam.error);
+      } catch(e) { console.warn('[SS] registrar solicitud de examen: ' + (e && e.message), e); }
       // Also save locally as fallback
       try {
         var requests = JSON.parse(localStorage.getItem('maestroac_exam_requests') || '[]');

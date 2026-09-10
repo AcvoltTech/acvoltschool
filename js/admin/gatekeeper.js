@@ -1,3 +1,16 @@
+// 🪤 TRAMPA ESTRUCTURAL (vista 10-sep-2026): este archivo usa `_escHtml` 26 veces
+// pero NO lo define — vive en `js/video-tutoriales.js`, otro módulo perezoso. Como
+// MaestroLoader carga en PARALELO, si gatekeeper abre sin que ese archivo haya
+// entrado, `_escHtml` no existe y truena. Ya era así antes de hoy y arreglar las 26
+// llamadas es otro cambio; lo que NO se puede permitir es que el mensaje de ERROR
+// dependa de él: sería la pantalla de fallo tumbándose a sí misma y dejando al admin
+// sin una sola pista. Por eso las rutas de error usan este escape local.
+function _gkEsc(s) {
+  var d = document.createElement('div');
+  d.textContent = (s === null || s === undefined) ? '' : String(s);
+  return d.innerHTML;
+}
+
 if (typeof _addTranslations === 'function') _addTranslations({
   adm_gk_access_control: { es: 'Control de Acceso', en: 'Access Control' },
   adm_gk_add_student: { es: 'Agregar Estudiante', en: 'Add Student' },
@@ -18,7 +31,6 @@ if (typeof _addTranslations === 'function') _addTranslations({
   adm_gk_group: { es: 'Grupo', en: 'Group' },
   adm_gk_loading: { es: 'Cargando datos...', en: 'Loading data...' },
   adm_gk_db_unavail: { es: 'Base de datos no disponible', en: 'Database not available' },
-  adm_gk_error_loading: { es: 'Error cargando datos', en: 'Error loading data' },
   adm_gk_no_students: { es: 'No se encontraron estudiantes', en: 'No students found' },
   adm_gk_active_badge: { es: 'Activo', en: 'Active' },
   adm_gk_blocked_badge: { es: 'Bloqueado', en: 'Blocked' },
@@ -252,11 +264,48 @@ async function loadGatekeeperData() {
   try {
     if (!supabaseClient) { _gkLoading = false; if (listEl) listEl.innerHTML = '<div style="text-align:center;color:#ef4444;padding:40px;">' + _t('adm_gk_db_unavail') + '</div>'; return; }
     // 1. Memberships
+    // 🔴 RAÍZ (10-sep-2026): `mbRes.data || []` convertía un FALLO en "nadie paga".
+    // Ni `MaestroMemberships.list` ni supabase-js LANZAN: cuando la edge rechaza
+    // (sesión de admin caducada, RLS, 400) contestan {data:null, error:{...}} y se
+    // resuelven normal. Con la lista vacía TODO el padrón se pintaba con
+    // `activa: null` — el cohorte entero se veía SIN PAGAR. Desde esta pantalla se
+    // bloquea gente, así que un cero falso aquí se traduce en cortarle el acceso a
+    // quien sí pagó. 🔒 Si la tabla del DINERO no se pudo leer, no se pinta nada.
     var mbRes = await MaestroMemberships.list('*');
+    if (mbRes && mbRes.error) {
+      _gkLoading = false;
+      var _msgMb = (mbRes.error.message || mbRes.error);
+      console.warn('[Gatekeeper] no se pudieron leer las membresías: ' + _msgMb, mbRes.error);
+      if (listEl) {
+        listEl.innerHTML = '<div style="text-align:center;color:#ef4444;padding:40px;">' +
+          '⚠️ ' + _gkEsc(_t('adm_gk_mem_fail', 'No pude cargar las membresías. NO quiere decir que nadie pague — la consulta falló.')) +
+          '<br><span style="color:#94a3b8;font-size:12px;">' + _gkEsc(_msgMb) + '</span><br>' +
+          '<button onclick="loadGatekeeperData()" style="margin-top:14px;padding:8px 18px;background:#334155;color:#e2e8f0;border:none;border-radius:8px;font-weight:700;cursor:pointer;">🔄 ' +
+          _gkEsc(_t('adm_gk_retry', 'Reintentar')) + '</button></div>';
+      }
+      return;
+    }
     var memberships = (mbRes.data || []);
 
     // 2. Technicians (all registered users)
+    // 🪤 `usersDataAdmin('admin_list', {limit: 5000})` SÍ pagina solo (ver
+    // js/users-data-client.js): con limit >= 1000 y sin offset se trae la tabla
+    // completa, así que aquí NO aplica el tope de 1,000 de PostgREST. Lo que sí
+    // faltaba era leer el error, por la misma razón que arriba.
     var techRes = await usersDataAdmin('admin_list', { limit: 5000, fields: ["email","nombre","telefono","ciudad","estado"] });
+    if (techRes && techRes.error) {
+      _gkLoading = false;
+      var _msgTec = (techRes.error.message || techRes.error);
+      console.warn('[Gatekeeper] no se pudo leer el padrón de técnicos: ' + _msgTec, techRes.error);
+      if (listEl) {
+        listEl.innerHTML = '<div style="text-align:center;color:#ef4444;padding:40px;">' +
+          '⚠️ ' + _gkEsc(_t('adm_gk_tech_fail', 'No pude cargar el padrón de técnicos.')) +
+          '<br><span style="color:#94a3b8;font-size:12px;">' + _gkEsc(_msgTec) + '</span><br>' +
+          '<button onclick="loadGatekeeperData()" style="margin-top:14px;padding:8px 18px;background:#334155;color:#e2e8f0;border:none;border-radius:8px;font-weight:700;cursor:pointer;">🔄 ' +
+          _gkEsc(_t('adm_gk_retry', 'Reintentar')) + '</button></div>';
+      }
+      return;
+    }
     var technicians = (techRes.data || []);
 
     // 3. Student groups (local + supabase synced)

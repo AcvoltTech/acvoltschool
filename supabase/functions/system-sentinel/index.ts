@@ -149,17 +149,42 @@ serve(async (req) => {
   // ── CHECK 5: Push subscriptions count by inferred platform ──
   {
     const r = await timed(async () => {
-      const { data, error } = await supabase.from('push_subscriptions')
-        .select('user_agent, active').eq('active', true);
-      if (error) throw new Error(error.message);
-      const counts: Record<string, number> = { web: 0, ios: 0, android: 0, unknown: 0 };
-      for (const row of data || []) {
-        const ua = (row.user_agent || '').toLowerCase();
-        if (ua.includes('android')) counts.android++;
-        else if (ua.includes('iphone') || ua.includes('ipad') || ua.includes('ios')) counts.ios++;
-        else if (ua) counts.web++;
-        else counts.unknown++;
-      }
+      // 🔴 RAÍZ: antes esto se leía fila por fila (`select('user_agent, active')`) y
+      // PostgREST corta TODA consulta en 1,000 filas (max_rows = 1000, del SERVIDOR).
+      // Sin error, sin aviso, HTTP 200. Síntoma real: la mezcla de plataformas daba
+      // SIEMPRE exactamente 1,000 y así se escribía en `health_log` cada 5 minutos —
+      // la gráfica llevaba meses congelada y nunca se movía. Medido 2026-09-10: hay
+      // 5,838 suscripciones activas (android 3,366 · ios 2,454 · web 18), no 1,000.
+      // 🪤 `.limit(N)` NO rompe el tope. Aquí ni siquiera hace falta paginar: se cuenta
+      // en el servidor con `count: 'exact', head: true` (no baja ni una fila, y este
+      // check corre cada 5 minutos — bajar 5,800 user-agents cada vez era regalar ancho
+      // de banda). Las categorías son las MISMAS de antes y no se traslapan:
+      //   android = ua contiene 'android'
+      //   ios     = ua contiene iphone/ipad/ios y NO contiene android
+      //   unknown = ua nulo o vacío
+      //   web     = el resto
+      const countOf = async (build: () => PromiseLike<{ count: number | null; error: { message?: string } | null }>) => {
+        const { count, error } = await build();
+        // 🪤 supabase-js NUNCA tira excepción: si no se revisa `error`, un conteo roto
+        // pasa como 0 y el sentinel reporta 'WARN' en vez de 'FAIL'.
+        if (error) throw new Error(error.message || String(error));
+        return count || 0;
+      };
+      const base = () => supabase.from('push_subscriptions').select('id', { count: 'exact', head: true }).eq('active', true);
+      const total = await countOf(() => base());
+      const android = await countOf(() => base().ilike('user_agent', '%android%'));
+      const ios = await countOf(() => base()
+        .not('user_agent', 'ilike', '%android%')
+        .or('user_agent.ilike.%iphone%,user_agent.ilike.%ipad%,user_agent.ilike.%ios%'));
+      const uaNull = await countOf(() => base().is('user_agent', null));
+      const uaEmpty = await countOf(() => base().eq('user_agent', ''));
+      const unknown = uaNull + uaEmpty;
+      const counts: Record<string, number> = {
+        web: Math.max(0, total - android - ios - unknown),
+        ios,
+        android,
+        unknown,
+      };
       return counts;
     });
     const total = r.value ? Object.values(r.value as Record<string, number>).reduce((a, b) => a + b, 0) : 0;

@@ -405,6 +405,20 @@
           body: JSON.stringify({ action: 'check_subscription', email: email })
         });
         
+        // 🔴 ANTES: si la edge respondía 500/403 se caía al `return` de hasta abajo y
+        // el admin leía "NO tiene membresía activa en Stripe" — o sea, se acusaba de
+        // moroso a quien SÍ pagó, por una falla NUESTRA. "No pude preguntar" no es
+        // "no pagó". Ahora se marca `unknown:true` y arriba se dice otra cosa.
+        if (!response.ok) {
+          var _bodyTxt = '';
+          try { _bodyTxt = await response.text(); } catch (e2) { _bodyTxt = ''; }
+          console.warn('[Stripe Check] la edge get-stripe-data respondió HTTP ' + response.status + ' para ' + email, _bodyTxt.slice(0, 300));
+          return {
+            active: false, unknown: true, plan: null,
+            error: _tc('radio_stripe_unreachable', 'No pude consultar Stripe (HTTP ' + response.status + '). Esto NO significa que no haya pagado.')
+          };
+        }
+
         if (response.ok) {
           const data = await response.json();
           if (data.active || data.has_subscription) {
@@ -451,72 +465,171 @@
         return { active: false, plan: null, error: _tc('radio_no_active_payment', 'No se encontro pago activo ($20/mes, $240/año, o Membresia)') };
         
       } catch(e) {
-        console.warn('[Stripe Check]', e);
-        return { active: false, plan: null, error: _tc('radio_stripe_error', 'Error conectando con Stripe') + ': ' + e.message };
+        // 🪤 `fetch` SÍ lanza (a diferencia de supabase-js), así que este catch sí corre:
+        // es red caída, no "no pagó". Se marca `unknown` por la misma razón de arriba.
+        console.warn('[Stripe Check] no se pudo consultar Stripe para ' + email + ': ' + ((e && e.message) || e), e);
+        return { active: false, unknown: true, plan: null, error: _tc('radio_stripe_error', 'Error conectando con Stripe') + ': ' + e.message };
       }
     }
 
-    async function approveAccessCode(index) {
-      let requests = [];
+    // ════════════════════════════════════════════════════════════════════════════
+    // 🔴 RAÍZ (10-sep-2026): SE APROBABA / RECHAZABA AL ESTUDIANTE EQUIVOCADO.
+    // ════════════════════════════════════════════════════════════════════════════
+    // supabase-js NO LANZA: una consulta rechazada (RLS, red, token vencido) RESUELVE
+    // con {data:null, error:{...}}. Por eso el `try/catch` que envolvía esta lectura
+    // era zona muerta, y `const { data } = ...` convertía una FALLA en "no hay nada".
+    // Con la lista vacía, el `if (requests.length === 0)` de abajo caía al respaldo de
+    // localStorage: OTRA lista, CON OTRO ORDEN. Pero el `index` que llega desde el
+    // botón lo pintó la tabla con la lista DEL SERVIDOR.
+    // Síntoma real: Mario aprieta "Aprobar" en el renglón 3 y le aprueba —o peor, le
+    // RECHAZA— el acceso que YA PAGÓ a un estudiante distinto.
+    // 🔒 Ahora se lee `.error`. Si el servidor falló NO se sustituye la lista por
+    // ninguna otra: se aborta la acción y se avisa. No hacer nada es infinitamente
+    // mejor que tocarle la cuenta al que no era.
+    async function _loadAccessCodeRequests() {
+      var res = null;
       try {
-        const { data } = await supabaseClient.from('access_code_requests').select('*').order('requested_at', { ascending: false });
-        if (data) requests = data;
-      } catch(e) { console.warn('[RadioPodcast]', e.message || e); }
-      
-      if (requests.length === 0) {
-        requests = JSON.parse(localStorage.getItem('maestroac_code_requests') || '[]');
+        res = await supabaseClient.from('access_code_requests').select('*').order('requested_at', { ascending: false });
+      } catch (e) {
+        // 🪤 Este catch solo cubre el caso raro de que `supabaseClient` ni exista.
+        // El error de verdad viene en `res.error`, sin excepción de por medio.
+        res = { error: { message: (e && e.message) || 'fallo de red' } };
       }
-      
-      if (requests[index]) {
-        const studentEmail = requests[index].student_email;
-        
-        // Verify Stripe membership
-        const stripeCheck = await verifyStripeMembership(studentEmail);
-        
-        if (!stripeCheck.active) {
-          const override = confirm(
-            _tc('radio_alert_no_membership', '⚠️ ALERTA') + ': ' + (requests[index].student_name || studentEmail) + ' ' + _tc('radio_no_stripe_membership', 'NO tiene membresía activa en Stripe.') + '\n\n' +
-            (stripeCheck.error ? '📋 ' + stripeCheck.error + '\n\n' : '') +
-            _tc('radio_generate_anyway', '¿Deseas generar el código de todas formas?') + '\n\n' +
-            _tc('radio_yes_generate', '• SÍ = Generar código manualmente (sin verificación de pago)') + '\n' +
-            _tc('radio_no_cancel', '• NO = Cancelar y pedir que pague primero')
-          );
-          if (!override) return;
-        } else {
-          // Confirmed active — show plan info
-          window.showToast(_tc('radio_membership_verified', '✅ Membresía verificada en Stripe') + ' — Plan: ' + (stripeCheck.plan || _tc('radio_active', 'Activa')) + ' — ' + _tc('radio_student', 'Estudiante') + ': ' + (requests[index].student_name || studentEmail) + ' — ' + _tc('radio_generating_code', 'Generando código...'), 'success');
-        }
+      if (!res || res.error) {
+        var _m = (res && res.error && res.error.message) || 'fallo de red';
+        console.warn('[RadioPodcast] no se pudieron leer las solicitudes de código: ' + _m, res && res.error);
+        return { ok: false, requests: [] };
+      }
+      return { ok: true, requests: res.data || [] };
+    }
 
-        const code = generateRandomAccessCode();
-        requests[index].status = 'approved';
-        requests[index].code = code;
-        requests[index].approved_at = new Date().toISOString();
-        requests[index].stripe_verified = stripeCheck.active;
-        
-        try {
-          await supabaseClient.from('access_code_requests').update({ 
-            status: 'approved', code: code, approved_at: new Date().toISOString(),
-            stripe_verified: stripeCheck.active
-          }).eq('id', requests[index].id);
-        } catch(e) { console.warn('[RadioPodcast]', e.message || e); }
-        
-        localStorage.setItem('maestroac_code_requests', JSON.stringify(requests));
-        renderAccessCodes();
-        
-        var req = requests[index];
-        var name = req.student_name || 'Estudiante';
-        var email = req.student_email || '';
-        var phone = req.student_phone || '';
-        
-        showCodeSendModal(name, email, phone, code);
+    // Aviso único para cuando la lista no se pudo leer. 🔒 Nunca decimos "no hay
+    // solicitudes": decimos que no pudimos cargarlas y que lo vuelva a intentar.
+    function _warnAccessRequestsUnavailable() {
+      if (window.showToast) {
+        window.showToast(_tc('radio_codes_load_failed', 'No pude cargar las solicitudes. No se aprobó ni se rechazó nada — revisa tu conexión y toca Reintentar.'), 'error');
       }
+    }
+
+    // 🪤 El botón manda una POSICIÓN de arreglo, no una identidad: si entró una
+    // solicitud nueva mientras el admin miraba la tabla, esa posición ya apunta a otra
+    // persona. Por eso se acepta también el `id` estable de la fila y se prefiere
+    // siempre que venga. El índice queda solo como camino viejo.
+    function _findAccessRequest(requests, ref) {
+      for (var i = 0; i < requests.length; i++) {
+        if (requests[i] && requests[i].id != null && String(requests[i].id) === String(ref)) return i;
+      }
+      var idx = Number(ref);
+      return (Number.isInteger(idx) && idx >= 0 && idx < requests.length) ? idx : -1;
+    }
+
+    // 🪤 La fila que el admin tocó ya no está en la lista del servidor (otro la atendió,
+    // o se borró). Aprobar "la que quedó en esa posición" sería el mismo bug de nuevo.
+    function _warnAccessRequestGone(ref) {
+      console.warn('[RadioPodcast] la solicitud "' + ref + '" ya no está en la lista del servidor; no se tocó ninguna fila.');
+      if (window.showToast) {
+        window.showToast(_tc('radio_code_row_gone', 'Esa solicitud ya no existe en el servidor. Recarga la lista antes de aprobar.'), 'warning');
+      }
+    }
+
+    // 🪤 `renderAccessCodes` y `generateRandomAccessCode` NO están definidas en ningún
+    // archivo de este repo (solo se llaman). Una llamada suelta lanza ReferenceError y
+    // MATA el resto de la función. Síntoma real: la aprobación ya quedó guardada en el
+    // servidor, pero el modal con el código nunca abre y Mario se queda sin nada que
+    // enviarle al estudiante que pagó. `typeof` sobre un identificador no declarado no
+    // lanza, así que aquí se puede preguntar sin riesgo.
+    function _refreshAccessCodesTable() {
+      try {
+        if (typeof renderAccessCodes === 'function') renderAccessCodes();
+        else console.warn('[RadioPodcast] renderAccessCodes() no existe en este repo: la tabla de códigos no se repinta sola.');
+      } catch (e) {
+        console.warn('[RadioPodcast] no se pudo repintar la tabla de códigos: ' + ((e && e.message) || e), e);
+      }
+    }
+
+    async function approveAccessCode(ref) {
+      var loaded = await _loadAccessCodeRequests();
+      if (!loaded.ok) { _warnAccessRequestsUnavailable(); return; }
+      var requests = loaded.requests;
+      var index = _findAccessRequest(requests, ref);
+      if (index < 0) { _warnAccessRequestGone(ref); return; }
+
+      var studentEmail = requests[index].student_email;
+
+      // Verify Stripe membership
+      var stripeCheck = await verifyStripeMembership(studentEmail);
+
+      if (!stripeCheck.active) {
+        // 🔴 Antes este aviso decía siempre "NO tiene membresía activa en Stripe",
+        // incluso cuando la consulta a Stripe ni siquiera respondió. Acusar de moroso
+        // a quien pagó por una falla nuestra es la peor mentira posible: ahora se
+        // distingue "no pagó" de "no pude preguntar".
+        var cabecera = stripeCheck.unknown
+          ? _tc('radio_alert_stripe_unknown', '⚠️ NO PUDE VERIFICAR el pago en Stripe (esto NO quiere decir que no haya pagado)') + ': ' + (requests[index].student_name || studentEmail)
+          : _tc('radio_alert_no_membership', '⚠️ ALERTA') + ': ' + (requests[index].student_name || studentEmail) + ' ' + _tc('radio_no_stripe_membership', 'NO tiene membresía activa en Stripe.');
+        var override = confirm(
+          cabecera + '\n\n' +
+          (stripeCheck.error ? '📋 ' + stripeCheck.error + '\n\n' : '') +
+          _tc('radio_generate_anyway', '¿Deseas generar el código de todas formas?') + '\n\n' +
+          _tc('radio_yes_generate', '• SÍ = Generar código manualmente (sin verificación de pago)') + '\n' +
+          _tc('radio_no_cancel', '• NO = Cancelar y pedir que pague primero')
+        );
+        if (!override) return;
+      } else {
+        // Confirmed active — show plan info
+        window.showToast(_tc('radio_membership_verified', '✅ Membresía verificada en Stripe') + ' — Plan: ' + (stripeCheck.plan || _tc('radio_active', 'Activa')) + ' — ' + _tc('radio_student', 'Estudiante') + ': ' + (requests[index].student_name || studentEmail) + ' — ' + _tc('radio_generating_code', 'Generando código...'), 'success');
+      }
+
+      var code = generateRandomAccessCode();
+      var approvedAt = new Date().toISOString();
+
+      // 🔴 ESTE UPDATE TAMPOCO SE REVISABA. Como supabase-js resuelve con {error} en vez
+      // de lanzar, el `try/catch` no atrapaba nada: si el servidor rechazaba la escritura
+      // se seguía derecho, se guardaba "approved" en localStorage y se abría el modal
+      // "envíale este código". Síntoma real: Mario le manda por WhatsApp un código que el
+      // servidor NUNCA emitió; el estudiante lo teclea y le sale "código inválido" — y en
+      // la tabla del admin la solicitud sigue pendiente.
+      // 🔒 Si no se guardó, no se declara aprobado ni se abre el modal de envío.
+      var _upd = null;
+      try {
+        _upd = await supabaseClient.from('access_code_requests').update({
+          status: 'approved', code: code, approved_at: approvedAt,
+          stripe_verified: stripeCheck.active
+        }).eq('id', requests[index].id);
+      } catch (e) {
+        _upd = { error: { message: (e && e.message) || 'fallo de red' } };
+      }
+      if (!_upd || _upd.error) {
+        var _msgU = (_upd && _upd.error && _upd.error.message) || 'fallo de red';
+        console.warn('[RadioPodcast] no se guardó la aprobación de ' + (studentEmail || '?') + ': ' + _msgU, _upd && _upd.error);
+        if (window.showToast) {
+          window.showToast(_tc('radio_approve_failed', 'No se pudo guardar la aprobación. NO le mandes el código todavía — vuelve a intentar.'), 'error');
+        }
+        return;
+      }
+
+      // A partir de aquí el servidor YA lo tiene: recién ahora es verdad decir "aprobado".
+      requests[index].status = 'approved';
+      requests[index].code = code;
+      requests[index].approved_at = approvedAt;
+      requests[index].stripe_verified = stripeCheck.active;
+
+      localStorage.setItem('maestroac_code_requests', JSON.stringify(requests));
+      _refreshAccessCodesTable();
+
+      var req = requests[index];
+      var name = req.student_name || 'Estudiante';
+      var email = req.student_email || '';
+      var phone = req.student_phone || '';
+
+      showCodeSendModal(name, email, phone, code);
     }
 
     function markCodeSent(sentKey) {
       try {
         localStorage.setItem(sentKey, new Date().toISOString());
         // Refresh the table after a short delay to show "Enviado" badge
-        setTimeout(function() { renderAccessCodes(); }, 500);
+        setTimeout(function() { _refreshAccessCodesTable(); }, 500);
       } catch(e) { console.warn('[RadioPodcast]', e.message || e); }
     }
 
@@ -616,27 +729,38 @@
       modal.addEventListener('click', function(e) { if (e.target === modal) modal.remove(); });
     }
 
-    async function rejectAccessCode(index) {
-      let requests = [];
+    // 🔴 MISMO BUG QUE EN `approveAccessCode`, y aquí duele más: rechazar por índice
+    // sobre una lista sustituida le NIEGA el acceso que ya pagó a otro estudiante.
+    // Ver el comentario largo arriba de `_loadAccessCodeRequests`.
+    async function rejectAccessCode(ref) {
+      var loaded = await _loadAccessCodeRequests();
+      if (!loaded.ok) { _warnAccessRequestsUnavailable(); return; }
+      var requests = loaded.requests;
+      var index = _findAccessRequest(requests, ref);
+      if (index < 0) { _warnAccessRequestGone(ref); return; }
+
+      // 🔴 El rechazo tampoco se comprobaba: si el servidor lo rechazaba, la tabla se
+      // repintaba con "rechazado" sacado de localStorage mientras el servidor seguía
+      // diciendo "pendiente". Síntoma real: el admin cree que ya despachó la solicitud,
+      // la fila reaparece pendiente al recargar, y nadie sabe cuál es la verdad.
+      var _upd = null;
       try {
-        const { data } = await supabaseClient.from('access_code_requests').select('*').order('requested_at', { ascending: false });
-        if (data) requests = data;
-      } catch(e) { console.warn('[RadioPodcast]', e.message || e); }
-      
-      if (requests.length === 0) {
-        requests = JSON.parse(localStorage.getItem('maestroac_code_requests') || '[]');
+        _upd = await supabaseClient.from('access_code_requests').update({ status: 'rejected' }).eq('id', requests[index].id);
+      } catch (e) {
+        _upd = { error: { message: (e && e.message) || 'fallo de red' } };
       }
-      
-      if (requests[index]) {
-        requests[index].status = 'rejected';
-        
-        try {
-          await supabaseClient.from('access_code_requests').update({ status: 'rejected' }).eq('id', requests[index].id);
-        } catch(e) { console.warn('[RadioPodcast]', e.message || e); }
-        
-        localStorage.setItem('maestroac_code_requests', JSON.stringify(requests));
-        renderAccessCodes();
+      if (!_upd || _upd.error) {
+        var _msgR = (_upd && _upd.error && _upd.error.message) || 'fallo de red';
+        console.warn('[RadioPodcast] no se guardó el rechazo de ' + (requests[index].student_email || '?') + ': ' + _msgR, _upd && _upd.error);
+        if (window.showToast) {
+          window.showToast(_tc('radio_reject_failed', 'No se pudo guardar el rechazo. La solicitud sigue pendiente — vuelve a intentar.'), 'error');
+        }
+        return;
       }
+
+      requests[index].status = 'rejected';
+      localStorage.setItem('maestroac_code_requests', JSON.stringify(requests));
+      _refreshAccessCodesTable();
     }
 
     function copyCodeToClipboard(code) {

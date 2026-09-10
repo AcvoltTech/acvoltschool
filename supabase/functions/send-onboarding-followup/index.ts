@@ -78,6 +78,31 @@ function emailHTML(name: string): string {
 }
 const SMS_BODY = 'Hola técnico, bajaste Maestro HVACR pero no la has abierto. Tienes BLE, AI Chaka, cursos EPA. Empieza: https://maestrohvacr.com/get?s=onboarding STOP=baja';
 
+// ── Lector paginado (rompe el tope de 1,000 filas de PostgREST) ──
+// 🔴 RAÍZ: PostgREST corta TODA consulta en 1,000 filas (max_rows = 1000, del SERVIDOR).
+// Sin error, sin aviso: HTTP 200 con exactamente 1,000 filas; el síntoma es un total que
+// nunca se mueve. 🪤 `.limit(2000)` NO sirve — el tope no lo pone el cliente. Se pagina.
+// 🪤 Se ordena por `id` (ÚNICO): con una columna con empates una página repite filas y se
+// salta otras → a unos les llega dos veces la campaña y a otros nunca.
+// 🪤 supabase-js NUNCA tira excepción: hay que leer `error` en CADA página y reportar
+// PARCIAL con lo que sí se leyó, nunca seguir callado con una lista corta.
+const PAGE_SIZE = 1000;
+const MAX_PAGES = 100; // tope de seguridad (100k filas) para no caer en un bucle eterno
+async function fetchAllPaged<T>(
+  build: (from: number, to: number) => PromiseLike<{ data: unknown[] | null; error: { message?: string } | null }>,
+): Promise<{ rows: T[]; error: string | null }> {
+  const rows: T[] = [];
+  for (let page = 0; page < MAX_PAGES; page++) {
+    const offset = page * PAGE_SIZE;
+    const { data, error } = await build(offset, offset + PAGE_SIZE - 1);
+    if (error) return { rows, error: error.message || String(error) };
+    const batch = (data || []) as T[];
+    rows.push(...batch);
+    if (batch.length < PAGE_SIZE) return { rows, error: null };
+  }
+  return { rows, error: `Se alcanzó el tope de ${MAX_PAGES} páginas (${MAX_PAGES * PAGE_SIZE} filas)` };
+}
+
 interface UserRow { id: string; nombre: string | null; email: string | null; telefono: string | null; }
 
 function normPhone(raw: string | null): string | null {
@@ -123,29 +148,50 @@ serve(async (req) => {
     const threeDaysAgo = new Date(Date.now() - 3 * 86400 * 1000).toISOString();
 
     // Two-step query: 1) get IDs with active memberships, 2) exclude them
-    const { data: activeMemberRows } = await sb
-      .from('memberships')
-      .select('user_id')
-      .eq('activa', true)
-      .not('user_id', 'is', null);
-    const activeUserIds = new Set(((activeMemberRows || []) as { user_id: string }[]).map(r => r.user_id));
+    // 🔴 Hoy son 77 membresías activas (cabe de sobra), pero esta consulta tampoco tenía
+    // tope propio: el día que pasen de 1,000, PostgREST recorta la lista sin avisar y
+    // empezaríamos a mandarle correo de "no has abierto la app" a gente que SÍ PAGA.
+    // Se pagina por si acaso — cuesta una sola página mientras sean menos de 1,000.
+    const { rows: activeMemberRows, error: mErr } = await fetchAllPaged<{ user_id: string }>(
+      (from, to) => sb
+        .from('memberships')
+        .select('id, user_id')
+        .eq('activa', true)
+        .not('user_id', 'is', null)
+        .order('id', { ascending: true })
+        .range(from, to),
+    );
+    // 🪤 Si la lista de quién paga se leyó mal, NO se envía: el riesgo es molestar a un
+    // cliente que paga con un correo de "regresa". Callar aquí sale caro.
+    if (mErr) return json({ error: 'No se pudo leer memberships (lista de exclusión); se aborta para no escribirle a quien paga.', details: mErr }, 500);
+    const activeUserIds = new Set(activeMemberRows.map(r => r.user_id));
 
-    const { data: users, error: uErr } = await sb
-      .from('users')
-      .select('id, nombre, email, telefono, fecha_registro, ultimo_acceso, onboarding_sent_at')
-      .gte('fecha_registro', minDate)
-      .lt('fecha_registro', maxDate)
-      .or(`ultimo_acceso.is.null,ultimo_acceso.lt.${threeDaysAgo}`)
-      .is('onboarding_sent_at', null)
-      .limit(2000);
-    if (uErr) throw uErr;
+    // 🔴 RAÍZ (medido 2026-09-10): elegibles reales por bucket — `cold` 5,817 y `cool`
+    // 2,521 (hot/warm sí caben bajo el tope). Esto devolvía 1,000. Síntoma real: una
+    // corrida del bucket `cold` mandaba 1,000 correos y reportaba "listo", dejando a
+    // 4,817 sin tocar y sin una sola señal de error. El `.limit(2000)` era decorativo.
+    const { rows: users, error: uErr } = await fetchAllPaged<UserRow & { id: string }>(
+      (from, to) => sb
+        .from('users')
+        .select('id, nombre, email, telefono, fecha_registro, ultimo_acceso, onboarding_sent_at')
+        .gte('fecha_registro', minDate)
+        .lt('fecha_registro', maxDate)
+        .or(`ultimo_acceso.is.null,ultimo_acceso.lt.${threeDaysAgo}`)
+        .is('onboarding_sent_at', null)
+        .order('id', { ascending: true })
+        .range(from, to),
+    );
+    // 🪤 Sin nadie leído no hay campaña: error duro. Leído a medias: se dice PARCIAL.
+    if (uErr && users.length === 0) return json({ error: 'No se pudo leer el cohorte: ' + uErr }, 500);
+    const partial = uErr ? { partial: true, audience_read_error: uErr } : {};
 
-    const eligible = ((users || []) as (UserRow & { id: string })[]).filter(u => !activeUserIds.has(u.id));
+    const eligible = users.filter(u => !activeUserIds.has(u.id));
 
     if (dry_run) {
       return json({
         dry_run: true,
         bucket,
+        ...partial,
         target_size: eligible.length,
         with_email: eligible.filter(u => !!u.email).length,
         with_phone: eligible.filter(u => !!normPhone(u.telefono)).length,
@@ -202,13 +248,20 @@ serve(async (req) => {
       }
 
       // Mark all eligible as sent so we never double-send
+      // 🪤 Lotes de 100, no de 500: un `.in()` con 500 UUIDs arma una URL de ~19 KB que el
+      // servidor rechaza, y como supabase-js NUNCA tira excepción el fallo pasaba MUDO:
+      // nadie quedaba marcado y la siguiente corrida le volvía a escribir a los mismos.
+      // Con 5,817 elegibles en `cold` (antes 1,000 por el tope) esto ya pasa de verdad.
       const idsToMark = eligible.map(u => u.id);
-      for (let i = 0; i < idsToMark.length; i += 500) {
-        const chunk = idsToMark.slice(i, i + 500);
-        await sb.from('users').update({ onboarding_sent_at: nowIso }).in('id', chunk);
+      let marked = 0;
+      for (let i = 0; i < idsToMark.length; i += 100) {
+        const chunk = idsToMark.slice(i, i + 100);
+        const { error: markErr } = await sb.from('users').update({ onboarding_sent_at: nowIso }).in('id', chunk);
+        if (markErr) console.error('[send-onboarding-followup] no se pudo marcar un lote (riesgo de re-envío):', markErr.message);
+        else marked += chunk.length;
       }
 
-      console.log('[send-onboarding-followup] done', { bucket, emails_sent, emails_failed, sms_sent, sms_failed, marked: idsToMark.length });
+      console.log('[send-onboarding-followup] done', { bucket, emails_sent, emails_failed, sms_sent, sms_failed, marked, to_mark: idsToMark.length, audience_read_error: uErr || null });
     };
 
     if (typeof EdgeRuntime !== 'undefined' && EdgeRuntime.waitUntil) {
@@ -222,6 +275,7 @@ serve(async (req) => {
       dry_run: false,
       bucket,
       started: true,
+      ...partial,
       target_size: eligible.length,
       message: 'Background send started. Check users.onboarding_sent_at after a few minutes.',
     });

@@ -1410,20 +1410,45 @@
     sopShowTimerModal();
   }
 
-  function sopCreateLiveTicket() {
+  // ══════════════════════════════════════════════════════════════════════
+  // 🔴 RAÍZ (10-sep-2026): el técnico paga $300, le decimos "Sesión en vivo
+  // agendada"… y NO existe ningún ticket. Nadie lo contacta nunca.
+  // ══════════════════════════════════════════════════════════════════════
+  // supabase-js NO LANZA: el insert rechazado (RLS, red, columna ausente) resuelve
+  // con {data:null, error:{...}}. El `.then(...)` de antes corría IGUAL cuando el
+  // insert había fallado —soltaba la notificación y el aviso al admin sobre la nada—
+  // y el `.catch(...)` era CÓDIGO MUERTO porque la promesa nunca se rechaza.
+  // 🔒 Ahora se lee `res.error`: si falló NO se afirma que quedó agendada.
+  async function sopCreateLiveTicket() {
     if (!supabaseClient || !isOnline) return;
     var email = sopEmail();
     var name = sopName();
-    supabaseClient.from('soporte_tickets').insert({
-      student_email: email,
-      student_name: name,
-      subject: 'Soporte en Vivo 1-a-1 ($300)',
-      description: 'Sesión de soporte en vivo solicitada.',
-      category: 'live_support'
-    }).then(function () {
-      try { addNotification('soporte', _t('st_notif_live_scheduled', 'Sesión en vivo agendada')); } catch(e) { console.warn('[SoporteTecnico]', e.message || e); }
-      try { notifyAdmin('Soporte en Vivo', name + ' pagó $300 por sesión 1-a-1', 'soporte'); } catch(e) { console.warn('[SoporteTecnico]', e.message || e); }
-    }).catch(function (err) { console.warn('[Soporte] live ticket error:', err); });
+    var res = null;
+    try {
+      res = await supabaseClient.from('soporte_tickets').insert({
+        student_email: email,
+        student_name: name,
+        subject: 'Soporte en Vivo 1-a-1 ($300)',
+        description: 'Sesión de soporte en vivo solicitada.',
+        category: 'live_support'
+      });
+    } catch (e) {
+      // Solo un fetch reventado llega aquí; el rechazo de la base NO lanza.
+      res = { error: { message: (e && e.message) || 'fallo de red' } };
+    }
+
+    if (res && res.error) {
+      // 🪤 Dinero cobrado sin ticket: dejar rastro de QUIÉN era para rescatarlo a mano.
+      console.warn('[SoporteTecnico] NO se creó el ticket de Soporte en Vivo ($300) de ' +
+                   (email || 'sin correo') + ': ' + (res.error.message || '?'), res.error);
+      if (typeof window.showToast === 'function') {
+        window.showToast(_t('st_live_not_scheduled', 'No se pudo agendar tu sesión en vivo. Intenta de nuevo o escríbenos por WhatsApp para que no pierdas tu lugar.'), 'error');
+      }
+      return;
+    }
+
+    try { addNotification('soporte', _t('st_notif_live_scheduled', 'Sesión en vivo agendada')); } catch(e) { console.warn('[SoporteTecnico]', e.message || e); }
+    try { notifyAdmin('Soporte en Vivo', name + ' pagó $300 por sesión 1-a-1', 'soporte'); } catch(e) { console.warn('[SoporteTecnico]', e.message || e); }
   }
 
   function sopShowTimerModal() {

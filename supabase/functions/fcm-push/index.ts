@@ -27,6 +27,31 @@ function json(d: unknown, status = 200) {
   return new Response(JSON.stringify(d), { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 }
 
+// ── Lector paginado (rompe el tope de 1,000 filas de PostgREST) ──
+// 🔴 RAÍZ: PostgREST corta TODA consulta en 1,000 filas (max_rows = 1000 del SERVIDOR).
+// Sin error, sin aviso: HTTP 200 con exactamente 1,000 filas. El síntoma es un total que
+// nunca se mueve. 🪤 `.limit(50000)` NO sirve — el tope no lo pone el cliente. Se pagina.
+// 🪤 Se ordena por `id` (ÚNICO): con una columna con empates, una página repite filas y
+// se salta otras → unos reciben dos push y otros ninguno.
+// 🪤 supabase-js NUNCA tira excepción: hay que leer `error` en CADA página y reportar
+// PARCIAL con lo que sí se leyó, en vez de seguir callado con una lista corta.
+const PAGE_SIZE = 1000;
+const MAX_PAGES = 100; // tope de seguridad (100k filas) para no caer en un bucle eterno
+async function fetchAllPaged<T>(
+  build: (from: number, to: number) => PromiseLike<{ data: unknown[] | null; error: { message?: string } | null }>,
+): Promise<{ rows: T[]; error: string | null }> {
+  const rows: T[] = [];
+  for (let page = 0; page < MAX_PAGES; page++) {
+    const offset = page * PAGE_SIZE;
+    const { data, error } = await build(offset, offset + PAGE_SIZE - 1);
+    if (error) return { rows, error: error.message || String(error) };
+    const batch = (data || []) as T[];
+    rows.push(...batch);
+    if (batch.length < PAGE_SIZE) return { rows, error: null };
+  }
+  return { rows, error: `Se alcanzó el tope de ${MAX_PAGES} páginas (${MAX_PAGES * PAGE_SIZE} filas)` };
+}
+
 // ── Google OAuth (JWT RS256 con el service account) ──
 function pemToArrayBuffer(pem: string): ArrayBuffer {
   const b64 = pem.replace(/-----BEGIN PRIVATE KEY-----/g, '').replace(/-----END PRIVATE KEY-----/g, '').replace(/\\n/g, '').replace(/\s+/g, '');
@@ -125,21 +150,31 @@ serve(async (req) => {
     }
 
     // Tokens nativos activos (app iOS + Android)
-    const { data: subs, error } = await sb
-      .from('push_subscriptions')
-      .select('device_token')
-      .eq('active', true)
-      .not('device_token', 'is', null)
-      .limit(50000);
-    if (error) throw error;
+    // 🔴 RAÍZ (medido 2026-09-10): hay 5,795 tokens activos, pero esto devolvía 1,000.
+    // Síntoma real: `[fcm-push] done { total: ... }` imprimía ~1000 para siempre y TODO
+    // dispositivo iOS/Android después del primer millar jamás recibía un push. El
+    // `.limit(50000)` daba falsa tranquilidad: el tope es del servidor. Ahora se pagina.
+    const { rows: subs, error: subsErr } = await fetchAllPaged<{ device_token: string | null }>(
+      (from, to) => sb
+        .from('push_subscriptions')
+        .select('id, device_token')
+        .eq('active', true)
+        .not('device_token', 'is', null)
+        .order('id', { ascending: true })
+        .range(from, to),
+    );
+    // 🪤 Si no se leyó NADA, no hay a quién mandarle: error duro. Si se leyó a medias,
+    // seguimos pero la respuesta lo dice — 1,000 de 5,795 no es un envío exitoso.
+    if (subsErr && subs.length === 0) return json({ error: 'No se pudo leer push_subscriptions: ' + subsErr }, 500);
 
     const seen = new Set<string>();
     const tokens: string[] = [];
-    for (const s of (subs || []) as { device_token: string | null }[]) {
+    for (const s of subs) {
       if (s.device_token && !seen.has(s.device_token)) { seen.add(s.device_token); tokens.push(s.device_token); }
     }
 
-    if (dry_run) return json({ dry_run: true, target: tokens.length });
+    const partial = subsErr ? { partial: true, audience_read_error: subsErr } : {};
+    if (dry_run) return json({ dry_run: true, target: tokens.length, ...partial });
 
     const accessToken = await getAccessToken(sa);
     const sendAll = async () => {
@@ -151,17 +186,25 @@ serve(async (req) => {
         else { failed++; if (res.stale) { stale++; staleTokens.push(token); } }
       }
       // Desactiva tokens muertos
-      for (let i = 0; i < staleTokens.length; i += 200) {
-        const chunk = staleTokens.slice(i, i + 200);
-        try { await sb.from('push_subscriptions').update({ active: false }).in('device_token', chunk); } catch (_) { /* */ }
+      // 🪤 Lotes de 50, no de 200: un `.in()` con 200 tokens FCM (~160 caracteres cada uno)
+      // arma una URL de ~32 KB que el servidor rechaza — y como supabase-js NUNCA tira
+      // excepción, el `catch` de abajo jamás se enteraba: los tokens muertos seguían vivos
+      // en la tabla y los reintentábamos en cada envío. Con 5,795 tokens (antes 1,000
+      // por el tope de PostgREST) esa lista ya es grande de verdad.
+      let staleCleaned = 0;
+      for (let i = 0; i < staleTokens.length; i += 50) {
+        const chunk = staleTokens.slice(i, i + 50);
+        const { error: upErr } = await sb.from('push_subscriptions').update({ active: false }).in('device_token', chunk);
+        if (upErr) console.warn('[fcm-push] no se pudieron desactivar tokens muertos:', upErr.message);
+        else staleCleaned += chunk.length;
       }
-      console.log('[fcm-push] done', { sent, failed, stale, total: tokens.length });
+      console.log('[fcm-push] done', { sent, failed, stale, stale_cleaned: staleCleaned, total: tokens.length, audience_read_error: subsErr || null });
     };
 
     if (typeof EdgeRuntime !== 'undefined' && EdgeRuntime.waitUntil) EdgeRuntime.waitUntil(sendAll());
     else sendAll().catch((e) => console.error('[fcm-push] async:', e));
 
-    return json({ started: true, target: tokens.length });
+    return json({ started: true, target: tokens.length, ...partial });
   } catch (err) {
     console.error('[fcm-push]', err);
     return json({ error: (err as Error).message || 'Internal error' }, 500);

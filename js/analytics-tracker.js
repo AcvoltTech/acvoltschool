@@ -45,16 +45,32 @@ var MaestroAnalytics = (function() {
     _flushing = true;
     var batch = _queue.splice(0, BATCH_SIZE);
 
+    // 🔴 RAÍZ (10-sep-2026): supabase-js NO LANZA. Un insert rechazado (RLS, columna
+    // inexistente, 400) regresa {data:null, error:{...}} y se resuelve normal, así que
+    // este `catch` era CÓDIGO MUERTO: nunca corrió, y el re-encolado de abajo tampoco.
+    // Cada lote fallido se perdía en silencio — y estos son los eventos con los que se
+    // mide el DAU (`analytics_events` con event='session_start'). Un día entero de uso
+    // real podía desaparecer del tablero sin una sola línea en consola.
+    // 🪤 Las columnas REALES de la tabla son: event, screen, user_email, metadata,
+    // session_id, created_at. NO existe `event_name` ni `user_id`: si alguien renombra
+    // un campo aquí, PostgREST devuelve 400 y —antes de este arreglo— el app seguía
+    // tan campante reportando cero problemas.
+    var res = null;
     try {
-      await supabaseClient.from('analytics_events').insert(batch);
+      res = await supabaseClient.from('analytics_events').insert(batch);
     } catch (e) {
-      // Re-queue on failure (drop if queue is too large)
-      if (_queue.length < 200) {
-        _queue = batch.concat(_queue);
-      }
-    } finally {
-      _flushing = false;
+      // Solo cae aquí por un fallo de red duro (fetch abortado / sin conexión).
+      res = { error: { message: (e && e.message) || 'fallo de red' } };
     }
+
+    if (res && res.error) {
+      console.warn('[Analytics] lote de ' + batch.length + ' eventos RECHAZADO: ' +
+                   (res.error.message || 'error desconocido') + ' — se reintenta en el próximo flush', res.error);
+      // Re-encolar (se descarta solo si la cola ya creció demasiado).
+      if (_queue.length < 200) _queue = batch.concat(_queue);
+    }
+
+    _flushing = false;
   }
 
   function _startFlushTimer() {

@@ -25,8 +25,12 @@ if (typeof _addTranslations === 'function') _addTranslations({
   adm_dg_same_phone: { es: 'Mismo tel\u00E9fono', en: 'Same phone' },
   adm_dg_yes: { es: 'S\u00ED', en: 'Yes' },
   adm_dg_no: { es: 'No', en: 'No' },
+  adm_dg_load_failed: { es: 'No pude leer una de las fuentes. Los conteos ser\u00EDan mentira, as\u00ED que no se pintan.', en: 'Could not read one of the sources. The counts would be a lie, so they are not shown.' },
+  adm_dg_retry: { es: 'Reintentar', en: 'Retry' },
+  adm_dg_floor: { es: 'Lectura INCOMPLETA: \u201Csin actividad\u201D es un TECHO, no un dato firme.', en: 'INCOMPLETE read: \u201Cno activity\u201D is a ceiling, not a firm number.' },
+  adm_dg_src_missing: { es: 'Falta una fuente de actividad: la tabla `activity_log` NO EXISTE en esta base. Un usuario cuya \u00FAnica huella viviera ah\u00ED sale aqu\u00ED como \u201Csin actividad\u201D. El conteo de inactivos es un TECHO.', en: 'One activity source is missing: table `activity_log` DOES NOT EXIST in this database. A user whose only trace lived there shows here as \u201Cno activity\u201D. The inactive count is a ceiling.' },
 });
-var _diagData = { all: [], active: [], inactive: [], duplicates: [] };
+var _diagData = { all: [], active: [], inactive: [], duplicates: [], completo: true, fuenteFaltante: true };
 
 async function runStudentDiagnostic(){
   var container = document.getElementById('diagResults');
@@ -37,30 +41,53 @@ async function runStudentDiagnostic(){
     var users = [], _dgOff = 0, _dgMore = true;
     while (_dgMore) {
       var usersRes = await usersDataAdmin('admin_list', { offset: _dgOff, limit: 1000, fields: ["*"], order_by: 'fecha_registro', ascending: false });
+      // 🔒 El paginado ya estaba bien, pero `usersRes.data || []` convertía un fallo en
+      // "se acabó la lista": una página rota daba un roster corto (o vacío) sin una sola
+      // señal, y de ahí salían "inactivos" que ni siquiera se habían leído.
+      if (usersRes.error) throw new Error('users (offset ' + _dgOff + '): ' + (usersRes.error.message || usersRes.error));
       var _dgBatch = usersRes.data || [];
       users = users.concat(_dgBatch);
       if (_dgBatch.length < 1000) _dgMore = false; else _dgOff += 1000;
     }
 
-    // 2. Get all progress records (who has activity)
-    var progressRes = await supabaseClient.from('user_progress').select('user_id');
-    var progressUserIds = new Set((progressRes.data || []).map(function(p){ return p.user_id; }));
+    // 🔴 RAÍZ (10-sep-2026): las lecturas 2-4 eran `.select('user_id')` PELONES.
+    // PostgREST corta TODO select en 1,000 filas sin avisar (HTTP 200, sin error), y
+    // `user_progress` tiene 48,959 filas MEDIDAS ese día. O sea: el diagnóstico veía 1,000
+    // de 48,959 registros de progreso (2%) y por eso reportaba MILES de "registrados que
+    // nunca entraron" que en realidad llevan meses estudiando. MaestroPagina.todo() lee la
+    // tabla COMPLETA y, a diferencia del `|| []`, distingue "falló" de "no hay filas".
+    // (quiz_attempts 44 y certificates 21 hoy no llegan al tope, pero se paginan igual: el
+    //  día que crezcan nadie va a volver aquí, y el `|| []` tapaba también sus errores.)
+    var _dgLeer = function(tabla) {
+      return window.MaestroPagina.todo(tabla, 'id, user_id');
+    };
+    var fuentes = await Promise.all([_dgLeer('user_progress'), _dgLeer('quiz_attempts'), _dgLeer('certificates')]);
 
-    // 3. Get all quiz attempts
-    var quizRes = await supabaseClient.from('quiz_attempts').select('user_id');
-    var quizUserIds = new Set((quizRes.data || []).map(function(q){ return q.user_id; }));
+    // 🔒 LEY: si una fuente falló, esta pantalla NO pinta conteos. Un cero aquí se lee
+    // como "nadie tiene actividad" y con eso se toman decisiones de a quién dar de baja.
+    var _dgNombres = ['user_progress', 'quiz_attempts', 'certificates'];
+    for (var _f = 0; _f < fuentes.length; _f++) {
+      if (fuentes[_f].error) throw new Error(_dgNombres[_f] + ': ' + (fuentes[_f].error.message || fuentes[_f].error));
+    }
+    var _dgCompleto = fuentes.every(function(r){ return r.completo !== false; });
 
-    // 4. Get all certificates
-    var certRes = await supabaseClient.from('certificates').select('user_id');
-    var certUserIds = new Set((certRes.data || []).map(function(c){ return c.user_id; }));
+    var progressUserIds = new Set((fuentes[0].data || []).map(function(p){ return p.user_id; }));
+    var quizUserIds     = new Set((fuentes[1].data || []).map(function(q){ return q.user_id; }));
+    var certUserIds     = new Set((fuentes[2].data || []).map(function(c){ return c.user_id; }));
 
-    // 5. Get activity log
-    var actRes = await supabaseClient.from('activity_log').select('user_id');
-    var actUserIds = new Set((actRes.data || []).map(function(a){ return a.user_id; }));
+    // 🪤 TRAMPA (10-sep-2026): aquí se leía `activity_log`, y esa tabla NO EXISTE en esta
+    // base. PostgREST responde 400, el `(actRes.data || [])` de antes lo convertía en "no hay
+    // filas" y la unión de actividad se quedaba sin una fuente entera, EN SILENCIO: gente
+    // activa clasificada como "sin actividad". Verificado contra information_schema.columns.
+    // NO se adivina reemplazo: `last_activity` sí tiene `user_id` pero está VACÍA (0 filas
+    // medidas) y `daily_activity` va por `email`, no por `user_id` — ninguna es la misma
+    // cosa. Se retira la consulta fantasma y se DICE en pantalla que falta esa fuente, para
+    // que el conteo de inactivos se lea como TECHO y no como verdad.
+    var _dgFuenteFaltante = true;
 
     // Combine all activity
     var activeIds = new Set();
-    [progressUserIds, quizUserIds, certUserIds, actUserIds].forEach(function(s){
+    [progressUserIds, quizUserIds, certUserIds].forEach(function(s){
       s.forEach(function(id){ activeIds.add(id); });
     });
 
@@ -122,7 +149,9 @@ async function runStudentDiagnostic(){
       all: users,
       active: activeUsers,
       inactive: inactiveUsers,
-      duplicates: duplicateGroups
+      duplicates: duplicateGroups,
+      completo: _dgCompleto,
+      fuenteFaltante: _dgFuenteFaltante
     };
 
     // Update stats
@@ -134,9 +163,33 @@ async function runStudentDiagnostic(){
 
     showDiagFilter('all');
   } catch(e){
-    container.innerHTML = '<span style="color:#e74c3c;">Error: ' + _escHtml(e.message || e) + '</span>';
-    console.error('Diagnostic error:', e);
+    // 🔒 LEY: "no pude leer" se DICE y se ofrece Reintentar. Antes salía un
+    // "Error: ..." pelado sin salida, y los mosaicos de arriba se quedaban con los números
+    // viejos como si nada hubiera pasado.
+    console.warn('[Diagnostico] carga: ' + (e.message || e), e);
+    var _dgStats = document.getElementById('diagStats');
+    if (_dgStats) _dgStats.style.display = 'none';
+    container.innerHTML =
+      '<div style="background:rgba(231,76,60,0.12);border:1px solid rgba(231,76,60,0.35);border-radius:12px;padding:16px;">' +
+        '<div style="color:#e74c3c;font-weight:bold;margin-bottom:6px;">\u26A0\uFE0F ' + _escHtml(_t('adm_dg_load_failed', 'No pude leer una de las fuentes. Los conteos ser\u00EDan mentira, as\u00ED que no se pintan.')) + '</div>' +
+        '<div style="color:#94a3b8;font-size:0.85em;margin-bottom:12px;">' + _escHtml(e.message || String(e)) + '</div>' +
+        '<button onclick="runStudentDiagnostic()" style="background:#e74c3c;color:#fff;border:none;border-radius:8px;padding:9px 16px;font-size:0.9em;font-weight:bold;cursor:pointer;">\uD83D\uDD04 ' + _escHtml(_t('adm_dg_retry', 'Reintentar')) + '</button>' +
+      '</div>';
+    if (typeof window.showToast === 'function') window.showToast(_t('adm_dg_load_failed', 'No pude leer una de las fuentes.'), 'error');
   }
+}
+
+// Aviso que va ARRIBA de cualquier vista del diagnóstico: dice qué tan confiable es lo que
+// se está viendo. Sin esto, "1,234 sin actividad" se lee como un hecho cuando es un techo.
+function _diagAvisoHtml(){
+  var h = '';
+  if (_diagData.fuenteFaltante) {
+    h += '<div style="background:rgba(243,156,18,0.12);border:1px solid rgba(243,156,18,0.35);border-radius:10px;padding:10px 14px;margin-bottom:10px;color:#f39c12;font-size:0.85em;">\u26A0\uFE0F ' + _t('adm_dg_src_missing', 'Falta una fuente de actividad: la tabla activity_log NO EXISTE en esta base. El conteo de inactivos es un TECHO.') + '</div>';
+  }
+  if (_diagData.completo === false) {
+    h += '<div style="background:rgba(243,156,18,0.12);border:1px solid rgba(243,156,18,0.35);border-radius:10px;padding:10px 14px;margin-bottom:10px;color:#f39c12;font-size:0.85em;">\u26A0\uFE0F ' + _t('adm_dg_floor', 'Lectura INCOMPLETA: "sin actividad" es un TECHO, no un dato firme.') + '</div>';
+  }
+  return h;
 }
 
 function showDiagFilter(filter){
@@ -167,11 +220,11 @@ function showDiagFilter(filter){
 
   var list = filter === 'all' ? _diagData.all : filter === 'active' ? _diagData.active : _diagData.inactive;
   if(!list || list.length === 0){
-    container.innerHTML = '<span style="color:#64748b;">' + _t('adm_dg_no_data', 'No hay datos') + '</span>';
+    container.innerHTML = _diagAvisoHtml() + '<span style="color:#64748b;">' + _t('adm_dg_no_data', 'No hay datos') + '</span>';
     return;
   }
 
-  var html = '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:0.85em;">';
+  var html = _diagAvisoHtml() + '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:0.85em;">';
   html += '<tr style="background:rgba(255,255,255,0.05);"><th style="padding:8px;text-align:left;color:#94a3b8;">' + _t('adm_dg_name', 'Nombre') + '</th><th style="padding:8px;text-align:left;color:#94a3b8;">' + _t('adm_dg_email', 'Email') + '</th><th style="padding:8px;text-align:left;color:#94a3b8;">' + _t('adm_dg_phone', 'Tel\u00E9fono') + '</th><th style="padding:8px;text-align:center;color:#94a3b8;">' + _t('adm_dg_registered', 'Registro') + '</th><th style="padding:8px;text-align:center;color:#94a3b8;">' + _t('adm_dg_last_access', '\u00DAltimo Acceso') + '</th><th style="padding:8px;text-align:center;color:#94a3b8;">' + _t('adm_dg_status', 'Estado') + '</th></tr>';
 
   list.forEach(function(u){
@@ -201,10 +254,10 @@ function showDiagFilter(filter){
 function renderDuplicates(container){
   var groups = _diagData.duplicates;
   if(!groups || groups.length === 0){
-    container.innerHTML = '<span style="color:#2ecc71;">\u2705 ' + _t('adm_dg_no_duplicates', 'No se encontraron registros duplicados') + '</span>';
+    container.innerHTML = _diagAvisoHtml() + '<span style="color:#2ecc71;">\u2705 ' + _t('adm_dg_no_duplicates', 'No se encontraron registros duplicados') + '</span>';
     return;
   }
-  var html = '';
+  var html = _diagAvisoHtml();
   groups.forEach(function(g, idx){
     html += '<div style="background:rgba(243,156,18,0.1);border:1px solid rgba(243,156,18,0.3);border-radius:12px;padding:15px;margin-bottom:12px;">';
     html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">';

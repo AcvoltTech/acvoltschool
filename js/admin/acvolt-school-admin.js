@@ -721,16 +721,56 @@ function _ascCloseModal() {
 }
 
 /* ── Stream preview ───────────────────────────────────────────── */
+// 🔴 RAÍZ (10-sep-2026): esta vista previa armaba la URL con el uid PELÓN.
+// Los videos migrados a Cloudflare Stream llevan `requireSignedURLs: true`, así que
+// `iframe.videodelivery.net/<uid>` responde 401 y el iframe queda NEGRO Y MUDO — sin
+// error en consola, sin nada. Mario abría "Editar Lección" para comprobar que el video
+// correcto estaba asignado y veía un rectángulo negro, que se lee igual que "uid malo".
+// El lado del alumno ya firmaba (js/video-firma.js); el panel de admin nunca se enteró.
+// 🪤 El firmado es ASÍNCRONO y este HTML se arma de golpe: por eso se marca el iframe
+// con `data-vf-uid` y `firmarPendientes()` le rellena el `src` cuando llega el token.
 function _ascPreviewStream(uid) {
   var container = document.getElementById('asc-ed-preview');
   if (!container) return;
   uid = (uid || '').trim();
   if (uid) {
-    container.innerHTML = '<iframe src="https://iframe.videodelivery.net/' +
-      encodeURIComponent(uid) + '" style="width:100%;height:180px;" allow="autoplay;fullscreen"></iframe>';
+    container.innerHTML = _ascStreamIframeHtml(uid);
+    _ascFirmarPreview(container);
   } else {
     container.innerHTML = '<div style="color:#475569;padding:20px;font-size:13px;">' + _t('adm_as_no_video', 'Sin video asignado') + '</div>';
   }
+}
+
+// Iframe SIN `src`: lo rellena el firmador. Si el firmador no está cargado, se cae al
+// uid pelón (comportamiento viejo) en vez de dejar la pantalla en blanco.
+function _ascStreamIframeHtml(uid) {
+  var u = encodeURIComponent(String(uid || '').trim());
+  if (window.MaestroVideoFirma && typeof window.MaestroVideoFirma.firmarPendientes === 'function') {
+    return '<iframe data-vf-uid="' + u + '" style="width:100%;height:180px;background:#000;" allow="autoplay;fullscreen"></iframe>' +
+           '<div class="asc-vf-msg" style="display:none;color:#ef4444;font-size:12px;padding:6px 2px;"></div>';
+  }
+  console.warn('[AcvoltSchool] falta js/video-firma.js: la vista previa usará el uid sin firmar y saldrá negra si el video exige firma');
+  return '<iframe src="https://iframe.videodelivery.net/' + u + '" style="width:100%;height:180px;" allow="autoplay;fullscreen"></iframe>';
+}
+
+// 🔒 Si la firma falla, se DICE por qué. Un negro silencioso es peor que un error.
+function _ascFirmarPreview(scope) {
+  if (!(window.MaestroVideoFirma && typeof window.MaestroVideoFirma.firmarPendientes === 'function')) return;
+  if (!_ascFirmarPreview._oyendo) {
+    _ascFirmarPreview._oyendo = true;
+    window.addEventListener('maestro:firma-fallo', function(ev) {
+      var d = (ev && ev.detail) || {};
+      var host = d.iframe && d.iframe.parentNode;
+      var box = host && host.querySelector ? host.querySelector('.asc-vf-msg') : null;
+      var porque = d.porque || _t('adm_as_sign_failed', 'no se pudo firmar el video');
+      console.warn('[AcvoltSchool] firma fallida uid=' + d.uid + ': ' + porque);
+      if (box) {
+        box.textContent = '⚠️ ' + _t('adm_as_preview_unavailable', 'No pude cargar la vista previa') + ' — ' + porque;
+        box.style.display = '';
+      }
+    });
+  }
+  window.MaestroVideoFirma.firmarPendientes(scope || document);
 }
 
 /* ── Toast notification ───────────────────────────────────────── */
@@ -784,8 +824,10 @@ function _ascEditLesson(id) {
   overlay.id = 'asc-modal-overlay';
   overlay.onclick = function(e) { if (e.target === overlay) _ascCloseModal(); };
 
+  // 🔴 Igual que `_ascPreviewStream`: sin firmar, este preview sale NEGRO en todo video
+  // migrado a Cloudflare Stream (requireSignedURLs: true → 401 mudo).
   var streamPreview = lesson.stream_uid
-    ? '<iframe src="https://iframe.videodelivery.net/' + encodeURIComponent(lesson.stream_uid) + '" style="width:100%;height:180px;" allow="autoplay;fullscreen"></iframe>'
+    ? _ascStreamIframeHtml(lesson.stream_uid)
     : '<div style="color:#475569;padding:20px;font-size:13px;">' + _t('adm_as_no_video', 'Sin video asignado') + '</div>';
 
   overlay.innerHTML =
@@ -839,6 +881,8 @@ function _ascEditLesson(id) {
     '</div>';
 
   document.body.appendChild(overlay);
+  // El iframe ya está en el DOM: ahora sí se le puede pedir la firma.
+  _ascFirmarPreview(overlay);
 }
 
 /* ── Transcribir el video con IA (Deepgram) para ayudar a titular ──── */

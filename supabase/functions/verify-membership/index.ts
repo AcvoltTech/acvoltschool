@@ -2,6 +2,31 @@
 // Verifies student memberships directly against Stripe (source of truth)
 // Actions: verify_single (per-student) | batch_sync (admin reconciliation)
 // Deploy: supabase functions deploy verify-membership --no-verify-jwt
+//
+// ╔══════════════════════════════════════════════════════════════════════════╗
+// ║ ⚠️ COPIA LOCAL ATRASADA — NO LA DESPLIEGUES SIN BAJAR EL FUENTE REAL     ║
+// ╚══════════════════════════════════════════════════════════════════════════╝
+// Medido el 10-sep-2026: desplegada 2026-08-16 · esta copia local 2026-05-25.
+//
+// 🔴 BUG CONFIRMADO EN LA VERSIÓN VIVA (se leyó su fuente desplegado el
+// 10-sep-2026 y todavía trae `user_email: email` en 2 lugares): `memberships`
+// NO TIENE la columna `user_email`. El insert devuelve 400, y como supabase-js
+// NO LANZA, el resultado se descarta y el código pone `action = 'activated'` /
+// `activated++` de todas formas. Síntoma real: el reporte de reconciliación
+// dice "activated: N" sin haber escrito UNA SOLA fila — y ésta es justo la
+// función que uno corre para RESCATAR a quien pagó y no recibió acceso.
+//
+// 🪤 Además no pagina: `const { data: memberships } = await sb.from('memberships').select('*')`
+// (~línea 218) construye `supaMap`, y todo correo ausente de ese mapa se INSERTA
+// como membresía nueva. Hoy hay 714 membresías —debajo del tope de 1,000 de
+// PostgREST— así que aún no explota; el día que se pase de 1,000 empezará a
+// crear duplicados y registros de doble cobro. Es un camino de DINERO al 71%
+// del detonador.
+//
+// Para arreglarlo: baja primero el fuente REAL desplegado
+// (GET /v1/projects/<ref>/functions/verify-membership/body → paquete ESZIP2.3),
+// reemplaza este archivo, y HASTA ENTONCES edita. Parchar esta copia vieja a
+// ciegas borraría 3 meses de cambios que sí están vivos.
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";

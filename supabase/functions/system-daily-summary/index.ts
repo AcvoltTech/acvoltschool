@@ -20,6 +20,31 @@ function jsonResponse(data: unknown, status = 200) {
   });
 }
 
+// ── Lector paginado (rompe el tope de 1,000 filas de PostgREST) ──
+// 🔴 RAÍZ: PostgREST corta TODA consulta en 1,000 filas (max_rows = 1000, del SERVIDOR).
+// Sin error, sin aviso: HTTP 200 con exactamente 1,000 filas. 🪤 `.limit(N)` NO sirve.
+// 🪤 Se ordena por `id` (ÚNICO): ordenar por `checked_at` (que tiene empates de sobra,
+// el sentinel escribe varias filas en el mismo instante) repetiría filas en una página
+// y se saltaría otras — el conteo de fallas saldría mal en las dos direcciones.
+// 🪤 supabase-js NUNCA tira excepción: se revisa `error` en CADA página y el resumen
+// dice que va INCOMPLETO en vez de presentar medio día como si fuera el día entero.
+const PAGE_SIZE = 1000;
+const MAX_PAGES = 100; // tope de seguridad (100k filas) para no caer en un bucle eterno
+async function fetchAllPaged<T>(
+  build: (from: number, to: number) => PromiseLike<{ data: unknown[] | null; error: { message?: string } | null }>,
+): Promise<{ rows: T[]; error: string | null }> {
+  const rows: T[] = [];
+  for (let page = 0; page < MAX_PAGES; page++) {
+    const offset = page * PAGE_SIZE;
+    const { data, error } = await build(offset, offset + PAGE_SIZE - 1);
+    if (error) return { rows, error: error.message || String(error) };
+    const batch = (data || []) as T[];
+    rows.push(...batch);
+    if (batch.length < PAGE_SIZE) return { rows, error: null };
+  }
+  return { rows, error: `Se alcanzó el tope de ${MAX_PAGES} páginas (${MAX_PAGES * PAGE_SIZE} filas)` };
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors });
 
@@ -37,16 +62,29 @@ serve(async (req) => {
 
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 
+  // 🔴 RAÍZ (medido 2026-09-10): en las últimas 24 h hay 6,912 filas en `health_log`
+  // (la tabla entera trae 947,252), pero esta lectura devolvía 1,000 — y encima sin
+  // `.order()`, así que ni siquiera se sabía CUÁLES 1,000. Síntoma real: el correo
+  // diario sub-reportaba las fallas; un subsistema podía estar caído todo el día y no
+  // aparecer nunca en el resumen. Ahora se pagina, ordenado por `id`.
   const since = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
-  const { data, error } = await supabase
-    .from('health_log').select('subsystem, platform, status, checked_at')
-    .gte('checked_at', since);
-  if (error) return jsonResponse({ error: error.message }, 500);
+  type HealthRow = { subsystem: string; platform: string | null; status: string; checked_at: string };
+  const { rows: data, error } = await fetchAllPaged<HealthRow>(
+    (from, to) => supabase
+      .from('health_log').select('id, subsystem, platform, status, checked_at')
+      .gte('checked_at', since)
+      .order('id', { ascending: true })
+      .range(from, to),
+  );
+  // 🪤 Si no se leyó NADA, no hay resumen que mandar: error duro (mandar "ALL CLEAR"
+  // cuando en realidad no pudimos leer sería la peor mentira posible de este correo).
+  if (error && data.length === 0) return jsonResponse({ error }, 500);
+  const partialRead = error;
 
   // Aggregate per (subsystem, platform)
   type Agg = { ok: number; warn: number; fail: number; total: number };
   const groups: Record<string, Agg> = {};
-  for (const row of data || []) {
+  for (const row of data) {
     const key = `${row.subsystem}|${row.platform || ''}`;
     if (!groups[key]) groups[key] = { ok: 0, warn: 0, fail: 0, total: 0 };
     groups[key].total++;
@@ -61,7 +99,7 @@ serve(async (req) => {
     return b[1].warn - a[1].warn;
   });
 
-  const totalChecks = (data || []).length;
+  const totalChecks = data.length;
   const totalFails = sorted.reduce((s, [, v]) => s + v.fail, 0);
   const totalWarns = sorted.reduce((s, [, v]) => s + v.warn, 0);
   const overall = totalFails > 0 ? '❌' : (totalWarns > 0 ? '⚠️' : '✅');
@@ -70,6 +108,11 @@ serve(async (req) => {
   let html = `<div style="font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:#0f172a;color:#f1f5f9;padding:24px;">`;
   html += `<h1 style="margin:0 0 4px;font-size:22px;">${overall} Maestro Daily Health — ${overallVerb}</h1>`;
   html += `<p style="margin:0 0 18px;color:#94a3b8;font-size:13px;">Last 24h · ${totalChecks} checks · ${totalFails} fails · ${totalWarns} warns</p>`;
+  // 🪤 Si la lectura de health_log se quedó a medias, el correo lo DICE. Un resumen
+  // incompleto que se ve completo es exactamente cómo un subsistema caído pasa inadvertido.
+  if (partialRead) {
+    html += `<div style="background:rgba(239,68,68,0.15);border:1px solid #ef4444;border-radius:8px;padding:12px;margin:0 0 18px;color:#fecaca;font-size:13px;">⚠️ LECTURA INCOMPLETA de health_log — este resumen cubre solo ${totalChecks} filas de las últimas 24h. Error: ${partialRead}. Los conteos de abajo van POR DEBAJO de la realidad.</div>`;
+  }
 
   if (sorted.length === 0) {
     html += `<div style="color:#facc15;padding:14px;">No health_log entries in the last 24h. Sentinel may not be running.</div>`;
@@ -113,7 +156,12 @@ serve(async (req) => {
     });
     const ok = resendRes.ok;
     const txt = ok ? null : await resendRes.text();
-    return jsonResponse({ sent: ok, totals: { checks: totalChecks, fails: totalFails, warns: totalWarns }, error: txt });
+    return jsonResponse({
+      sent: ok,
+      totals: { checks: totalChecks, fails: totalFails, warns: totalWarns },
+      ...(partialRead ? { partial: true, health_log_read_error: partialRead } : {}),
+      error: txt,
+    });
   } catch (e) {
     return jsonResponse({ error: (e as Error).message }, 500);
   }

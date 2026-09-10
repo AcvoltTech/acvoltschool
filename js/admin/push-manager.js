@@ -32,6 +32,10 @@ if (typeof _addTranslations === 'function') _addTranslations({
   adm_pm_daily_deactivated: { es: 'Recordatorio diario IN-APP desactivado', en: 'Daily IN-APP reminder disabled' },
   adm_pm_reminder_push_title: { es: '\uD83D\uDD14 \u00A1Activa las Notificaciones!', en: '\uD83D\uDD14 Turn On Notifications!' },
   adm_pm_reminder_push_body: { es: '\u00BFTienes compa\u00F1eros que no reciben avisos de clases? Diles que activen notificaciones en maestrohvacr.com para no perderse las clases EN VIVO.', en: 'Know peers who don\'t get class alerts? Tell them to enable notifications at maestrohvacr.com so they don\'t miss LIVE classes.' },
+  adm_pm_load_failed: { es: 'No pude cargar los datos de push. Los n\u00FAmeros de abajo ser\u00EDan mentira, as\u00ED que no se pintan.', en: 'Could not load push data. The numbers below would be a lie, so they are not shown.' },
+  adm_pm_retry: { es: 'Reintentar', en: 'Retry' },
+  adm_pm_partial: { es: 'Lectura INCOMPLETA: estos n\u00FAmeros son un PISO, no el total.', en: 'INCOMPLETE read: these numbers are a floor, not a total.' },
+  adm_pm_sending_batches: { es: 'Enviando en tandas de 50... {i} de {n}', en: 'Sending in batches of 50... {i} of {n}' },
 });
 
 /* ===================================================================
@@ -41,8 +45,13 @@ if (typeof _addTranslations === 'function') _addTranslations({
    Self-contained: injects HTML into #crm-section-pushManager.
    =================================================================== */
 
-var _pmData = { total: 0, withPush: 0, withoutPush: 0, users: [], pushEmails: new Set() };
+var _pmData = { total: 0, withPush: 0, withoutPush: 0, users: [], pushEmails: new Set(), completo: true };
 var _pmLoading = false;
+
+// 🪤 La edge `send-push-notification` recorre los correos UNO POR UNO (una consulta y un
+// envío por cada uno). Mandarle 5,718 de golpe la revienta por tiempo y NO se nota: responde
+// 200 con 0 enviados. Se manda de 50 en 50, en serie.
+var PM_LOTE_PUSH = 50;
 
 function _pmSb() { return window.supabaseClient; }
 
@@ -67,17 +76,41 @@ async function loadPushManager() {
     var sb = _pmSb();
     if (!sb) throw new Error('Supabase not available');
 
-    // Fetch all users and all push subscriptions in parallel
+    // Fetch all users and all push subscriptions in parallel.
+    // usersDataAdmin('admin_list') con limit>=1000 y sin offset YA pagina solo (ver
+    // js/users-data-client.js → callAllPages): trae los 11,296 usuarios completos.
     var usersPromise = usersDataAdmin('admin_list', { limit: 5000, fields: ["email","nombre","telefono","fecha_registro"] });
-    var pushPromise = sb.from('push_subscriptions').select('user_email, active, created_at').eq('active', true);
+
+    // 🔴 RAÍZ (10-sep-2026): esto era un `.select('user_email, active, created_at')` PELÓN.
+    // PostgREST corta TODO select en 1,000 filas sin avisar (HTTP 200, sin error), así que
+    // el mosaico "Con Push Activo" llevaba meses clavado cerca de 1,000 sobre 11,296 —
+    // Mario creía que el alcance de push era ~9%. MEDIDO ese día: 5,838 suscripciones
+    // activas / 5,718 correos distintos. El alcance real era 5.7x lo que decía la pantalla.
+    // 🪤 Se quitaron `active` y `created_at` del select: `active` ya va en el .eq() y
+    // `created_at` (verificado: SÍ existe en la tabla) no lo lee nadie aquí — son 5,838
+    // filas de datos que se traían para tirarlos.
+    var pushPromise = window.MaestroPagina.todo('push_subscriptions', 'id, user_email', function(q) {
+      return q.eq('active', true);
+    });
 
     var results = await Promise.all([usersPromise, pushPromise]);
-    var users = (results[0].data || []);
-    var pushSubs = (results[1].data || []);
+    var usersRes = results[0] || {};
+    var pushRes = results[1] || {};
 
-    // Build push email set
+    // 🔒 LEY: si la lectura falló, esta pantalla NO pinta 0 ni un porcentaje inventado.
+    // Antes el `|| []` convertía cualquier fallo en "nadie tiene push", que es la misma
+    // pantalla que "todo el mundo apagó las notificaciones" — indistinguibles.
+    if (usersRes.error) throw new Error('usuarios: ' + (usersRes.error.message || usersRes.error));
+    if (pushRes.error) throw new Error('push_subscriptions: ' + (pushRes.error.message || pushRes.error));
+
+    var users = usersRes.data || [];
+    var pushSubs = pushRes.data || [];
+    _pmData.completo = pushRes.completo !== false;
+
+    // 🪤 El mismo técnico tiene varios dispositivos (5,838 filas vs 5,718 correos):
+    // contar filas en vez de correos distintos infla el alcance ~2%.
     var pushEmails = {};
-    pushSubs.forEach(function(p) { if (p.user_email) pushEmails[p.user_email.toLowerCase()] = true; });
+    pushSubs.forEach(function(p) { if (p.user_email) pushEmails[String(p.user_email).trim().toLowerCase()] = true; });
 
     _pmData.total = users.length;
     _pmData.pushEmails = pushEmails;
@@ -107,7 +140,18 @@ async function loadPushManager() {
 
     _pmRender(shell);
   } catch(e) {
-    shell.innerHTML = '<div style="padding:24px;color:#ef4444;">Error: ' + (e.message || e) + '</div>';
+    // 🔒 LEY: "no pude leer" se DICE y se ofrece Reintentar. Antes salía un `Error: ...`
+    // pelón sin salida, y el admin no tenía forma de reintentar más que recargar el CRM.
+    console.warn('[PushManager] carga: ' + (e.message || e), e);
+    shell.innerHTML =
+      '<div style="padding:24px;">' +
+        '<div style="background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.35);border-radius:14px;padding:20px;">' +
+          '<div style="color:#fca5a5;font-size:15px;font-weight:700;margin-bottom:6px;">⚠️ ' + _pmEsc(_t('adm_pm_load_failed')) + '</div>' +
+          '<div style="color:#94a3b8;font-size:12px;margin-bottom:14px;">' + _pmEsc(e.message || String(e)) + '</div>' +
+          '<button onclick="loadPushManager()" style="background:linear-gradient(135deg,#ef4444,#dc2626);color:#fff;border:none;border-radius:10px;padding:10px 18px;font-size:13px;font-weight:700;cursor:pointer;">🔄 ' + _pmEsc(_t('adm_pm_retry')) + '</button>' +
+        '</div>' +
+      '</div>';
+    if (typeof window.showToast === 'function') window.showToast(_t('adm_pm_load_failed'), 'error');
   } finally {
     _pmLoading = false;
   }
@@ -124,6 +168,12 @@ function _pmRender(shell) {
   h += '<h2 style="margin:0;color:#e2e8f0;font-size:22px;">🔔 ' + _t('adm_pm_title') + '</h2>';
   h += '<button onclick="loadPushManager()" style="background:rgba(59,130,246,0.15);border:1px solid rgba(59,130,246,0.3);border-radius:8px;padding:8px 16px;color:#60a5fa;cursor:pointer;font-size:13px;">🔄 ' + _t('adm_pm_reload') + '</button>';
   h += '</div>';
+
+  // 🔒 LEY: una lista truncada NO se reporta como total. Si MaestroPagina llegó a su tope,
+  // los mosaicos son un PISO y hay que decirlo ANTES de que alguien tome una decisión con ellos.
+  if (_pmData.completo === false) {
+    h += '<div style="background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.35);border-radius:12px;padding:12px 16px;margin-bottom:16px;color:#fcd34d;font-size:13px;">⚠️ ' + _t('adm_pm_partial') + '</div>';
+  }
 
   // Stats cards
   h += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:16px;margin-bottom:24px;">';
@@ -303,7 +353,12 @@ async function _pmForceReprompt() {
 
 /* ── Send push reminder to those WITH push ────────── */
 async function _pmSendReminder() {
-  if (!confirm(_t('adm_pm_confirm_reminder').replace('{n}', _pmData.withPush))) return;
+  // 🪤 El confirm decía `_pmData.withPush` (los que CRUZAN con la tabla users), pero
+  // se manda a TODOS los correos suscritos. Con la lista capada a 1,000 la diferencia no se
+  // veía; con 5,718 reales sí, y prometer un número y mandar otro es la misma mentira de
+  // siempre. Se pregunta con el número que de verdad se va a usar.
+  var _pmDestinos = Object.keys(_pmData.pushEmails || {}).length;
+  if (!confirm(_t('adm_pm_confirm_reminder').replace('{n}', _pmDestinos))) return;
 
   var msg = document.getElementById('pmResultMsg');
   if (msg) { msg.style.display = ''; msg.style.background = 'rgba(59,130,246,0.15)'; msg.style.color = '#60a5fa'; msg.textContent = '⏳ ' + _t('adm_pm_sending_reminder'); }
@@ -313,17 +368,48 @@ async function _pmSendReminder() {
     var emails = Object.keys(_pmData.pushEmails);
     if (emails.length === 0) { if (msg) { msg.textContent = '⚠️ ' + _t('adm_pm_no_push_users'); } return; }
 
-    var resp = await sb.functions.invoke('send-push-notification', {
-      body: {
-        recipient_emails: emails,
-        title: _t('adm_pm_reminder_push_title', '\uD83D\uDD14 \u00A1Activa las Notificaciones!'),
-        body: _t('adm_pm_reminder_push_body', '\u00BFTienes compa\u00F1eros que no reciben avisos de clases? Diles que activen notificaciones en maestrohvacr.com para no perderse las clases EN VIVO.'),
-        type: 'general',
-        admin_email: typeof getAdminEmail === 'function' ? getAdminEmail() : ''
+    // 🔴 Antes se mandaban TODOS los correos en UNA sola llamada. Con la lista capada a
+    // 1,000 a veces alcanzaba; ahora que la lista real son 5,718 la edge se muere de tiempo
+    // a media lista y devuelve 200 con 0 enviados — el admin ve "✅ Enviado" y no salió ni
+    // un push. Se manda de 50 en 50, EN SERIE, y se suma lo que cada tanda reporta.
+    var titulo = _t('adm_pm_reminder_push_title', '\uD83D\uDD14 \u00A1Activa las Notificaciones!');
+    var cuerpo = _t('adm_pm_reminder_push_body', '\u00BFTienes compa\u00F1eros que no reciben avisos de clases? Diles que activen notificaciones en maestrohvacr.com para no perderse las clases EN VIVO.');
+    var totalLotes = Math.ceil(emails.length / PM_LOTE_PUSH);
+    var enviados = 0, fallidos = 0, lotesRotos = 0;
+
+    for (var i = 0; i < emails.length; i += PM_LOTE_PUSH) {
+      var lote = emails.slice(i, i + PM_LOTE_PUSH);
+      var nLote = Math.floor(i / PM_LOTE_PUSH) + 1;
+      if (msg) msg.textContent = '⏳ ' + _t('adm_pm_sending_batches').replace('{i}', nLote).replace('{n}', totalLotes);
+
+      var resp = await sb.functions.invoke('send-push-notification', {
+        body: {
+          recipient_emails: lote,
+          title: titulo,
+          body: cuerpo,
+          type: 'general',
+          admin_email: typeof getAdminEmail === 'function' ? getAdminEmail() : ''
+        }
+      });
+      if (resp && resp.error) {
+        // Una tanda rota no cancela las demás, pero SÍ se cuenta: si no, el resumen final
+        // vuelve a mentir por omisión.
+        lotesRotos++;
+        fallidos += lote.length;
+        console.warn('[PushManager] tanda ' + nLote + '/' + totalLotes + ' rechazada: ' + (resp.error.message || resp.error), resp.error);
+        continue;
       }
-    });
-    var data = resp.data || {};
-    if (msg) { msg.style.background = 'rgba(34,197,94,0.15)'; msg.style.color = '#22c55e'; msg.textContent = '✅ ' + _t('adm_pm_sent_to').replace('{n}', data.sent || 0).replace('{f}', data.failed || 0); }
+      var data = (resp && resp.data) || {};
+      enviados += Number(data.sent || 0);
+      fallidos += Number(data.failed || 0);
+    }
+
+    if (msg) {
+      var roto = lotesRotos ? ' · ⚠️ ' + lotesRotos + '/' + totalLotes + ' tandas no salieron' : '';
+      msg.style.background = lotesRotos ? 'rgba(245,158,11,0.15)' : 'rgba(34,197,94,0.15)';
+      msg.style.color = lotesRotos ? '#fcd34d' : '#22c55e';
+      msg.textContent = (lotesRotos ? '⚠️ ' : '✅ ') + _t('adm_pm_sent_to').replace('{n}', enviados).replace('{f}', fallidos) + roto;
+    }
   } catch(e) {
     if (msg) { msg.style.background = 'rgba(239,68,68,0.15)'; msg.style.color = '#ef4444'; msg.textContent = '❌ Error: ' + (e.message || e); }
   }
