@@ -377,7 +377,12 @@ function renderAdminLiveStreamPanel() {
         '<div style="display:flex;flex-direction:column;gap:12px;">' +
           '<input class="lsa-input" id="lsaTitle" placeholder="' + _t('adm_lsa_title_ph') + '" maxlength="200">' +
           '<select class="lsa-input" id="lsaGroup" style="cursor:pointer;">' +
-            '<option value="todos">' + _t('adm_lsa_all_students') + '</option>' +
+            // 🔴 Mario 18-sep: "clases para todos y clases vip... así les damos una
+            //    probadita a todos para convertir más ventas". El grupo que se llamaba
+            //    "Todos" en realidad EXIGE el VIP $149.99 — el nombre decía una cosa y
+            //    hacía la otra. Ahora se llama por su nombre y existe la clase ABIERTA.
+            '<option value="abierta">\u{1F513} Clase para TODOS · gratis</option>' +
+            '<option value="todos">\u{1F451} Clase VIP · solo quien paga $149.99</option>' +
             '<option value="mar_mie">' + _t('adm_lsa_tue_wed') + '</option>' +
             '<option value="sab_dom">' + _t('adm_lsa_sat_sun') + '</option>' +
           '</select>' +
@@ -482,6 +487,14 @@ function renderAdminStreamList() {
 
     // Action buttons based on status
     html += '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">';
+
+    /* 🔍 «Comprobar audiencia» — pregunta al servidor a cuántos avisaría ESTA clase
+     *  SIN enviar nada. Va en toda transmisión existente: no hace falta ponerse en
+     *  vivo para saber el número. No inicia ni modifica la transmisión. */
+    html += '<button class="lsa-btn lsa-btn-gray" id="lsaAudBtn_' + s.id + '" ' +
+            'onclick="lsaComprobarAudiencia(\'' + s.id + '\')" ' +
+            'title="Pregunta al servidor a cuántas cuentas avisaría. NO envía avisos.">' +
+            '🔍 Comprobar audiencia</button>';
 
     if (s.status === 'scheduled') {
       html += '<button class="lsa-btn lsa-btn-red" onclick="adminGoLiveBrowser(\'' + s.id + '\')">📹 ' + _t('adm_lsa_broadcast_here') + '</button>';
@@ -927,10 +940,10 @@ function lsaGetEmailsForGroup(classGroup) {
   var allStudents = [];
   try { allStudents = JSON.parse(localStorage.getItem('maestroac_student_groups') || '[]'); } catch(e) { console.warn('[LiveStreamAdmin]', e.message || e); }
 
-  if (!classGroup || classGroup === 'todos') {
-    // Return all student emails
-    return allStudents.map(function(s) { return s.email; }).filter(Boolean);
-  }
+  // 🪤 YA NO devuelve el padrón del NAVEGADOR para 'todos': ese era el bug que el
+  //    18-sep avisó a 355 personas (1 de 31 VIP, y 190 que no pagan) en vez de a los
+  //    VIP reales. 'todos' y 'abierta' los resuelve el SERVIDOR, que sí pagina y filtra.
+  if (!classGroup || classGroup === 'todos' || classGroup === 'abierta') return [];
 
   // Map class_group to student group IDs
   var groupMap = {
@@ -946,38 +959,197 @@ function lsaGetEmailsForGroup(classGroup) {
   }).map(function(s) { return s.email; });
 }
 
+/* Quién debe recibir el aviso de ESTA transmisión.
+ *  'abierta'        → '__all__'  (clase gratis para todos)
+ *  'todos' o vacío  → '__vip__'  (clase de paga; sin grupo la PUERTA también pide VIP)
+ *  cohorte          → su lista; vacía = NADIE, nunca "todos"
+ * 🔒 Centinela propio para VIP, no '__all__'+bandera: si la bandera se perdiera en el
+ *    camino, '__all__' significaría "a todos" y la clase de paga se le anunciaría a
+ *    5,093 personas que no pueden entrar. Con '__vip__' el peor caso es no llegarle a
+ *    nadie — falla CERRADO, que es lo correcto para algo que se cobra. */
+function _lsaAudienciaDelVivo(stream) {
+  /* Sin transmisión explícita (el botón manual «📣 ALERTA A TODOS») se toma la que
+   * está EN VIVO. 🪤 Antes ese botón mandaba '__all__' FIJO: apretarlo durante una
+   * clase VIP le anunciaba una clase de paga a 5,093 personas que rebotan en el muro.
+   * Si no hay ninguna en vivo, se conserva el sentido literal del botón: a todos. */
+  if (!stream) {
+    try {
+      var lista = (typeof _lsaStreams !== 'undefined' && _lsaStreams) || [];
+      for (var i = 0; i < lista.length; i++) {
+        if (lista[i] && (lista[i].status === 'live' || lista[i].is_live === true)) { stream = lista[i]; break; }
+      }
+    } catch (e) { console.warn('[LiveStreamAdmin] no pude ver las transmisiones:', (e && e.message) || e); }
+    if (!stream) return { recipient_emails: ['__all__'] };
+  }
+  var grp = stream && stream.class_group;
+  if (grp === 'abierta') return { recipient_emails: ['__all__'] };
+  if (!grp || grp === 'todos') return { recipient_emails: ['__vip__'], solo_vip: true };
+  var correos = lsaGetEmailsForGroup(grp) || [];
+  if (!correos.length) {
+    console.warn('[LiveStreamAdmin] cohorte "' + grp + '" sin correos: no aviso a nadie en vez de avisar a todos');
+    return { recipient_emails: [] };
+  }
+  return { recipient_emails: correos };
+}
+
+/* Sesión de admin REAL o nada. 🪤 `_lsaHmsAuthToken()` cae a la llave ANÓNIMA cuando
+ * no hay sesión; el servidor la rechaza con 401 y el fallo se pierde en un warn — o sea
+ * que la consulta parecería "no funcionar por algo" cuando en realidad nunca iba firmada.
+ * Tener el panel abierto NO prueba que la sesión siga viva. */
+async function _lsaTokenAdminReal() {
+  try {
+    if (typeof supabaseClient === 'undefined' || !supabaseClient || !supabaseClient.auth) return null;
+    var sess = await supabaseClient.auth.getSession();
+    var tok = sess && sess.data && sess.data.session && sess.data.session.access_token;
+    return tok || null;
+  } catch (e) { console.warn('[LSA] no pude leer la sesión:', (e && e.message) || e); return null; }
+}
+
+/* 🔍 «Comprobar audiencia» — a cuántas CUENTAS avisaría esta clase, SIN enviar nada.
+ *  Usa `dry_run:true` de send-live-notification: el servidor resuelve la audiencia desde
+ *  el `stream_id` y contesta el número, sin llamar al envío y sin exponer correos.
+ *  🪤 "cuentas únicas" NO es "avisos entregados": un técnico puede traer 3 teléfonos. */
+window.lsaComprobarAudiencia = async function (streamId) {
+  var btn = document.getElementById('lsaAudBtn_' + streamId);
+  var prev = btn && btn.textContent;
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Comprobando…'; }
+  var r = { ok: false, motivo: '', targeted: null, group: null };
+  try {
+    var tok = await _lsaTokenAdminReal();
+    if (!tok) {
+      r.motivo = 'Tu sesión de administrador no está activa (o venció). Vuelve a entrar y repite — tener el panel abierto no basta.';
+    } else {
+      var sbUrl = (typeof SUPABASE_URL !== 'undefined') ? SUPABASE_URL : 'https://htklsowiyjwsjnacnvnr.supabase.co';
+      var sbKey = (typeof SUPABASE_KEY !== 'undefined') ? SUPABASE_KEY : '';
+      var resp = await fetch(sbUrl + '/functions/v1/send-live-notification', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + tok, 'apikey': sbKey },
+        body: JSON.stringify({ stream_id: streamId, dry_run: true })
+      });
+      var d = {};
+      try { d = await resp.json(); } catch (e) { d = {}; }
+      if (resp.status === 401 || resp.status === 403) {
+        r.motivo = 'El servidor no te reconoció como administrador (' + resp.status + '). La sesión pudo vencer: vuelve a entrar.';
+      } else if (!resp.ok || d.dry_run !== true) {
+        r.motivo = 'El servidor no pudo resolver la audiencia' + (d.error ? ': ' + d.error : '') + ' (código ' + resp.status + ').';
+      } else { r.ok = true; r.targeted = d.targeted; r.group = d.group; }
+    }
+  } catch (e) { r.motivo = 'No pude preguntarle al servidor: ' + ((e && e.message) || e); }
+  if (btn) { btn.disabled = false; btn.textContent = prev || '🔍 Comprobar audiencia'; }
+  var et = { abierta: 'Clase para TODOS · gratis', todos: 'Clase VIP ($149.99)', mar_mie: 'Mar/Mié', sab_dom: 'Sáb/Dom', trinidad: 'Sáb/Dom' };
+  if (r.ok) {
+    alert('🔍 Comprobación — NO se envió ningún aviso\n\nGrupo: ' + (et[r.group] || r.group) +
+          '\nLe avisaría a: ' + r.targeted + ' cuentas distintas\n\n' +
+          'Ojo: son CUENTAS, no avisos entregados — un técnico puede tener varios teléfonos.');
+  } else {
+    alert('🔍 Comprobación — NO se envió ningún aviso\n\n⚠️ ' + r.motivo);
+  }
+  return r;
+};
+
 function lsaNotifyGoLive(stream) {
   if (!stream) return;
-  // Prevent duplicate notifications for same stream
-  if (stream._notifSent) return;
-  stream._notifSent = true;
-  var groupEmails = lsaGetEmailsForGroup(stream.class_group);
+  /* 🪤 DOS BANDERAS, no una. Con una sola no se distingue "ya salió" de "va en
+   *    camino", y por eso un fallo quedaba marcado como enviado PARA SIEMPRE: el
+   *    código viejo ponía `_notifSent = true` ANTES de mandar, así que si la
+   *    petición fallaba el aviso se perdía y NUNCA se reintentaba.
+   *      _notifPending = va en camino → no mandar otra vez AHORA
+   *      _notifSent    = SE CONFIRMÓ  → no mandar nunca más */
+  if (stream._notifSent || stream._notifPending) return;
+  stream._notifPending = true;
 
-  var groupLabels = { todos: _t('adm_lsa_grp_all', 'Todos'), mar_mie: _t('adm_lsa_grp_mar_mie', 'Mar/Mié'), sab_dom: _t('adm_lsa_grp_sab_dom', 'Sáb/Dom'), trinidad: _t('adm_lsa_grp_sab_dom', 'Sáb/Dom') };
-  var groupLabel = groupLabels[stream.class_group] || _t('adm_lsa_grp_all', 'Todos');
+  var _liberar = function (porQue) {
+    stream._notifPending = false;
+    console.error('[LiveStreamAdmin] el aviso NO salió (' + porQue + '): queda para reintentar');
+  };
+  var _confirmar = function (detalle) {
+    stream._notifPending = false;
+    stream._notifSent = true;
+    console.log('[LiveStreamAdmin] aviso confirmado · ' + detalle);
+  };
+  /* Un lote a medias NO se confirma (el que no lo recibió no existiría para nadie)
+   * y TAMPOCO se libera (reintentar duplica al que ya lo tiene). Tercer estado. */
+  var _parcial = function (salieron, pedidos, detalle) {
+    console.error('[LiveStreamAdmin] aviso INCOMPLETO · ' + detalle + ' → solo ' + salieron +
+                  ' de ' + pedidos + '. NO lo doy por enviado y NO lo reintento solo.');
+  };
+  /* Arriba de 50 el servidor contesta {background:true,sending:N} SIN conteos y
+   * termina en segundo plano. "Aceptado" no es "cero" — ni es "entregado". */
+  var _enSegundoPlano = function (d, detalle) {
+    if (!d || d.background !== true) return false;
+    _confirmar(detalle + ' → ACEPTADO, enviando ' + (d.sending || '?') +
+               ' en segundo plano (el conteo real queda en notification_log)');
+    return true;
+  };
+  /* "No sé" no es "no salió": un recibo ilegible puede llegar DESPUÉS del despacho. */
+  var _dudoso = function (d, detalle) {
+    if (!d || (d.uncertain !== true && d.status !== 'receipt_unknown')) return false;
+    console.error('[LiveStreamAdmin] recibo DUDOSO · ' + detalle + ' → pudo haber salido y no me consta.');
+    return true;
+  };
+  /* 🔴 EL EDGE NO MANDA `total` (Codex CDX-153). `send-push-notification` responde
+   *  `{sent, failed}` a secas. Si se lee `d.total` y no viene, pedidos queda en 0 y
+   *  entonces `{sent:1, failed:1}` —¡un envío A MEDIAS!— se confirma como COMPLETO.
+   *  🪤 El total se DERIVA de sent+failed. Si no se puede derivar o no cuadra, el
+   *     recibo es DUDOSO: se conserva el pendiente en vez de adivinar. */
+  var _cuenta = function (v) { return typeof v === 'number' && isFinite(v) && v >= 0 && Math.floor(v) === v; };
+  var _pedidosDelRecibo = function (d) {
+    if (!d || !_cuenta(d.sent)) return null;
+    if (_cuenta(d.total)) {
+      if (_cuenta(d.failed) && d.total !== d.sent + d.failed) return null;
+      return d.total;
+    }
+    if (_cuenta(d.failed)) return d.sent + d.failed;
+    return null;
+  };
+  var _juzgar = function (salieron, pedidos, detalle) {
+    if (!(salieron > 0)) { _liberar('cero enviados · ' + detalle); return; }
+    if (pedidos > 0 && salieron < pedidos) { _parcial(salieron, pedidos, detalle); return; }
+    _confirmar(detalle + ' → ' + salieron + ' de ' + (pedidos || salieron));
+  };
+
+  var etiquetas = { abierta: 'TODOS · gratis', todos: 'VIP', mar_mie: 'Mar/Mié', sab_dom: 'Sáb/Dom', trinidad: 'Sáb/Dom' };
+  var etiqueta = etiquetas[stream.class_group] || 'VIP';
   var pushTitle = '🔴 ' + _t('adm_lsa_live') + ': ' + (stream.title || _t('adm_lsa_class_live'));
   var pushBody = _t('adm_lsa_push_body_live', 'Maestro Mario está transmitiendo ahora. ¡Entra a ver la clase!');
 
-  if (groupEmails.length > 0) {
-    // Send push to group-specific students
-    if (typeof notifyStudents === 'function') {
-      notifyStudents(pushTitle, pushBody, 'clase', groupEmails);
-    }
-    console.log('[LiveStreamAdmin] Push sent to ' + groupEmails.length + ' students (' + groupLabel + ')');
-  } else {
-    // No group emails found — send to ALL active push subscribers automatically
-    console.log('[LiveStreamAdmin] No group emails found, sending push to ALL subscribers');
-    if (typeof notifyStudents === 'function') {
-      notifyStudents(pushTitle, pushBody, 'clase', 'all');
-    }
-    console.log('[LiveStreamAdmin] Push sent to ALL students');
+  var audiencia = _lsaAudienciaDelVivo(stream);
+  if (!audiencia.recipient_emails || !audiencia.recipient_emails.length) {
+    _liberar('la audiencia del grupo "' + stream.class_group + '" vino vacía — mejor a nadie que a todos');
+    return;
   }
 
-  // Email broadcast backup — reaches iOS native users who can't receive Web Push
-  _lsaEmailBroadcastOnLive(pushTitle, pushBody);
+  try {
+    var _sb = (typeof supabaseClient !== 'undefined') ? supabaseClient : null;
+    if (!_sb || !_sb.functions) { _liberar('sin cliente Supabase'); return; }
+    var cuerpo = {
+      title: pushTitle, body: pushBody, type: 'clase',
+      url: './index.html#liveStreamingScreen?ntf=1',
+      admin_email: (localStorage.getItem('tecnico_email') || localStorage.getItem('maestroac_email') || '')
+    };
+    for (var k in audiencia) { if (Object.prototype.hasOwnProperty.call(audiencia, k)) cuerpo[k] = audiencia[k]; }
+    _sb.functions.invoke('send-push-notification', { body: cuerpo }).then(function (r) {
+      // 🪤 Un {data:{error}} con HTTP 200 es un fallo de NEGOCIO: la petición llegó
+      //    pero el envío no ocurrió. Mirar solo r.error lo daba por bueno.
+      if (!r || r.error || !r.data || r.data.error) {
+        _liberar('el servidor no confirmó' + (r && r.data && r.data.error ? ': ' + r.data.error : ''));
+        return;
+      }
+      var d = r.data;
+      if (_dudoso(d, etiqueta)) return;
+      if (_enSegundoPlano(d, etiqueta)) return;
+      var _ped = _pedidosDelRecibo(d);
+      if (_ped === null) { _dudoso({ uncertain: true }, etiqueta + ' · recibo sin conteos usables'); return; }
+      _juzgar(d.sent, _ped, etiqueta);
+    }, function (e) { _liberar((e && e.message) || 'la petición falló'); });
+  } catch (e) { _liberar((e && e.message) || 'reventó'); }
+
+  // Correo de respaldo (iOS nativo no recibe Web Push). Va con la MISMA audiencia:
+  // sin audiencia el edge aborta con 400 a propósito, para no mandarle a 11,653.
+  _lsaEmailBroadcastOnLive(pushTitle, pushBody, audiencia);
 }
 
-function _lsaEmailBroadcastOnLive(title, body) {
+function _lsaEmailBroadcastOnLive(title, body, audiencia) {
   try {
     var sbUrl = typeof SUPABASE_URL !== 'undefined' ? SUPABASE_URL : 'https://htklsowiyjwsjnacnvnr.supabase.co';
     var sbKey = typeof SUPABASE_KEY !== 'undefined' ? SUPABASE_KEY : '';
@@ -986,12 +1158,14 @@ function _lsaEmailBroadcastOnLive(title, body) {
       fetch(sbUrl + '/functions/v1/broadcast-live-alert', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + authTok, 'apikey': sbKey },
-        body: JSON.stringify({
+        // 🪤 El correo iba SIN audiencia: el edge lo abortaba con 400 a propósito
+        //    para no mandarle a los 11,653. Ahora lleva la MISMA audiencia del push.
+        body: JSON.stringify(Object.assign({
           title: title,
           body: body,
           url: 'https://maestrohvacr.com/#liveStreamingScreen',
           admin_email: adminEmail
-        })
+        }, audiencia || {}))
       }).then(function(r) { return r.json().catch(function(){ return {}; }); })
         .then(function(d) { console.log('[LiveStreamAdmin] Email broadcast sent:', d.sent || 0, 'emails'); })
         .catch(function(e) { console.warn('[LiveStreamAdmin] Email broadcast error:', e.message || e); });
@@ -3033,14 +3207,14 @@ window.lsaBroadcastLiveAlert = async function() {
     var pushP = fetch(sbUrl + '/functions/v1/send-push-notification', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + authTok, 'apikey': sbKey },
-      body: JSON.stringify({
-        recipient_emails: ['__all__'],
+      // 🪤 Ya no '__all__' FIJO: sigue la audiencia de la clase que está en vivo.
+      body: JSON.stringify(Object.assign(_lsaAudienciaDelVivo(), {
         title: titleIn,
         body: bodyIn,
         type: 'clase',
         url: './index.html#liveStreamingScreen?ntf=1',
         admin_email: adminEmail
-      })
+      }))
     }).then(function(r) { return r.json().catch(function(){ return {}; }).then(function(d){ return { ok: r.ok, data: d }; }); });
 
     var emailP = fetch(sbUrl + '/functions/v1/broadcast-live-alert', {
@@ -3184,7 +3358,9 @@ window._lsaRetryFailed = async function() {
     var retryPush = pushFailed ? fetch(sbUrl + '/functions/v1/send-push-notification', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + authTok, 'apikey': sbKey },
-      body: JSON.stringify({ recipient_emails: ['__all__'], title: params.titleIn, body: params.bodyIn, type: 'clase', url: './index.html#liveStreamingScreen', admin_email: params.adminEmail })
+      // 🪤 El REINTENTO también mandaba '__all__' fijo: un reintento con la audiencia
+      //    equivocada es igual de dañino que el primer envío con la audiencia equivocada.
+      body: JSON.stringify(Object.assign(_lsaAudienciaDelVivo(), { title: params.titleIn, body: params.bodyIn, type: 'clase', url: './index.html#liveStreamingScreen', admin_email: params.adminEmail }))
     }).then(function(r) { return r.json().catch(function(){ return {}; }).then(function(d){ return { ok: r.ok, data: d }; }); }) : Promise.resolve(prev.push);
 
     var retryEmail = emailFailed ? fetch(sbUrl + '/functions/v1/broadcast-live-alert', {
