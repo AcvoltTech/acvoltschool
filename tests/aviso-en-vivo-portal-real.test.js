@@ -211,3 +211,20 @@ describe('comprobar audiencia sin enviar (portal real)', () => {
     expect(r.targeted).toBe(null);
   });
 });
+
+// 🔴 EL CORREO MANDABA A LA PÁGINA DE PUBLICIDAD (18-sep-2026). `maestrohvacr.com` es
+//    el sitio de marketing: medido, NO contiene `liveStreamingScreen` ni código de app.
+//    El técnico leía "entra a la clase", picaba, y aterrizaba en un anuncio.
+describe('el enlace de la clase lleva a la clase', () => {
+  it('ningún enlace apunta ya a la página de publicidad', () => {
+    expect(src).not.toContain('maestrohvacr.com/#liveStreamingScreen');
+  });
+
+  it('el push usa ruta RELATIVA (abre en el origen de quien recibe)', async () => {
+    const { ctx, pedido } = entorno({ data: { sent: 1, failed: 0 } }, []);
+    ctx.lsaNotifyGoLive({ id: 'a', class_group: 'todos' });
+    await esperar();
+    expect(pedido.cuerpo.url.startsWith('./')).toBe(true);
+    expect(pedido.cuerpo.url).toContain('liveStreamingScreen');
+  });
+});

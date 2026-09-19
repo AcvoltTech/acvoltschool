@@ -1163,7 +1163,7 @@ function _lsaEmailBroadcastOnLive(title, body, audiencia) {
         body: JSON.stringify(Object.assign({
           title: title,
           body: body,
-          url: 'https://maestrohvacr.com/#liveStreamingScreen',
+          url: 'https://acvoltschool.com/#liveStreamingScreen',
           admin_email: adminEmail
         }, audiencia || {}))
       }).then(function(r) { return r.json().catch(function(){ return {}; }); })
@@ -3223,7 +3223,12 @@ window.lsaBroadcastLiveAlert = async function() {
       body: JSON.stringify({
         title: titleIn,
         body: bodyIn,
-        url: 'https://maestrohvacr.com/#liveStreamingScreen?ntf=1',
+        /* 🔴 Este PUSH mandaba a maestrohvacr.com, que es la página de PUBLICIDAD: no
+         *  tiene `liveStreamingScreen` ni código de app, así que el técnico picaba
+         *  "entra a la clase" y aterrizaba en un anuncio. En un push la ruta correcta
+         *  es RELATIVA: abre la clase en el propio origen de quien recibe (la app o la
+         *  escuela), igual que hace el aviso automático. (18-sep-2026) */
+        url: './index.html#liveStreamingScreen?ntf=1',
         admin_email: adminEmail
       })
     }).then(function(r) { return r.json().catch(function(){ return {}; }).then(function(d){ return { ok: r.ok, data: d }; }); });
@@ -3366,7 +3371,7 @@ window._lsaRetryFailed = async function() {
     var retryEmail = emailFailed ? fetch(sbUrl + '/functions/v1/broadcast-live-alert', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + authTok, 'apikey': sbKey },
-      body: JSON.stringify({ title: params.titleIn, body: params.bodyIn, url: 'https://maestrohvacr.com/#liveStreamingScreen', admin_email: params.adminEmail })
+      body: JSON.stringify({ title: params.titleIn, body: params.bodyIn, url: 'https://acvoltschool.com/#liveStreamingScreen', admin_email: params.adminEmail })
     }).then(function(r) { return r.json().catch(function(){ return {}; }).then(function(d){ return { ok: r.ok, data: d }; }); }) : Promise.resolve(prev.email);
 
     var retrySms = smsFailed ? fetch(sbUrl + '/functions/v1/sms-live-alert', {
