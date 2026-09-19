@@ -611,7 +611,13 @@ async function loadLiveStreams() {
     for (var i = 0; i < allStreams.length; i++) {
       var s = allStreams[i];
       var isLive = s.status === 'live';
-      var canAccess = !s.class_group || myGroups.indexOf(s.class_group) !== -1;
+      /* 🔓 LA WEB DE LA ESCUELA NO SABÍA QUÉ ES UNA CLASE ABIERTA (19-sep-2026).
+       *  'abierta' es la probadita GRATIS para convertir, y no está en los grupos de
+       *  nadie: `canAccess` daba false y la tarjeta mostraba "Contacta para inscribirte"
+       *  —el muro— en la clase que justamente NO tiene muro. Mario se quedó fuera de su
+       *  propia clase desde el teléfono; aquí en la web pasaba lo mismo.
+       *  🪤 Solo se abre 'abierta'. La clase VIP y las cohortes deciden igual que antes. */
+      var canAccess = (s.class_group === 'abierta') || !s.class_group || myGroups.indexOf(s.class_group) !== -1;
       var badge = isLive
         ? '<span style="background:#34c759;color:#fff;padding:3px 10px;border-radius:10px;font-size:11px;font-weight:800;animation:lsa-pulse 1.5s infinite;letter-spacing:0.5px;">' + _t('ls_badge_live','EN VIVO') + '</span>'
         : '<span style="background:rgba(234,179,8,0.15);color:#b45309;padding:3px 10px;border-radius:10px;font-size:11px;font-weight:700;">' + _t('ls_badge_scheduled','Programado') + '</span>';
@@ -3258,6 +3264,10 @@ function _lsFloatReaction(emoji) {
 
 /* ── Check if stream belongs to my group ─────────────────────── */
 function _lsStreamIsForMe(stream) {
+  /* 🔓 Sin esta línea la clase abierta se creaba, avisaba a los 5,012 y NO APARECÍA EN
+   *  LA LISTA DE NADIE: abajo se exige pertenecer al grupo, y a 'abierta' no pertenece
+   *  nadie. La ve todo el que tenga la app, sin cohorte y sin VIP. */
+  if (stream.class_group === 'abierta') return true;
   if (!stream.class_group || stream.class_group === 'todos') return true;
   var myGroups = _lsGetMyGroups();
   return myGroups.indexOf(stream.class_group) !== -1;
