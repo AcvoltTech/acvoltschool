@@ -600,7 +600,9 @@ async function loadLiveStreams() {
 
     // AUTO-ENTER: If there's exactly one live stream the user CAN access, go directly
     var accessibleLive = allStreams.filter(function(s) {
-      return s.status === 'live' && (!s.class_group || myGroups.indexOf(s.class_group) !== -1);
+      // 🔓 Sin esto el "entrar directo" nunca se dispara en la clase GRATIS: 'abierta'
+      //    no está en los grupos de nadie. (Barrido de puertas, 19-sep-2026)
+      return s.status === 'live' && (s.class_group === 'abierta' || !s.class_group || myGroups.indexOf(s.class_group) !== -1);
     });
     if (accessibleLive.length === 1) {
       watchStream(accessibleLive[0].id, accessibleLive[0].playback_url || '');
@@ -674,7 +676,8 @@ async function loadRecordings() {
     var myGroups = _lsGetMyGroups();
     data = (data || []).filter(function(r) {
       var group = r.live_streams ? r.live_streams.class_group : 'todos';
-      return !group || myGroups.indexOf(group) !== -1;
+      // 🔓 La grabación de la clase GRATIS se escondía de la lista.
+      return group === 'abierta' || !group || myGroups.indexOf(group) !== -1;
     });
 
     // Cache recordings and preload quiz progress
@@ -3713,7 +3716,9 @@ async function _lsDoVerify() {
     }
 
     // User found — check group access
-    if (stream.class_group && stream.class_group !== 'todos') {
+    // 🔓 'abierta' caía en la comprobación de COHORTE y respondía "Tu membresía no
+    //    incluye el grupo abierta" — una clase gratis rechazando gente.
+    if (stream.class_group && stream.class_group !== 'todos' && stream.class_group !== 'abierta') {
       var hasAccess = await _lsCheckGroupAccess(user.email, stream.class_group);
       if (!hasAccess) {
         var gLabels = { mar_mie: _t('ls_group_tue_wed', 'Martes y Miércoles'), sab_dom: _t('ls_group_sat_sun', 'Sábado y Domingo') };
