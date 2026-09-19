@@ -131,7 +131,7 @@ serve(async (req) => {
     const SA_RAW = Deno.env.get('FCM_SERVICE_ACCOUNT_JSON') || '';
     if (!SA_RAW) return json({ error: 'FCM_SERVICE_ACCOUNT_JSON no configurado' }, 500);
 
-    const { title, body, url, admin_email, dry_run, test_token } = await req.json();
+    const { title, body, url, admin_email, dry_run, test_token, recipient_emails, solo_vip } = await req.json();
     const sb = createClient(SB_URL, SB_KEY);
     const auth = await verifyAdminAuth(req, sb, admin_email);
     if (!auth.verified) return json({ error: auth.error || 'Unauthorized' }, auth.status || 403);
@@ -154,24 +154,73 @@ serve(async (req) => {
     // Síntoma real: `[fcm-push] done { total: ... }` imprimía ~1000 para siempre y TODO
     // dispositivo iOS/Android después del primer millar jamás recibía un push. El
     // `.limit(50000)` daba falsa tranquilidad: el tope es del servidor. Ahora se pagina.
-    const { rows: subs, error: subsErr } = await fetchAllPaged<{ device_token: string | null }>(
+    /* 🔴 ESTA FUNCIÓN IGNORABA LA AUDIENCIA POR COMPLETO (Codex CDX-158 · 19-sep-2026).
+     *  No leía `recipient_emails` ni `solo_vip`: mandaba a TODOS los tokens nativos
+     *  activos, siempre. El botón manual «📣 ALERTA A TODOS» la llama, así que una
+     *  clase VIP $149.99 se le anunciaba a los ~5,795 teléfonos iOS/Android aunque el
+     *  web-push sí respetara `__vip__`. El canal grande era justo el que no filtraba.
+     *  🪤 Sin audiencia declarada NO se manda: mismo contrato que broadcast-live-alert.
+     */
+    const audiencia: string[] = Array.isArray(recipient_emails)
+      ? recipient_emails.map((e: unknown) => String(e || '').trim().toLowerCase()).filter(Boolean)
+      : [];
+    if (audiencia.length === 0) {
+      return json({ error: 'audiencia_no_declarada', detalle: 'Di a quién: ["__all__"], ["__vip__"] o una lista de correos.' }, 400);
+    }
+    const esTodos = audiencia.includes('__all__');
+    const esVip = audiencia.includes('__vip__') || solo_vip === true;
+
+    const { rows: subs, error: subsErr } = await fetchAllPaged<{ device_token: string | null; user_email: string | null }>(
       (from, to) => sb
         .from('push_subscriptions')
-        .select('id, device_token')
+        .select('id, device_token, user_email')
         .eq('active', true)
         .not('device_token', 'is', null)
         .order('id', { ascending: true })
         .range(from, to),
     );
-    // 🪤 Si no se leyó NADA, no hay a quién mandarle: error duro. Si se leyó a medias,
-    // seguimos pero la respuesta lo dice — 1,000 de 5,795 no es un envío exitoso.
-    if (subsErr && subs.length === 0) return json({ error: 'No se pudo leer push_subscriptions: ' + subsErr }, 500);
+    /* 🪤 MEDIA LISTA NO ES LA LISTA. Antes, con lectura parcial se seguía enviando y la
+     *  respuesta "lo decía" — pero el registro quedaba como envío hecho. Ahora aborta,
+     *  igual que send-push-notification y broadcast-live-alert. */
+    if (subsErr) return json({ error: 'audiencia_incompleta', detalle: 'No pude leer toda la lista de suscripciones: ' + subsErr }, 503);
+
+    // A quién se le permite: todos, solo VIP (por la regla canónica que usa la PUERTA),
+    // o exactamente los correos pedidos.
+    let permitido: ((correo: string) => boolean) | null = null;
+    if (!esTodos) {
+      if (esVip) {
+        const candidatos = [...new Set(subs.map((s) => String(s.user_email || '').trim().toLowerCase()).filter(Boolean))];
+        const vip = new Set<string>();
+        for (let i = 0; i < candidatos.length; i += 20) {
+          const tanda = candidatos.slice(i, i + 20);
+          const veredictos = await Promise.all(tanda.map(async (correo) => {
+            const { data, error } = await sb.rpc('tiene_vip_para_clase', { p_email: correo });
+            if (error || typeof data !== 'boolean') return null;
+            return data ? correo : '';
+          }));
+          for (const v of veredictos) {
+            // 🪤 Si la regla no contesta, NO se manda: una clase de paga no se anuncia "a ver si pega".
+            if (v === null) return json({ error: 'vip_policy_unavailable' }, 503);
+            if (v) vip.add(v);
+          }
+        }
+        permitido = (correo) => vip.has(correo);
+      } else {
+        const pedidos = new Set(audiencia.filter((e) => e.includes('@')));
+        if (pedidos.size === 0) return json({ error: 'audiencia_no_declarada', detalle: 'La lista no traía correos válidos.' }, 400);
+        permitido = (correo) => pedidos.has(correo);
+      }
+    }
 
     const seen = new Set<string>();
     const tokens: string[] = [];
     for (const s of subs) {
-      if (s.device_token && !seen.has(s.device_token)) { seen.add(s.device_token); tokens.push(s.device_token); }
+      if (!s.device_token || seen.has(s.device_token)) continue;
+      if (permitido && !permitido(String(s.user_email || '').trim().toLowerCase())) continue;
+      seen.add(s.device_token); tokens.push(s.device_token);
     }
+    console.log('[fcm-push] audiencia ' + (esTodos ? '__all__' : esVip ? '__vip__' : 'lista') +
+                ' → ' + tokens.length + ' tokens de ' + subs.length + ' suscripciones');
 
     const partial = subsErr ? { partial: true, audience_read_error: subsErr } : {};
     if (dry_run) return json({ dry_run: true, target: tokens.length, ...partial });

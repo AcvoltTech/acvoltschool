@@ -228,3 +228,58 @@ describe('el enlace de la clase lleva a la clase', () => {
     expect(pedido.cuerpo.url).toContain('liveStreamingScreen');
   });
 });
+
+// 🔴 CDX-157 / CDX-158: el botón manual «📣 ALERTA A TODOS» abre CUATRO canales y solo
+//    uno declaraba a quién. El peor: fcm-push (iOS+Android, la mayoría) mandaba a TODOS
+//    los tokens activos — una clase VIP $149.99 le sonaba a ~5,795 teléfonos.
+//    Y el correo iba sin audiencia, así que el edge lo rechazaba con 400: nunca salía.
+describe('todos los canales manuales declaran a quién', () => {
+  const manual = src.slice(src.indexOf('window.lsaBroadcastLiveAlert'), src.indexOf('async function _lsaGetHmsToken'));
+
+  it('los cuatro canales del disparo inicial llevan audiencia', () => {
+    for (const ep of ['send-push-notification', 'broadcast-live-alert', 'fcm-push']) {
+      const i = manual.indexOf(ep);
+      expect(i, ep + ' no encontrado').toBeGreaterThan(-1);
+      const trozo = manual.slice(i, i + 1600);   // ventana amplia: los comentarios desplazan el body
+      expect(trozo, ep + ' va sin audiencia').toContain('_lsaAudienciaDelVivo()');
+    }
+  });
+
+  it('el reintento de correo también', () => {
+    const i = manual.lastIndexOf('broadcast-live-alert');
+    expect(manual.slice(i, i + 1600)).toContain('_lsaAudienciaDelVivo()');
+  });
+
+  it('el CORREO usa URL absoluta (una ruta relativa no resuelve en un correo)', () => {
+    const i = manual.indexOf('broadcast-live-alert');
+    const trozo = manual.slice(i, i + 1600);
+    expect(trozo).toContain('https://acvoltschool.com/#liveStreamingScreen');
+    expect(trozo).not.toContain("url: './index.html");
+  });
+
+  it('el PUSH sí usa ruta relativa (abre en el origen de quien recibe)', () => {
+    const i = manual.indexOf('fcm-push');
+    expect(manual.slice(i, i + 1600)).toContain("./index.html#liveStreamingScreen");
+  });
+});
+
+// El servidor de FCM: sin audiencia no manda, y media lista no es la lista.
+describe('fcm-push respeta la audiencia en el servidor', () => {
+  const fcm = fs.readFileSync('supabase/functions/fcm-push/index.ts', 'utf8');
+  it('lee recipient_emails y solo_vip', () => {
+    expect(fcm).toContain('recipient_emails');
+    expect(fcm).toContain('solo_vip');
+  });
+  it('sin audiencia declarada no manda', () => {
+    expect(fcm).toContain('audiencia_no_declarada');
+  });
+  it('usa la MISMA regla de la puerta, no una propia', () => {
+    expect(fcm).toContain('tiene_vip_para_clase');
+  });
+  it('si la regla VIP no contesta, falla cerrado', () => {
+    expect(fcm).toContain('vip_policy_unavailable');
+  });
+  it('lectura incompleta aborta en vez de mandar a medias', () => {
+    expect(fcm).toContain('audiencia_incompleta');
+  });
+});

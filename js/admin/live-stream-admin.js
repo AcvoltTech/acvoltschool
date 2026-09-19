@@ -3220,17 +3220,19 @@ window.lsaBroadcastLiveAlert = async function() {
     var emailP = fetch(sbUrl + '/functions/v1/broadcast-live-alert', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + authTok, 'apikey': sbKey },
-      body: JSON.stringify({
+      /* 🔴 DOS COSAS AQUÍ (Codex CDX-157 · 19-sep-2026):
+       *  1) Esto es el CORREO, no el push — yo me equivoqué y le puse una ruta RELATIVA.
+       *     En un correo `./index.html#…` no resuelve contra nada: el enlace muere.
+       *     El correo necesita URL ABSOLUTA. (Antes apuntaba a maestrohvacr.com, que es
+       *     la página de publicidad y no tiene `liveStreamingScreen`.)
+       *  2) Iba SIN audiencia, y `broadcast-live-alert` rechaza eso con 400
+       *     `audiencia_no_declarada` — o sea que este correo NUNCA salía. */
+      body: JSON.stringify(Object.assign(_lsaAudienciaDelVivo(), {
         title: titleIn,
         body: bodyIn,
-        /* 🔴 Este PUSH mandaba a maestrohvacr.com, que es la página de PUBLICIDAD: no
-         *  tiene `liveStreamingScreen` ni código de app, así que el técnico picaba
-         *  "entra a la clase" y aterrizaba en un anuncio. En un push la ruta correcta
-         *  es RELATIVA: abre la clase en el propio origen de quien recibe (la app o la
-         *  escuela), igual que hace el aviso automático. (18-sep-2026) */
-        url: './index.html#liveStreamingScreen?ntf=1',
+        url: 'https://acvoltschool.com/#liveStreamingScreen',
         admin_email: adminEmail
-      })
+      }))
     }).then(function(r) { return r.json().catch(function(){ return {}; }).then(function(d){ return { ok: r.ok, data: d }; }); });
 
     var smsP = fetch(sbUrl + '/functions/v1/sms-live-alert', {
@@ -3245,7 +3247,12 @@ window.lsaBroadcastLiveAlert = async function() {
     var fcmP = fetch(sbUrl + '/functions/v1/fcm-push', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + authTok, 'apikey': sbKey },
-      body: JSON.stringify({ title: titleIn, body: bodyIn, url: './index.html#liveStreamingScreen?ntf=1', admin_email: adminEmail })
+      /* 🔴 EL CANAL MÁS GRANDE ERA EL QUE NO FILTRABA (Codex CDX-158). `fcm-push` son los
+       *  teléfonos iOS y Android — la mayoría. Iba sin audiencia y el servidor mandaba a
+       *  TODOS los tokens activos, así que una clase VIP $149.99 le sonaba a ~5,795
+       *  teléfonos que no pueden entrar. Ahora declara audiencia, y el servidor la respeta
+       *  con la misma regla canónica de la puerta. */
+      body: JSON.stringify(Object.assign(_lsaAudienciaDelVivo(), { title: titleIn, body: bodyIn, url: './index.html#liveStreamingScreen?ntf=1', admin_email: adminEmail }))
     }).then(function(r) { return r.json().catch(function(){ return {}; }).then(function(d){ return { ok: r.ok, data: d }; }); });
 
     var results = await Promise.all([pushP, emailP, smsP, fcmP]);
@@ -3371,7 +3378,9 @@ window._lsaRetryFailed = async function() {
     var retryEmail = emailFailed ? fetch(sbUrl + '/functions/v1/broadcast-live-alert', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + authTok, 'apikey': sbKey },
-      body: JSON.stringify({ title: params.titleIn, body: params.bodyIn, url: 'https://acvoltschool.com/#liveStreamingScreen', admin_email: params.adminEmail })
+      // 🪤 El reintento también iba sin audiencia: el edge lo rechaza con 400 a propósito,
+      //    así que reintentar el correo nunca podía funcionar.
+      body: JSON.stringify(Object.assign(_lsaAudienciaDelVivo(), { title: params.titleIn, body: params.bodyIn, url: 'https://acvoltschool.com/#liveStreamingScreen', admin_email: params.adminEmail }))
     }).then(function(r) { return r.json().catch(function(){ return {}; }).then(function(d){ return { ok: r.ok, data: d }; }); }) : Promise.resolve(prev.email);
 
     var retrySms = smsFailed ? fetch(sbUrl + '/functions/v1/sms-live-alert', {
