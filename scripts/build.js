@@ -212,6 +212,7 @@ const STATIC_DIRS = [
 // Si un archivo así falta aquí, CF sirve el fallback HTML → "Unexpected token '<'".
 // Ver [[feedback_standalone_scripts_must_be_in_build]].
 const STANDALONE_JS = [
+  'js/proteccion-contenido.js',
   'js/debug-overlay.js',   // reportero de errores en pantalla (iOS WKWebView), carga temprano
   // 🔒 Firma las URLs de Cloudflare Stream (sin esto, las lecciones dan 401).
   // 🪤 SUELTO, no en el bundle: el sitio publicado sirve los archivos
