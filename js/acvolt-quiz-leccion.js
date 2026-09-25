@@ -202,7 +202,19 @@
     var viejo = document.getElementById('acvoltAiQuizSection'); if (viejo) viejo.style.display = 'none';
     var marcar = document.querySelector('#acvoltLessonScreen button[onclick^="_acvoltMarkComplete"]'); if (marcar) marcar.style.display = 'none';
     var cont = document.createElement('div'); cont.id = 'acvqQuiz'; cont.style.cssText = 'padding:0 16px 24px';
+    // Entró por enlace directo (?leccion=) sin pasar por el temario: pedir el estado del curso para respetar el candado.
+    if (!estado[lesson.id]) { var e = await sb().rpc('acvolt_estado_curso', { p_course_id: lesson.course_id }); (e.data || []).forEach(function (y) { estado[y.lesson_id] = y; }); }
     var x = estado[lesson.id];
+    if (x && x.desbloqueada === false) {
+      var lista = orden(lesson), i = lista.findIndex(function (l) { return l.id === lesson.id; }), ant = i > 0 ? lista[i - 1] : null;
+      cont.innerHTML = '<div style="border:1px solid #FDE68A;background:#FFFBEB;border-radius:12px;padding:16px;margin-top:12px;text-align:center">' +
+        '<div style="font-size:30px">🔒</div><div style="font-weight:800;color:#0F172A;font-size:16px;margin:4px 0">Esta lección todavía está cerrada</div>' +
+        '<p style="margin:0 0 12px;color:#475569;font-size:14px">Aprueba el quiz de la lección anterior para abrirla.</p>' +
+        (ant ? '<button onclick="_acvoltOpenLesson(' + ant.id + ')" style="padding:12px 18px;border:0;border-radius:10px;background:#0B2545;color:#fff;font-weight:800;cursor:pointer">← Ir a la lección anterior</button>' : '') + '</div>';
+      var sigBtn = document.querySelector('#acvqNav button:last-child'); if (sigBtn && /Siguiente/.test(sigBtn.textContent)) sigBtn.remove();
+      var w0 = document.querySelector('#acvoltLessonScreen .acvolt-wrap'); (w0 || document.getElementById('acvoltLessonScreen')).appendChild(cont);
+      return;
+    }
     cont.innerHTML = '<div style="border-top:1px solid #E7E5DE;margin-top:12px;padding-top:18px">' +
       '<h4 style="margin:0 0 4px;color:#0F0F0F;font-size:17px">📝 Quiz de la lección</h4>' +
       '<p style="margin:0 0 14px;color:#6B6B66;font-size:13px">Termina el video y contesta. Necesitas <b>4 de 5</b> para abrir la siguiente lección.' + (x && x.aprobada ? ' <b style="color:#059669">Ya lo aprobaste ✓</b>' : '') + '</p>' +

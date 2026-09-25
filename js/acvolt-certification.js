@@ -369,7 +369,13 @@ function _acvFirmarYVigilar(el, lesson) {
     v.style.cssText = 'position:absolute;inset:0;display:flex;align-items:center;' +
       'justify-content:center;text-align:center;padding:22px;background:rgba(0,0,0,.9);' +
       'color:#fff;font-size:14px;line-height:1.6;z-index:5;';
-    v.textContent = 'No se pudo desbloquear el video. ' + (porque || '');
+    // Al alumno, en palabras claras; el porqué técnico solo lo ve el personal.
+    var _staff = false;
+    try { _staff = (typeof isAdminAuthenticated === 'function' && isAdminAuthenticated()) || (typeof isAdminStudent === 'function' && isAdminStudent()); } catch (e) { void e; }
+    v.textContent = _staff ? 'No se pudo desbloquear el video. ' + (porque || '')
+      : /403/.test(porque || '') ? '🔒 Este video se abre cuando apruebes el quiz de la lección anterior.'
+      : /402/.test(porque || '') ? 'Tu cuenta todavía no tiene acceso a este curso.'
+      : 'No se pudo cargar el video. Intenta de nuevo en un momento; si sigue igual, escríbenos al WhatsApp (909) 639-0448.';
     caja.appendChild(v);
   }
 
@@ -411,6 +417,8 @@ function _acvFirmarYVigilar(el, lesson) {
   // con `stream_uid` le pintaba "NO se creó el reproductor" — mentira: en esa
   // rama nunca se emite iframe.
   if (!el.querySelector('iframe[data-vf-uid], iframe')) return;
+  // Solo el personal ve el diagnóstico técnico; al alumno no se le enseña.
+  try { if (!((typeof isAdminAuthenticated === 'function' && isAdminAuthenticated()) || (typeof isAdminStudent === 'function' && isAdminStudent()))) return; } catch (e) { return; }
   setTimeout(function () {
     try {
       if (document.getElementById('acvDiagVideo')) return;
