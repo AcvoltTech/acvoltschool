@@ -78,6 +78,7 @@ const LAZY_JS_ROOT = [
   'js/live-streaming.js',
   'js/radio-podcast.js',
   'js/acvolt-certification.js',
+  'js/acvolt-quiz-leccion.js',
   'js/video-tutoriales.js',
   'js/student-exams.js',
   'js/student-grades.js',

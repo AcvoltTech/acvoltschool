@@ -284,7 +284,7 @@ function _acvoltRenderCourseDetail() {
         statusIcon = '<div style="width:24px;height:24px;border-radius:50%;background:#10b981;display:flex;align-items:center;justify-content:center;flex-shrink:0;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></div>';
       }
 
-      html += '<div onclick="_acvoltOpenLesson(' + lesson.id + ')" style="display:flex;align-items:center;gap:12px;padding:12px;background:#FFFFFF;border:1px solid ' + (isCompleted || quizPassed ? 'rgba(5,150,105,0.35)' : '#E7E5DE') + ';border-radius:10px;margin-bottom:6px;cursor:pointer;transition:background 0.15s;-webkit-tap-highlight-color:transparent;min-height:48px;box-shadow:0 1px 2px rgba(17,17,17,0.03);">';
+      html += '<div data-lesson="' + lesson.id + '" onclick="_acvoltOpenLesson(' + lesson.id + ')" style="display:flex;align-items:center;gap:12px;padding:12px;background:#FFFFFF;border:1px solid ' + (isCompleted || quizPassed ? 'rgba(5,150,105,0.35)' : '#E7E5DE') + ';border-radius:10px;margin-bottom:6px;cursor:pointer;transition:background 0.15s;-webkit-tap-highlight-color:transparent;min-height:48px;box-shadow:0 1px 2px rgba(17,17,17,0.03);">';
       // Icon
       html += '<div style="width:28px;height:28px;border-radius:8px;background:' + iconColor + '22;display:flex;align-items:center;justify-content:center;flex-shrink:0;">';
       html += '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="' + iconColor + '" stroke-width="2">' + icon + '</svg></div>';
@@ -306,7 +306,7 @@ function _acvoltRenderCourseDetail() {
     html += '<div style="color:#E8591C;font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">' + _tc('acv_lessons', 'Lecciones') + '</div>';
     orphanLessons.forEach(function(lesson) {
       var isCompleted = progress[lesson.id] && progress[lesson.id].completed;
-      html += '<div onclick="_acvoltOpenLesson(' + lesson.id + ')" style="display:flex;align-items:center;gap:12px;padding:12px;background:#FFFFFF;border:1px solid #E7E5DE;border-radius:10px;margin-bottom:6px;cursor:pointer;min-height:48px;box-shadow:0 1px 2px rgba(17,17,17,0.03);">';
+      html += '<div data-lesson="' + lesson.id + '" onclick="_acvoltOpenLesson(' + lesson.id + ')" style="display:flex;align-items:center;gap:12px;padding:12px;background:#FFFFFF;border:1px solid #E7E5DE;border-radius:10px;margin-bottom:6px;cursor:pointer;min-height:48px;box-shadow:0 1px 2px rgba(17,17,17,0.03);">';
       html += '<div style="color:#0F0F0F;font-size:14px;flex:1;font-weight:600;">' + _acvEsc(lesson.title) + '</div>';
       if (isCompleted) html += '<span style="color:#059669;font-weight:800;">\u2713</span>';
       html += '</div>';
@@ -316,6 +316,8 @@ function _acvoltRenderCourseDetail() {
 
   html += '</div>';
   el.innerHTML = html;
+  // Candados y quiz por lección (js/acvolt-quiz-leccion.js). Si no cargó, la lista queda como antes.
+  if (window.AcvQuizLeccion) window.AcvQuizLeccion.detalle(course);
 }
 
 function _acvoltBackToCourses() {
@@ -553,6 +555,8 @@ async function _acvoltRenderLesson() {
       if (btn) btn.textContent = '🧠 Tomar Quiz de Comprensión otra vez';
     }
   }
+  // Quiz de la lección calificado en el servidor (abre la siguiente). Sin quiz: queda el de antes.
+  if (window.AcvQuizLeccion) window.AcvQuizLeccion.leccion(lesson);
 }
 
 function _acvoltBackToCourse() {
