@@ -101,6 +101,7 @@
     var n = 0, t = setInterval(function () {
       var L = window._acvoltData && _acvoltData.lessons || [];
       var l = L.find(function (x) { return x.id === id; });
+      if (document.getElementById('webAccessGate')) { clearInterval(t); return; }   // sin acceso: no se abre nada
       if (l && window.supabaseClient && typeof window._acvoltOpenLesson === 'function') {
         clearInterval(t);
         try { window._acvoltCurrentCourse = (_acvoltData.courses || []).find(function (c) { return c.id === l.course_id; }) || window._acvoltCurrentCourse; } catch (_) {}

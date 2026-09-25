@@ -210,21 +210,23 @@
           '<div style="font-size:64px;margin-bottom:16px;">📱</div>' +
           '<div style="font-size:22px;font-weight:900;color:#fff;margin-bottom:8px;">Descarga la App</div>' +
           '<div style="font-size:14px;color:rgba(255,255,255,0.7);line-height:1.6;margin-bottom:24px;">' +
-            'Para acceder a Maestro HVACR desde el navegador necesitas una membresía activa.<br><br>' +
-            'Descarga la app gratis o suscríbete para continuar.' +
+            'Tu cuenta ya está creada. Para estudiar los cursos en el campus necesitas una membresía activa o ser alumno de la escuela.<br><br>' +
+            'Descarga la app gratis o elige tu carrera y plan para continuar.' +
           '</div>' +
           '<a href="https://play.google.com/store/apps/details?id=com.maestromario.twa" target="_blank" ' +
             'style="display:block;background:#34A853;color:#fff;padding:14px 20px;border-radius:12px;text-decoration:none;font-weight:700;font-size:15px;margin-bottom:10px;">' +
             '▶ Google Play (Android)' +
           '</a>' +
-          '<a href="https://apps.apple.com/app/maestro-hvacr/id6744396653" target="_blank" ' +
+          '<a href="https://apps.apple.com/us/app/maestrohvacr/id6761862324" target="_blank" ' +
             'style="display:block;background:#007AFF;color:#fff;padding:14px 20px;border-radius:12px;text-decoration:none;font-weight:700;font-size:15px;margin-bottom:10px;">' +
             ' App Store (iPhone)' +
           '</a>' +
           '<div style="margin-top:16px;border-top:1px solid rgba(255,255,255,0.1);padding-top:16px;">' +
-            '<div style="font-size:12px;color:rgba(255,255,255,0.5);margin-bottom:10px;">¿Ya eres miembro?</div>' +
-            '<a href="https://maestrohvacr.com/#membershipScreen" ' +
-              'style="color:#f59e0b;font-size:13px;font-weight:600;text-decoration:none;">Suscríbete aquí →</a>' +
+            '<a href="https://maestrohvacr.com/#carreras" ' +
+              'style="display:block;color:#f59e0b;font-size:14px;font-weight:700;text-decoration:none;margin-bottom:12px;">Ver carreras y planes →</a>' +
+            '<div style="font-size:12px;color:rgba(255,255,255,0.5);margin-bottom:8px;">¿Ya pagaste o eres alumno y ves esto? Escríbenos al WhatsApp (909) 639-0448.</div>' +
+            '<button onclick="(async function(){try{if(window.supabaseClient)await supabaseClient.auth.signOut();}catch(e){}try{localStorage.removeItem(\'tecnico_authenticated\');localStorage.removeItem(\'tecnico_user\');localStorage.removeItem(\'tecnico_email\');}catch(e){}location.href=\'/\';})()" ' +
+              'style="background:transparent;border:1px solid rgba(255,255,255,0.3);color:#fff;border-radius:10px;padding:10px 16px;font-size:13px;cursor:pointer;">Cerrar sesión</button>' +
           '</div>' +
         '</div>';
       document.body.appendChild(overlay);

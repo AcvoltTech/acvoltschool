@@ -7,7 +7,9 @@
   if (!/[?&]leccion=\d+/.test(location.search)) return;
   var n = 0, t = setInterval(function () {
     var listo = typeof window.showScreen === 'function' && (localStorage.getItem('tecnico_authenticated') === 'true' || window.currentUser);
-    if (listo) { clearInterval(t); try { showScreen('acvoltCertScreen'); } catch (_) {} }
+    // Se espera a que el candado de acceso (config.js, ~2.5 s) decida; si hay muro, no se abre nada.
+    if (document.getElementById('webAccessGate')) { clearInterval(t); return; }
+    if (listo && n >= 8) { clearInterval(t); try { showScreen('acvoltCertScreen'); } catch (_) {} }
     else if (++n > 60) clearInterval(t);   // sin sesión: el login normal toma el control
   }, 500);
 })();

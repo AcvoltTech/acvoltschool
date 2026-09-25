@@ -156,6 +156,13 @@ function _acvoltRenderCourseList() {
       if (_haySesion && window.__acvSesionOk === false) _haySesion = false;
     } catch (e) { void e; }
     var _traidos = (_acvoltData.courses || []).length;
+    var _esStaff = false;
+    try { _esStaff = (typeof isAdminAuthenticated === 'function' && isAdminAuthenticated()) || (typeof isAdminStudent === 'function' && isAdminStudent()); } catch (e) { void e; }
+    if (!_esStaff) {
+      // Al alumno no se le enseña el diagnóstico interno: un mensaje claro y qué hacer.
+      html += '<div style="background:#FEF3C7;border:2px solid #F59E0B;border-radius:12px;padding:14px 16px;margin:14px 16px;color:#7C2D12;font-size:14px;line-height:1.6;text-align:left;">' +
+        '<b>No pudimos cargar tus cursos en este momento.</b><br>Cierra sesión y vuelve a entrar con tu correo y contraseña. Si sigue igual, escríbenos al WhatsApp (909) 639-0448.</div>';
+    } else
     html += '<div style="background:#FEF3C7;border:2px solid #F59E0B;border-radius:12px;' +
       'padding:14px 16px;margin:14px 16px;color:#7C2D12;font-size:13.5px;line-height:1.6;text-align:left;">' +
       '<b>No se pudo traer tu temario.</b><br>' +
