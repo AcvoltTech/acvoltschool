@@ -30,6 +30,7 @@
     var r = await sb().rpc('acvolt_estado_curso', { p_course_id: course.id });
     if (r.error || !Array.isArray(r.data) || !r.data.length) return;          // sin datos: no se toca nada
     r.data.forEach(function (x) { estado[x.lesson_id] = x; });
+    barraXP(document.querySelector('#acvoltCourseScreen .acvolt-wrap'));
     var hayQuiz = r.data.some(function (x) { return x.tiene_quiz; });
     document.querySelectorAll('#acvoltCourseScreen [data-lesson]').forEach(function (row) {
       var x = estado[+row.getAttribute('data-lesson')]; if (!x) return;
@@ -62,9 +63,65 @@
     document.getElementById('acvqAvance').after(b);
   }
 
+  // ── Barra de XP (el mismo XP y nivel del app Maestro HVACR) ──
+  async function barraXP(dentro, ganado) {
+    if (!sb() || !dentro) return;
+    var r = await sb().rpc('acvolt_mi_xp'); if (r.error || !r.data) return;
+    var x = r.data, rango = (x.hasta || x.xp + 1) - x.desde, pct = Math.min(100, Math.round((x.xp - x.desde) * 100 / Math.max(1, rango)));
+    var html = '<div style="display:flex;justify-content:space-between;font:700 12.5px -apple-system,Segoe UI,sans-serif;color:#1E293B"><span>⚡ Nivel ' + x.nivel + '</span><span>' + x.xp.toLocaleString('es-MX') + ' XP' + (x.hasta ? ' · faltan ' + (x.hasta - x.xp).toLocaleString('es-MX') + ' para nivel ' + (x.nivel + 1) : '') + '</span></div>' +
+      '<div style="height:8px;background:#E2E8F0;border-radius:8px;margin-top:6px;overflow:hidden"><div style="height:100%;width:' + pct + '%;background:linear-gradient(90deg,#F59E0B,#EF4444);transition:width .8s"></div></div>' +
+      (ganado ? '<div style="font:800 13px -apple-system,sans-serif;color:#D97706;margin-top:6px">+' + ganado + ' XP ganados 🎉</div>' : '');
+    var b = dentro.querySelector('.acvq-xp');
+    if (!b) { b = document.createElement('div'); b.className = 'acvq-xp'; b.style.cssText = 'background:#FFFBEB;border:1px solid #FDE68A;border-radius:12px;padding:10px 12px;margin:10px 0'; dentro.prepend(b); }
+    b.innerHTML = html;
+  }
+
+  // ── Manual de trabajo debajo del video ──
+  var ICON = { equipo: '🧰 Equipo que se enseña', herramientas: '🔧 Herramientas necesarias', materiales: '📦 Materiales', componentes: '⚙️ Componentes mencionados', pasos: '🪜 Procedimiento paso a paso', datos_clave: '📏 Datos y valores clave', seguridad: '⚠️ Seguridad', glosario: '📖 Glosario' };
+  function filas(m, k) {
+    var v = m[k] || []; if (!v.length) return '';
+    var li = v.map(function (x) {
+      if (typeof x === 'string') return '<li>' + esc(x) + '</li>';
+      var min = x.segundo != null ? ' <span style="color:#2563EB;font-weight:700;white-space:nowrap">(min ' + mmss(x.segundo) + ')</span>' : '';
+      var a = x.nombre || x.paso || x.dato || x.termino || '', bb = x.descripcion || x.para_que || x.detalle || x.funcion || x.valor || x.definicion || '';
+      return '<li><b>' + esc(a) + '</b>' + (bb ? ' — ' + esc(bb) : '') + min + '</li>';
+    }).join('');
+    return '<details' + (k === 'herramientas' || k === 'pasos' ? ' open' : '') + ' style="border:1px solid #E7E5DE;border-radius:12px;padding:10px 12px;margin:0 0 8px;background:#fff">' +
+      '<summary style="font-weight:800;color:#0F172A;cursor:pointer">' + ICON[k] + ' <span style="color:#64748B;font-weight:600">(' + v.length + ')</span></summary>' +
+      '<' + (k === 'pasos' ? 'ol' : 'ul') + ' style="margin:8px 0 0;padding-left:20px;color:#1F2937;font-size:14px;line-height:1.5">' + li + '</' + (k === 'pasos' ? 'ol' : 'ul') + '></details>';
+  }
+  async function material(lesson, dentro) {
+    var r = await sb().rpc('acvolt_material_leccion', { p_lesson_id: lesson.id });
+    if (r.error || !r.data) return;
+    var m = r.data, cont = document.createElement('div'); cont.id = 'acvqManual'; cont.style.cssText = 'padding:0 16px';
+    cont.innerHTML = '<div style="border-top:1px solid #E7E5DE;margin-top:12px;padding-top:16px">' +
+      '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px"><h4 style="margin:0;color:#0F0F0F;font-size:17px">📘 Manual de trabajo</h4>' +
+      '<button id="acvqPdf" style="border:1px solid #2563EB;background:#fff;color:#2563EB;border-radius:999px;padding:8px 14px;font-weight:800;cursor:pointer">Descargar manual (PDF)</button></div>' +
+      (m.objetivo ? '<p style="margin:0 0 10px;color:#334155;font-size:14px">' + esc(m.objetivo) + '</p>' : '') +
+      ['equipo', 'herramientas', 'materiales', 'componentes', 'pasos', 'datos_clave', 'seguridad', 'glosario'].map(function (k) { return filas(m, k); }).join('') + '</div>';
+    var q = document.getElementById('acvqQuiz'); if (q) q.before(cont); else dentro.appendChild(cont);
+    document.getElementById('acvqPdf').onclick = function () { pdf(m, lesson); };
+  }
+  function pdf(m, lesson) {
+    var h = document.createElement('div'); h.id = 'acvqManualHoja';
+    h.style.cssText = 'position:fixed;left:-99999px;top:0;width:780px;background:#fff;color:#0F172A;font:13px/1.5 -apple-system,Segoe UI,sans-serif;padding:24px';
+    h.innerHTML = '<div style="border-bottom:3px solid #0B2545;padding-bottom:8px;margin-bottom:12px"><div style="font-size:11px;letter-spacing:2px;color:#475569">ACVOLT TECH SCHOOL · MAESTRO HVACR · MANUAL DE TRABAJO</div>' +
+      '<div style="font-size:20px;font-weight:800">' + esc(m.titulo || lesson.title) + '</div>' + (m.objetivo ? '<div style="color:#334155">' + esc(m.objetivo) + '</div>' : '') + '</div>' +
+      ['equipo', 'herramientas', 'materiales', 'componentes', 'pasos', 'datos_clave', 'seguridad', 'glosario'].map(function (k) { return filas(m, k).replace('<details', '<div').replace('</details>', '</div>').replace(/<summary[^>]*>/, '<div style="font-weight:800">').replace('</summary>', '</div>'); }).join('') +
+      '<div style="margin-top:14px;font-size:11px;color:#64748B">Material de estudio personal del alumno. Tomado de la clase grabada; los minutos indican dónde se explica en el video.</div>';
+    document.body.appendChild(h);
+    document.body.classList.add('pc-imprimir-manual'); window.print();
+    setTimeout(function () { document.body.classList.remove('pc-imprimir-manual'); h.remove(); }, 800);
+  }
+
   // ── Quiz al final del video ──
   async function leccion(lesson) {
     if (!sb() || !lesson || lesson.lesson_type !== 0) return;
+    var pant = document.querySelector('#acvoltLessonScreen .acvolt-wrap');
+    // El video queda fijo arriba mientras el alumno lee el manual y el quiz.
+    var vid = pant && pant.querySelector('iframe[data-vf-uid]'); if (vid && vid.parentElement) { vid.parentElement.style.position = 'sticky'; vid.parentElement.style.top = '0'; vid.parentElement.style.zIndex = '5'; }
+    barraXP(pant);
+    material(lesson, pant);
     var r = await sb().rpc('acvolt_quiz_leccion', { p_lesson_id: lesson.id });
     if (r.error || !Array.isArray(r.data) || !r.data.length) return;         // sin quiz: queda el de antes
     var viejo = document.getElementById('acvoltAiQuizSection'); if (viejo) viejo.style.display = 'none';
@@ -107,7 +164,9 @@
                            : '<span style="color:#B91C1C;font-weight:700">✗ Incorrecta.</span> Repasa el video en el minuto <b>' + mmss(x.segundo) + '</b>.';
     });
     if (d.aprobado) {
+      var ya = estado[lesson.id] && estado[lesson.id].aprobada;
       estado[lesson.id] = Object.assign({}, estado[lesson.id], { aprobada: true });
+      barraXP(document.querySelector('#acvoltLessonScreen .acvolt-wrap'), ya ? 0 : (d.certificado ? 550 : 50));
       var sig = siguiente(lesson);
       out.innerHTML = '<div style="background:#ECFDF5;border:1px solid #10b981;border-radius:12px;padding:14px;color:#065F46">' +
         '<b style="font-size:16px">🎉 ¡Aprobado! ' + d.correctas + ' de ' + d.total + '</b><br>Ya se abrió la siguiente lección.</div>' +

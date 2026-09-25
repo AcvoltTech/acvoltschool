@@ -33,6 +33,7 @@
   st.textContent =
     '@media print{body.pc-alumno *{visibility:hidden!important}body.pc-alumno:after{content:"Contenido protegido · Acvolt Tech School";visibility:visible;position:fixed;top:40%;left:0;right:0;text-align:center;font:700 22px sans-serif}}' +
     // El certificado SÍ se imprime (es del alumno): solo la hoja del certificado.
+    '@media print{body.pc-imprimir-manual *{visibility:hidden!important}body.pc-imprimir-manual #acvqManualHoja,body.pc-imprimir-manual #acvqManualHoja *{visibility:visible!important}body.pc-imprimir-manual #acvqManualHoja{position:absolute!important;left:0!important;top:0}body.pc-imprimir-manual:after{content:none!important}}' +
     '@media print{body.pc-imprimir-cert *{visibility:hidden!important}body.pc-imprimir-cert #acvqCertHoja,body.pc-imprimir-cert #acvqCertHoja *{visibility:visible!important}body.pc-imprimir-cert #acvqCertHoja{position:fixed;inset:0;margin:0}body.pc-imprimir-cert:after{content:none!important}}' +
     '.pc-marca{position:absolute;z-index:5;pointer-events:none;color:rgba(255,255,255,.42);text-shadow:0 0 3px rgba(0,0,0,.6);font:600 13px/1.2 -apple-system,Segoe UI,sans-serif;transition:top 1.2s,left 1.2s;white-space:nowrap;user-select:none}' +
     'body.pc-alumno.pc-fuera .question-text,body.pc-alumno.pc-fuera .option{filter:blur(6px)}' +
