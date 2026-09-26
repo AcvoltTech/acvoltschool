@@ -580,10 +580,10 @@ function closeMarioV2(){document.getElementById('marioV2Overlay').style.display=
         var expired=false;
         try{ expired=(new Date()).getTime() > new Date('2026-08-01T07:00:00Z').getTime(); }catch(e){}
         var T={
-          badge: en?'LIVE · FREE':'EN VIVO · GRATIS',
-          title: expired ? (en?'FREE live classes with the Maestro':'Clases en vivo GRATIS con el Maestro')
+          badge: en?'LIVE':'EN VIVO',
+          title: expired ? (en?'Live classes · $149/month membership':'Clases en vivo · membresía $149 al mes')
                          : (en?'FREE class · Mini Splits — Jul 30 & 31':'Clase GRATIS · Mini Splits — 30 y 31 jul'),
-          sub: expired ? (en?'Refrigerant charging, heat pumps, mini splits & airflow — live in the app.':'Carga de refrigerante, bombas de calor, mini splits y airflow — en vivo por la app.')
+          sub: expired ? (en?'Recordings, live classes as an observer and Q&A every Monday 7–9 PM (California). Current members keep their benefits.':'Grabaciones, clases en vivo como observador y dudas en vivo los lunes 7–9 PM (California). Los miembros actuales conservan sus beneficios.')
                        : (en?'Load calc (Manual J), selection (Manual S), install & startup — with the Maestro, live in the app.':'Cálculo de carga (Manual J), selección (Manual S), instalación y arranque — con el Maestro, en vivo por la app.'),
           cta: en?'📲 Open the app →':'📲 Entrar a la app →'
         };
@@ -1186,10 +1186,10 @@ function closeMarioV2(){document.getElementById('marioV2Overlay').style.display=
           var expired=false;
           try{ expired=(new Date()).getTime() > new Date('2026-08-01T07:00:00Z').getTime(); }catch(e){}
           var T={
-            badge: en?'LIVE · FREE':'EN VIVO · GRATIS',
-            title: expired ? (en?'FREE live classes with the Maestro':'Clases en vivo GRATIS con el Maestro')
+            badge: en?'LIVE':'EN VIVO',
+            title: expired ? (en?'Live classes · $149/month membership':'Clases en vivo · membresía $149 al mes')
                            : (en?'FREE class · Mini Splits — Jul 30 & 31':'Clase GRATIS · Mini Splits — 30 y 31 jul'),
-            sub: expired ? (en?'Refrigerant charging, heat pumps, mini splits & airflow — live in the app.':'Carga de refrigerante, bombas de calor, mini splits y airflow — en vivo por la app.')
+            sub: expired ? (en?'Recordings, live classes as an observer and Q&A every Monday 7–9 PM (California). Current members keep their benefits.':'Grabaciones, clases en vivo como observador y dudas en vivo los lunes 7–9 PM (California). Los miembros actuales conservan sus beneficios.')
                          : (en?'Load calc (Manual J), selection (Manual S), install & startup — with the Maestro, live in the app.':'Cálculo de carga (Manual J), selección (Manual S), instalación y arranque — con el Maestro, en vivo por la app.'),
             cta: en?'📲 Open the app →':'📲 Entrar a la app →'
           };
