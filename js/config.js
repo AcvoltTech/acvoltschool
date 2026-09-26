@@ -189,11 +189,30 @@
         // Re-check membership
         var tier2 = getMembershipTierLevel();
         if (tier2 >= 2) { if (callback) callback(); return; }
-        // BLOCKED — show download app screen
-        _showWebBlockedScreen();
+        // Membresía WEB ($149/$750, pagada en maestrohvacr.com): el muro solo conocía las del app. Se pregunta a
+        // study-access antes de bloquear; si la consulta falla se queda como antes (bloqueado), nunca regala acceso.
+        _membresiaWebActiva(function(activa) { if (activa) { if (callback) callback(); } else _showWebBlockedScreen(); });
       };
       // Give preloadStudentCRMGroups time to fetch
       setTimeout(_checkAsync, 2500);
+    }
+    function _membresiaWebActiva(cb) {
+      try {
+        var sbc = window.supabaseClient;
+        if (!sbc || !sbc.auth) { cb(false); return; }
+        sbc.auth.getSession().then(function(r) {
+          var t = r && r.data && r.data.session && r.data.session.access_token;
+          if (!t) { cb(false); return; }
+          fetch('https://htklsowiyjwsjnacnvnr.supabase.co/functions/v1/study-access', {
+            method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + t },
+            body: JSON.stringify({ action: 'status' })
+          }).then(function(x) { return x.ok ? x.json() : null; }).then(function(d) {
+            cb(!!(d && Array.isArray(d.subscriptions) && d.subscriptions.some(function(p) {
+              return p.status === 'active' && Date.parse(p.paid_through) > Date.now();
+            })));
+          }).catch(function() { cb(false); });
+        }).catch(function() { cb(false); });
+      } catch (e) { cb(false); }
     }
     window._checkWebAccessGate = _checkWebAccessGate;
 
