@@ -376,6 +376,15 @@ function _acvFirmarYVigilar(el, lesson) {
       : /403/.test(porque || '') ? '🔒 Este video se abre cuando apruebes el quiz de la lección anterior.'
       : /402/.test(porque || '') ? 'Tu cuenta todavía no tiene acceso a este curso.'
       : 'No se pudo cargar el video. Intenta de nuevo en un momento; si sigue igual, escríbenos al WhatsApp (909) 639-0448.';
+    // Sin acceso (402): nunca un callejón — el botón de suscripción va ahí mismo (orden 25-sep-2026).
+    if (!_staff && /402/.test(porque || '')) {
+      v.style.flexDirection = 'column'; v.style.gap = '14px';
+      var sub = document.createElement('a');
+      sub.href = 'https://maestrohvacr.com/estudiar#planes'; sub.target = '_blank'; sub.rel = 'noopener';
+      sub.textContent = 'Suscríbete ahora · $149 al mes';
+      sub.style.cssText = 'background:#ed342b;color:#fff;font-weight:800;border-radius:999px;padding:12px 20px;text-decoration:none;min-height:44px;display:inline-flex;align-items:center';
+      var t = document.createElement('div'); t.textContent = v.textContent; v.textContent = ''; v.appendChild(t); v.appendChild(sub);
+    }
     caja.appendChild(v);
   }
 

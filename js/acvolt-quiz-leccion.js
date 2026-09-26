@@ -12,6 +12,16 @@
  * El personal (admin_staff) ve todo abierto.
  * ========================================================================== */
 (function () {
+  // En el curso y en la lección los botones flotantes del tablero tapaban el título y mostraban un 2º XP distinto (QA 25-sep).
+  try {
+    if (!document.getElementById('acvqSinFlotantes')) {
+      var st = document.createElement('style'); st.id = 'acvqSinFlotantes';
+      st.textContent = 'body:has(#acvoltLessonScreen.active) #dashXpBadge,body:has(#acvoltLessonScreen.active) #dashMicBtn,body:has(#acvoltLessonScreen.active) #dashProfileAvatar,' +
+        'body:has(#acvoltCourseScreen.active) #dashXpBadge,body:has(#acvoltCourseScreen.active) #dashMicBtn,body:has(#acvoltCourseScreen.active) #dashProfileAvatar{display:none!important}';
+      document.head.appendChild(st);
+    }
+  } catch (_) {}
+
   'use strict';
   var sb = function () { return window.supabaseClient; };
   var esc = function (s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); };
