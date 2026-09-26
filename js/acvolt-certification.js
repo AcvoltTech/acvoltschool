@@ -782,12 +782,12 @@ function _acvRenderWelcome(el, onContinue) {
           '</video>' +
         '</div>' +
         '<div class="acv-welcome-message">' +
-          '<p style="font-size:16px;font-weight:600;color:#e6edf3;margin-bottom:16px;">' + _tc('acv_why_certs', '¿Por qué necesitas estas certificaciones?') + '</p>' +
+          '<p style="font-size:16px;font-weight:700;color:#0f172a !important;margin-bottom:16px;">' + _tc('acv_why_certs', '¿Por qué necesitas estas certificaciones?') + '</p>' +
 
           '<div class="acv-welcome-cert-item">' +
             '<div class="acv-welcome-cert-icon">🦺</div>' +
             '<div class="acv-welcome-cert-text">' +
-              '<strong style="color:#f87171;">OSHA 10 / OSHA 30</strong><br>' +
+              '<strong style="color:#f87171 !important;">OSHA 10 / OSHA 30</strong><br>' +
               _tc('acv_osha_desc', 'Sin OSHA no puedes pisar un sitio de trabajo comercial. Los empleadores lo exigen — es tu licencia para trabajar seguro.') +
             '</div>' +
           '</div>' +
@@ -795,7 +795,7 @@ function _acvRenderWelcome(el, onContinue) {
           '<div class="acv-welcome-cert-item">' +
             '<div class="acv-welcome-cert-icon">📋</div>' +
             '<div class="acv-welcome-cert-text">' +
-              '<strong style="color:#34d399;">EPA Sección 608</strong><br>' +
+              '<strong style="color:#34d399 !important;">EPA Sección 608</strong><br>' +
               _tc('acv_epa_desc', 'La ley federal exige esta certificación para manejar refrigerantes. Sin ella no puedes comprar refrigerante ni hacer recovery — multas de hasta $44,539 por día.') +
             '</div>' +
           '</div>' +
@@ -803,7 +803,7 @@ function _acvRenderWelcome(el, onContinue) {
           '<div class="acv-welcome-cert-item">' +
             '<div class="acv-welcome-cert-icon">❄️</div>' +
             '<div class="acv-welcome-cert-text">' +
-              '<strong style="color:#f59e0b;">' + _tc('acv_hvac_course', 'Curso Completo HVAC') + '</strong><br>' +
+              '<strong style="color:#f59e0b !important;">' + _tc('acv_hvac_course', 'Curso Completo HVAC') + '</strong><br>' +
               _tc('acv_hvac_desc', 'Herramientas, refrigeración, electricidad, soldadura, diagnóstico, mini splits, heat pumps, sistemas centrales y más.') +
             '</div>' +
           '</div>' +
@@ -811,7 +811,7 @@ function _acvRenderWelcome(el, onContinue) {
           '<div class="acv-welcome-cert-item">' +
             '<div class="acv-welcome-cert-icon">⚡</div>' +
             '<div class="acv-welcome-cert-text">' +
-              '<strong style="color:#a78bfa;">' + _tc('acv_advanced_specialties', 'Especialidades Avanzadas') + '</strong><br>' +
+              '<strong style="color:#a78bfa !important;">' + _tc('acv_advanced_specialties', 'Especialidades Avanzadas') + '</strong><br>' +
               _tc('acv_advanced_desc', 'A2L refrigerantes, controles eléctricos, diseño de ductos, cálculos de carga — lo que te separa del resto y te da los mejores trabajos.') +
             '</div>' +
           '</div>' +
