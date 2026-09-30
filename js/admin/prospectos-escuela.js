@@ -23,7 +23,7 @@
     sec.style.cssText = 'background:#ffffff;border:1px solid #e2e8f0;box-shadow:0 1px 3px rgba(0,0,0,0.06);';
     sec.innerHTML =
       '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:10px">' +
-      '<h3 style="margin:0;color:#0f2342">🧲 Prospectos de la página (Maestro HVACR AI)</h3>' +
+      '<h3 style="margin:0;color:#0f2342">🧲 Prospectos de maestrohvacr.com (formulario «te llamamos» + chat Maestro HVACR AI)</h3>' +
       '<button id="prospRecargar" style="background:#065cff;color:#fff;border:0;border-radius:6px;padding:6px 12px;cursor:pointer;font-weight:700">🔄 Actualizar</button></div>' +
       '<div id="prospFiltros" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px"></div>' +
       '<div id="prospLista" style="display:grid;gap:10px"><p style="color:#64748b">Cargando…</p></div>';
@@ -37,7 +37,32 @@
     }
     document.getElementById('prospRecargar').onclick = cargar;
     cargar();
+    menuVentas();
     return true;
+  }
+
+  // 30-sep (Mario: «necesito ver los leads del formulario de maestrohvacr.com»): los paneles de venta viven al fondo del
+  // Dashboard y no tenían botón en el menú de la izquierda. Grupo «Ventas web» en el menú: abre el Dashboard y baja al panel.
+  function menuVentas() {
+    var nav = document.getElementById('crmSidebarNav');
+    if (!nav || document.getElementById('crmMenuVentas')) return;
+    var despues = nav.querySelector('[data-crm-section="bandeja"]') || nav.querySelector('[data-crm-section="dashboard"]');
+    if (!despues) return;
+    var grupo = document.createElement('div');
+    grupo.id = 'crmMenuVentas';
+    grupo.innerHTML = '<div class="crm-sidebar-section">Ventas web (maestrohvacr.com)</div>';
+    [['adminProspectos', '🧲', 'Prospectos (leads)'], ['adminMiembrosWeb', '💳', 'Miembros web'], ['adminEntrenarAI', '🧠', 'Entrenar AI'], ['adminVideosEditor', '🎬', 'Videos (editor)']].forEach(function (x) {
+      var a = document.createElement('a');
+      a.className = 'crm-sidebar-item'; a.href = '#' + x[0];
+      a.innerHTML = '<span class="crm-icon">' + x[1] + '</span> <span>' + x[2] + '</span>';
+      a.onclick = function (e) {
+        e.preventDefault();
+        if (typeof showCrmSection === 'function') { try { showCrmSection('dashboard'); } catch (_) {} }
+        setTimeout(function () { var el = document.getElementById(x[0]); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 150);
+      };
+      grupo.appendChild(a);
+    });
+    despues.parentNode.insertBefore(grupo, despues.nextSibling);
   }
 
   async function cargar() {
@@ -76,7 +101,10 @@
       var card = document.createElement('div');
       card.style.cssText = 'border:1px solid #e2e8f0;border-left:4px solid ' + (p.estado === 'nuevo' ? '#ed342b' : p.estado === 'inscrito' ? '#16a34a' : '#065cff') + ';border-radius:10px;padding:12px 14px';
       card.innerHTML =
-        '<div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap"><b style="font-size:15px;color:#0f2342">' + esc(p.nombre) + '</b>' +
+        '<div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap"><b style="font-size:15px;color:#0f2342">' + esc(p.nombre) +
+        // 30-sep: de dónde llegó — el formulario «Déjanos tu WhatsApp» no tiene charla; el asistente sí.
+        (Number(p.mensajes) > 0 ? ' <span style="font-size:11.5px;font-weight:800;color:#065cff;background:#eef4ff;border-radius:999px;padding:2px 8px">🤖 Chat del sitio</span>'
+                                : ' <span style="font-size:11.5px;font-weight:800;color:#16a34a;background:#ecfdf3;border-radius:999px;padding:2px 8px">📝 Formulario del sitio</span>') + '</b>' +
         '<span style="color:#64748b;font-size:12px">' + (p.responsable ? '<b style="color:#7c3aed">👤 ' + esc(String(p.responsable).split(' ')[0]) + '</b> · ' : '') + esc(fecha(p.created_at)) + ' · ' + esc(p.idioma || '') + '</span></div>' +
         '<div style="margin:6px 0;font-size:13.5px">🎯 <b>' + esc(p.interes || '—') + '</b> · ' + esc((p.modalidad || 'sin_definir').replace('_', ' ')) +
         (o.utm_source || o.utm_campaign ? ' · 📣 ' + esc([o.utm_source, o.utm_campaign].filter(Boolean).join(' / ')) : '') + '</div>' +
