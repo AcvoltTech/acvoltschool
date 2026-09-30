@@ -226,11 +226,28 @@ function _cfStreamCall(body) {
 }
 
 /* ── Render admin panel ─────────────────────────────────────── */
+// 30-sep-2026 (Mario: «no hay nada ahí» en Streaming): se marcaba _lsaInitDone ANTES de dibujar. Si el primer dibujo
+// fallaba (o no encontraba el contenedor), cada clic siguiente solo recargaba una lista que no existía → sección en
+// blanco para siempre y sin pista. Ahora se vuelve a dibujar mientras el panel no esté, y si falla se ve el error AHÍ.
 function renderAdminLiveStreamPanel() {
-  if (_lsaInitDone) {
-    loadAdminStreams();
-    return;
+  var shell = document.getElementById('crm-section-streaming');
+  if (_lsaInitDone && shell && shell.querySelector('#lsaCreateForm')) { loadAdminStreams(); return; }
+  _lsaInitDone = false;
+  try {
+    _lsaDibujarPanel();
+  } catch (e) {
+    _lsaInitDone = false;
+    console.error('[LiveStreamAdmin] no se pudo dibujar:', e);
+    if (shell) {
+      var msg = String((e && e.message) || e).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; });
+      shell.innerHTML = '<div style="max-width:700px;margin:40px auto;padding:18px;border:1px solid #fecaca;border-radius:12px;background:#fff1f0;color:#7f1d1d">' +
+        '<b>⚠️ El panel de Streaming no cargó.</b><p style="margin:8px 0">Error: <code>' + msg + '</code></p>' +
+        '<button onclick="renderAdminLiveStreamPanel()" style="background:#dc2626;color:#fff;border:0;border-radius:8px;padding:8px 14px;cursor:pointer;font-weight:700">Reintentar</button></div>';
+    }
   }
+}
+
+function _lsaDibujarPanel() {
   _lsaInitDone = true;
 
   // CSS
