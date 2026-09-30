@@ -22,7 +22,7 @@
       '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:10px">' +
       '<h3 style="margin:0;color:#0f2342">💳 Miembros web (maestrohvacr.com)</h3>' +
       '<button id="mwRecargar" style="background:#065cff;color:#fff;border:0;border-radius:6px;padding:6px 12px;cursor:pointer;font-weight:700">🔄 Actualizar</button></div>' +
-      '<p style="margin:0 0 10px;color:#475569;font-size:13px">Cada venta nueva manda SMS a Brenda y a Marisol. Los de <b>$750</b> hay que contactarlos para Telegram y soporte.</p>' +
+      '<p style="margin:0 0 10px;color:#475569;font-size:13px">Cada venta nueva manda SMS a Mario; pagos fallidos, cancelaciones, reembolsos y contracargos, a Marisol. Los de <b>$750</b> hay que contactarlos para Telegram y soporte.</p>' +
       '<div id="mwResumen" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px"></div>' +
       '<div id="mwLista" style="display:grid;gap:10px"><p style="color:#64748b">Cargando…</p></div>';
     ancla.parentNode.insertBefore(sec, ancla.nextSibling);
