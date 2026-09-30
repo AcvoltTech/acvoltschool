@@ -1797,6 +1797,7 @@ function showScreen(screenId) {
           'js/admin/class-schedule.js',
           'js/admin/finanzas.js',
           'js/admin/prospectos-escuela.js',   // Prospectos de maestrohvacr.com (24-sep-2026)
+          'js/admin/miembros-web.js',         // Miembros web $149/$750 de maestrohvacr.com (30-sep-2026)
           'js/admin/inactivity-alerts.js',
           'js/admin/onboarding.js',
           'js/admin/progress-emails.js',

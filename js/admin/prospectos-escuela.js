@@ -6,7 +6,9 @@
 (function () {
   'use strict';
   var ESTADOS = [['nuevo', '🆕 Nuevo'], ['contactado', '📞 Contactado'], ['inscrito', '✅ Inscrito'], ['descartado', '🗂️ Descartado']];
-  var filtro = 'nuevo';
+  var filtro = 'nuevo', quien = 'todas';
+  // 30-sep: los prospectos se reparten parejo entre Brenda y Marisol (trigger en la base); cada una filtra los suyos.
+  var RESPONSABLES = [['todas', '👥 Todas'], ['Brenda Lagunas', 'Brenda'], ['Marisol Flores Lagunas', 'Marisol']];
   var esc = function (s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); };
   var fecha = function (s) { try { return new Date(s).toLocaleString('es-MX', { dateStyle: 'medium', timeStyle: 'short' }); } catch (_) { return s; } };
   var tel = function (t) { return String(t || '').replace(/\D/g, '').replace(/^(\d{10})$/, '1$1'); };
@@ -55,7 +57,18 @@
       b.onclick = function () { filtro = e[0]; cargar(); };
       filtros.appendChild(b);
     });
-    var ver = filtro === 'todos' ? todos : todos.filter(function (p) { return p.estado === filtro; });
+    var fila2 = document.createElement('div'); fila2.style.cssText = 'display:flex;gap:6px;flex-wrap:wrap;width:100%;margin-top:4px';
+    RESPONSABLES.forEach(function (r) {
+      var n = r[0] === 'todas' ? todos.length : todos.filter(function (p) { return p.responsable === r[0]; }).length;
+      var b2 = document.createElement('button');
+      b2.textContent = r[1] + ' (' + n + ')';
+      b2.style.cssText = 'border:1px solid #cbd5e1;border-radius:999px;padding:4px 11px;cursor:pointer;font-weight:700;font-size:12.5px;background:' + (quien === r[0] ? '#7c3aed;color:#fff' : '#fff;color:#4c1d95');
+      b2.onclick = function () { quien = r[0]; cargar(); };
+      fila2.appendChild(b2);
+    });
+    filtros.appendChild(fila2);
+    var ver = (filtro === 'todos' ? todos : todos.filter(function (p) { return p.estado === filtro; }))
+      .filter(function (p) { return quien === 'todas' || p.responsable === quien; });
     if (!ver.length) { lista.innerHTML = '<p style="color:#64748b">No hay prospectos en este estado.</p>'; return; }
     lista.innerHTML = '';
     ver.forEach(function (p) {
@@ -64,7 +77,7 @@
       card.style.cssText = 'border:1px solid #e2e8f0;border-left:4px solid ' + (p.estado === 'nuevo' ? '#ed342b' : p.estado === 'inscrito' ? '#16a34a' : '#065cff') + ';border-radius:10px;padding:12px 14px';
       card.innerHTML =
         '<div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap"><b style="font-size:15px;color:#0f2342">' + esc(p.nombre) + '</b>' +
-        '<span style="color:#64748b;font-size:12px">' + esc(fecha(p.created_at)) + ' · ' + esc(p.idioma || '') + '</span></div>' +
+        '<span style="color:#64748b;font-size:12px">' + (p.responsable ? '<b style="color:#7c3aed">👤 ' + esc(String(p.responsable).split(' ')[0]) + '</b> · ' : '') + esc(fecha(p.created_at)) + ' · ' + esc(p.idioma || '') + '</span></div>' +
         '<div style="margin:6px 0;font-size:13.5px">🎯 <b>' + esc(p.interes || '—') + '</b> · ' + esc((p.modalidad || 'sin_definir').replace('_', ' ')) +
         (o.utm_source || o.utm_campaign ? ' · 📣 ' + esc([o.utm_source, o.utm_campaign].filter(Boolean).join(' / ')) : '') + '</div>' +
         '<div style="display:flex;gap:8px;flex-wrap:wrap;margin:6px 0">' +

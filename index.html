@@ -218,7 +218,7 @@
   }catch(_e){}
 })();
 
-var APP_VERSION = 'v6.61-barrido-todas-las-puertas-conocen-la-clase-abierta';
+var APP_VERSION = 'v6.55-siete-raices';
 (function(){
   var stored = localStorage.getItem('maestroac_app_version');
   if(stored && stored !== APP_VERSION){
@@ -414,25 +414,67 @@ window._applyUpdate=function(){
   }else{forceReload();}
 };
 // Inject "Reconectar EN VIVO" button for live streams (deferred to avoid render-blocking)
-setTimeout(function(){ setInterval(function(){
-  var cards=document.querySelectorAll('.lsa-card');
-  for(var i=0;i<cards.length;i++){
-    var c=cards[i];
-    if(!c.querySelector('.lsa-badge-live'))continue;
-    if(c.querySelector('.lsa-reconectar'))continue;
-    var fin=c.querySelector('[onclick*="adminEndStream"]');
-    if(!fin)continue;
-    var m=fin.getAttribute('onclick').match(/'([^']+)'/);
-    if(!m)continue;
-    var sid=m[1];
-    var btn=document.createElement('button');
-    btn.className='lsa-btn lsa-btn-green lsa-reconectar';
-    btn.style.cssText='animation:lsa-pulse 1.5s infinite;margin-right:6px;';
-    btn.innerHTML=_t('html_reconnect_live','🔴 Reconectar EN VIVO');
-    btn.setAttribute('onclick',"adminGoLiveBrowser('"+sid+"')");
-    fin.parentNode.insertBefore(btn,fin);
+// ══════════════════════════════════════════════════════════════════════════════
+// 🔴 UN RELOJ DE ADMIN CORRIENDO EN EL TELÉFONO DE CADA ALUMNO (11-sep-2026)
+// Esto recorre el DOM con querySelectorAll('.lsa-card') cada 1.5 s para inyectar
+// el botón "Reconectar EN VIVO". Ese botón sólo lo usa el panel de admin — o sea
+// Mario — pero el intervalo arrancaba en TODOS los dispositivos, para siempre, y
+// sin guardar el handle no había forma de apagarlo. Miles de alumnos pagando
+// batería por una función que jamás van a ver.
+// 🪤 No basta con "arrancarlo sólo si es admin": cuando esto corre (2 s después de
+// cargar) todavía no se sabe quién es el usuario. Por eso el freno es distinto:
+// el reloj SE APAGA SOLO si en el primer minuto nunca apareció una `.lsa-card`.
+// Al admin le sobra: el panel se abre mucho después y `_armarRelojLSA()` lo vuelve
+// a encender desde live-stream-admin.js si hiciera falta.
+// Y con el app en segundo plano no hay nada que inyectar: el tick se salta.
+// ══════════════════════════════════════════════════════════════════════════════
+setTimeout(function(){
+  var _ticksSinTarjetas = 0;
+  var _relojLSA = null;
+
+  function _tickLSA(){
+    if (document.hidden) return;            // en segundo plano no hay nada que inyectar
+    var cards = document.querySelectorAll('.lsa-card');
+    if (cards.length === 0) {
+      // 40 ticks x 1.5 s = 60 s sin una sola tarjeta => este usuario no es admin.
+      if (++_ticksSinTarjetas >= 40) _apagarLSA();
+      return;
+    }
+    _ticksSinTarjetas = 0;
+    for (var i = 0; i < cards.length; i++) {
+      var c = cards[i];
+      if (!c.querySelector('.lsa-badge-live')) continue;
+      if (c.querySelector('.lsa-reconectar')) continue;
+      var fin = c.querySelector('[onclick*="adminEndStream"]');
+      if (!fin) continue;
+      var m = fin.getAttribute('onclick').match(/'([^']+)'/);
+      if (!m) continue;
+      var sid = m[1];
+      var btn = document.createElement('button');
+      btn.className = 'lsa-btn lsa-btn-green lsa-reconectar';
+      btn.style.cssText = 'animation:lsa-pulse 1.5s infinite;margin-right:6px;';
+      btn.innerHTML = _t('html_reconnect_live', '\ud83d\udd34 Reconectar EN VIVO');
+      btn.setAttribute('onclick', "adminGoLiveBrowser('" + sid + "')");
+      fin.parentNode.insertBefore(btn, fin);
+    }
   }
-},1500); }, 2000); // defer 2s after page load
+
+  function _apagarLSA(){
+    if (_relojLSA) { clearInterval(_relojLSA); _relojLSA = null; }
+    window._relojLSA = null;
+  }
+
+  // Expuesto para que el panel de admin lo vuelva a encender si se apagó solo
+  // (el panel se abre mucho después de estos 2 s iniciales).
+  window._armarRelojLSA = function(){
+    if (_relojLSA) return;
+    _ticksSinTarjetas = 0;
+    _relojLSA = setInterval(_tickLSA, 1500);
+    window._relojLSA = _relojLSA;
+  };
+
+  window._armarRelojLSA();
+}, 2000); // defer 2s after page load
 </script>
 
 <!-- Skip Navigation — Accessibility -->
@@ -2531,7 +2573,7 @@ function closeMarioV2(){document.getElementById('marioV2Overlay').style.display=
               <button onclick="ssDashTelegramAudit()" id="ssDashBtnTG" style="background:rgba(0,136,204,0.15);color:#0088cc;padding:6px 14px;border-radius:8px;border:1px solid #0088cc;cursor:pointer;font-size:11px;font-weight:bold;" data-i18n="adm_ss_dash_btn_tg_audit">✈️ Auditoría TG</button>
               <button onclick="ssDashTotalAudit()" id="ssDashBtnTotal" style="background:rgba(234,88,12,0.15);color:#ea580c;padding:6px 14px;border-radius:8px;border:1px solid #ea580c;cursor:pointer;font-size:11px;font-weight:bold;" data-i18n="adm_ss_dash_btn_total_audit">📊 Auditoría Total</button>
               <div style="flex:1;"></div>
-              <input type="text" id="ssDashSearch" placeholder="🔍 Nombre, email, tel..." data-i18n-placeholder="adm_ss_dash_search_ph" oninput="ssDashApplySearch()" style="padding:6px 12px;border-radius:8px;border:1px solid #e2e8f0;font-size:12px;width:200px;box-sizing:border-box;">
+              <input type="text" id="ssDashSearch" placeholder="🔍 Nombre, email, tel..." data-i18n-placeholder="adm_ss_dash_search_ph" oninput="ssDashApplySearchDebounced()" style="padding:6px 12px;border-radius:8px;border:1px solid #e2e8f0;font-size:12px;width:200px;box-sizing:border-box;">
               <button onclick="ssDashExportWhatsApp()" style="background:linear-gradient(135deg,#25D366,#128C7E);color:white;padding:6px 14px;border-radius:8px;border:none;cursor:pointer;font-size:11px;" data-i18n="adm_ss_dash_whatsapp_list">📋 Lista WhatsApp</button>
               <button onclick="ssDashBulkBlock()" style="background:linear-gradient(135deg,#dc2626,#b91c1c);color:white;padding:6px 14px;border-radius:8px;border:none;cursor:pointer;font-size:11px;" data-i18n="adm_ss_dash_bulk_block">🚫 Bloquear Inactivos</button>
               <button onclick="ssDashExportCSV()" style="background:linear-gradient(135deg,#7c3aed,#6d28d9);color:white;padding:6px 14px;border-radius:8px;border:none;cursor:pointer;font-size:11px;" data-i18n="adm_ss_dash_export_csv">📥 Exportar CSV</button>
@@ -7414,7 +7456,7 @@ if (typeof window._addTranslations === 'function') {
 <script src="js/utils.js?v=52"></script>
 <script src="js/haptics.js?v=1"></script>
 <script src="js/config.js?v=56"></script>
-<script src="js/lazy-loader.js?v=91"></script>
+<script src="js/lazy-loader.js?v=86"></script>
 <script src="js/supabase-init.js?v=53"></script>
 <script src="js/video-firma.js?v=1"></script>
 <script src="js/proteccion-contenido.js?v=1" defer></script>
@@ -7472,7 +7514,7 @@ document.addEventListener('DOMContentLoaded', function () {
 <script defer src="js/levels.js?v=52"></script>
 <script defer src="js/auth.js?v=55"></script>
 <script defer src="js/onboarding-gate.js?v=52"></script>
-<script defer src="js/navigation.js?v=65"></script>
+<script defer src="js/navigation.js?v=66"></script>
 <script defer src="js/global-search.js?v=5"></script>
 <script defer src="js/quiz.js?v=52"></script>
 <script defer src="js/activity-log.js?v=52"></script>
