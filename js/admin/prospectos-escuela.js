@@ -51,7 +51,7 @@
     var grupo = document.createElement('div');
     grupo.id = 'crmMenuVentas';
     grupo.innerHTML = '<div class="crm-sidebar-section">Ventas web (maestrohvacr.com)</div>';
-    [['adminProspectos', '🧲', 'Prospectos (leads)'], ['adminMiembrosWeb', '💳', 'Miembros web'], ['adminEntrenarAI', '🧠', 'Entrenar AI'], ['adminVideosEditor', '🎬', 'Videos (editor)']].forEach(function (x) {
+    [['adminAnaliticosSitio', '📈', 'Analíticos (cómo vamos)'], ['adminProspectos', '🧲', 'Prospectos (leads)'], ['adminMiembrosWeb', '💳', 'Miembros web'], ['adminEntrenarAI', '🧠', 'Entrenar AI'], ['adminVideosEditor', '🎬', 'Videos (editor)']].forEach(function (x) {
       var a = document.createElement('a');
       a.className = 'crm-sidebar-item'; a.href = '#' + x[0];
       a.innerHTML = '<span class="crm-icon">' + x[1] + '</span> <span>' + x[2] + '</span>';
