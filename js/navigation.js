@@ -1800,6 +1800,7 @@ function showScreen(screenId) {
           'js/admin/miembros-web.js',         // Miembros web $149/$750 de maestrohvacr.com (30-sep-2026)
           'js/admin/solicitudes-video.js',    // Videos para el editor (Manuel) con SMS (30-sep-2026)
           'js/admin/entrenar-ai.js',
+          'js/admin/crm-leads.js',            // 📋 CRM de leads: tablero por etapas, historial, tareas con SMS (30-sep-2026)
           'js/admin/analiticos-sitio.js',     // 📈 Analíticos de maestrohvacr.com: visitas, embudo, fuentes, leads, ventas (30-sep-2026)          // 🧠 Entrenar al Maestro HVACR AI: dudas, charlas y enseñanzas (30-sep-2026)
           'js/admin/inactivity-alerts.js',
           'js/admin/onboarding.js',
