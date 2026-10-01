@@ -1798,6 +1798,8 @@ function showScreen(screenId) {
           'js/admin/finanzas.js',
           'js/admin/prospectos-escuela.js',   // Prospectos de maestrohvacr.com (24-sep-2026)
           'js/admin/miembros-web.js',         // Miembros web $149/$750 de maestrohvacr.com (30-sep-2026)
+          'js/admin/student-id-tarjeta.js',   // 🪪 diseño de la credencial (copia de maestroac-app; 1-oct-2026)
+          'js/admin/student-ids.js',          // 🪪 Student ID: pedidos, verificación, impresión y envío (1-oct-2026)
           'js/admin/solicitudes-video.js',    // Videos para el editor (Manuel) con SMS (30-sep-2026)
           'js/admin/entrenar-ai.js',
           'js/admin/crm-leads.js',            // 📋 CRM de leads: tablero por etapas, historial, tareas con SMS (30-sep-2026)
