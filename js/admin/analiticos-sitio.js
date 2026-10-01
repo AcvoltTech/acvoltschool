@@ -21,9 +21,9 @@
     sec.className = 'admin-section admin-grid-full'; sec.id = 'adminAnaliticosSitio';
     sec.style.cssText = 'background:#ffffff;border:1px solid #e2e8f0;box-shadow:0 1px 3px rgba(0,0,0,0.06);padding:0;overflow:hidden';
     sec.innerHTML =
-      '<div style="background:linear-gradient(135deg,#071a33,#0f2f63 60%,#7a1020);color:#fff;padding:18px 20px 16px">' +
+      '<div class="as-cab" style="background:linear-gradient(135deg,#071a33,#0f2f63 60%,#7a1020);color:#fff;padding:18px 20px 16px">' +
       '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">' +
-      '<div><div style="font-size:12px;letter-spacing:2px;font-weight:800;color:#93c5fd">MAESTROHVACR.COM</div>' +
+      '<div><div class="as-azul" style="font-size:12px;letter-spacing:2px;font-weight:800;color:#93c5fd">MAESTROHVACR.COM</div>' +
       '<h3 style="margin:2px 0 0;color:#fff;font-size:22px">📈 ¿Cómo nos está yendo?</h3></div>' +
       '<div id="asPeriodos" style="display:flex;gap:6px"></div></div>' +
       '<div id="asKpis" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-top:14px"></div></div>' +
@@ -33,6 +33,12 @@
     var st = document.createElement('style');
     st.textContent = '#adminAnaliticosSitio #asCuerpo>*,#adminAnaliticosSitio #asCuerpo section,#adminAnaliticosSitio #asCuerpo>div>*{min-width:0}' +
       '#adminAnaliticosSitio .as-paso{grid-template-columns:minmax(120px,38%) minmax(0,1fr) 64px!important}' +
+      // 30-sep (captura de Mario): el tema del panel pintaba el título y las tarjetas de arriba en oscuro sobre el fondo oscuro.
+      '#adminAnaliticosSitio .as-cab,#adminAnaliticosSitio .as-cab h3,#adminAnaliticosSitio .as-cab div,#adminAnaliticosSitio .as-cab span:not(.as-ok):not(.as-mal){color:#fff!important;-webkit-text-fill-color:#fff!important;text-shadow:none!important}' +
+      '#adminAnaliticosSitio .as-cab button{-webkit-text-fill-color:currentColor!important}' +
+      '#adminAnaliticosSitio .as-cab .as-etq{color:#cbd5e1!important;-webkit-text-fill-color:#cbd5e1!important}' +
+      '#adminAnaliticosSitio .as-cab .as-ok{color:#86efac!important;-webkit-text-fill-color:#86efac!important}#adminAnaliticosSitio .as-cab .as-mal{color:#fca5a5!important;-webkit-text-fill-color:#fca5a5!important}' +
+      '#adminAnaliticosSitio .as-cab .as-azul{color:#93c5fd!important;-webkit-text-fill-color:#93c5fd!important}' +
       '@media(max-width:520px){#adminAnaliticosSitio .as-paso{grid-template-columns:1fr 56px!important}#adminAnaliticosSitio .as-paso>div:nth-child(2){grid-column:1/-1;order:3}}';
     sec.appendChild(st);
     ancla.parentNode.insertBefore(sec, ancla);
@@ -56,13 +62,13 @@
   function delta(a, b) {
     a = Number(a || 0); b = Number(b || 0);
     if (!b && !a) return '<span style="color:#cbd5e1">—</span>';
-    if (!b) return '<span style="color:#86efac">▲ nuevo</span>';
+    if (!b) return '<span class="as-ok" style="color:#86efac">▲ nuevo</span>';
     var p = Math.round((a - b) / b * 100);
-    return p >= 0 ? '<span style="color:#86efac">▲ ' + p + '%</span>' : '<span style="color:#fca5a5">▼ ' + Math.abs(p) + '%</span>';
+    return p >= 0 ? '<span class="as-ok" style="color:#86efac">▲ ' + p + '%</span>' : '<span class="as-mal" style="color:#fca5a5">▼ ' + Math.abs(p) + '%</span>';
   }
   function kpi(icono, titulo, valor, extra) {
     return '<div style="background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.18);border-radius:14px;padding:10px 12px">' +
-      '<div style="font-size:12.5px;color:#cbd5e1;font-weight:700">' + icono + ' ' + titulo + '</div>' +
+      '<div class="as-etq" style="font-size:12.5px;color:#cbd5e1;font-weight:700">' + icono + ' ' + titulo + '</div>' +
       '<div style="font-size:28px;font-weight:900;line-height:1.15;margin-top:2px">' + valor + '</div>' +
       '<div style="font-size:12px;font-weight:700;margin-top:2px">' + (extra || '') + '</div></div>';
   }
@@ -80,7 +86,7 @@
     var d = r.data || {}, k = d.kpi || {};
     var ant = dias === 1 ? 'vs. ayer' : 'vs. ' + dias + ' días antes';
     kp.innerHTML =
-      kpi('👀', 'Visitantes', num(k.visitantes), delta(k.visitantes, k.visitantes_ant) + ' <span style="color:#cbd5e1">' + ant + '</span>') +
+      kpi('👀', 'Visitantes', num(k.visitantes), delta(k.visitantes, k.visitantes_ant) + ' <span class="as-etq" style="color:#cbd5e1">' + ant + '</span>') +
       kpi('💬', 'Conversaciones', num(k.chats), delta(k.chats, k.chats_ant)) +
       kpi('🧲', 'Leads', num(k.leads), delta(k.leads, k.leads_ant)) +
       kpi('💰', 'Ventas web', num(k.ventas), '$' + num(k.ingreso) + ' · ' + delta(k.ventas, k.ventas_ant)) +
