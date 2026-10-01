@@ -1482,6 +1482,7 @@ function initCrmRedesign() {
     var quickAccess = document.querySelector('.crm-quick-access');
     if (quickAccess) {
       quickAccess.innerHTML =
+        '<button class="crm-quick-btn red" onclick="if(window.verPedidosVideo)window.verPedidosVideo()">🎬 Videos que te pidieron</button>' +
         '<button class="crm-quick-btn teal" onclick="showCrmSection(\'tutorialVideos\',document.querySelector(\'[data-crm-section=tutorialVideos]\'))">🎓 HVAC Certification</button>' +
         '<button class="crm-quick-btn purple" onclick="showCrmSection(\'acvoltSchool\',document.querySelector(\'[data-crm-section=acvoltSchool]\'))">🎬 Maestro HVACR Videos</button>' +
         '<button class="crm-quick-btn red" onclick="showCrmSection(\'streaming\',document.querySelector(\'[data-crm-section=streaming]\'))">📡 Streaming</button>' +
@@ -1491,7 +1492,9 @@ function initCrmRedesign() {
     }
     // Hide admin section panels on dashboard that editor shouldn't see
     // Mario 2026-05-29: added adminStreamingSection so editor can use streaming.
-    var editorAllowed = ['adminBandejaSection', 'adminStreamingSection', 'adminCursoVideos'];
+    // 1-oct-2026 (Mario: «Manuel tiene su zona pero no le aparecen nuestras peticiones»): el panel de pedidos
+    // de video (adminVideosEditor, js/admin/solicitudes-video.js) no estaba en esta lista → se le escondía.
+    var editorAllowed = ['adminBandejaSection', 'adminStreamingSection', 'adminCursoVideos', 'adminVideosEditor'];
     document.querySelectorAll('.admin-section.admin-grid-full').forEach(function(sec) {
       if (editorAllowed.indexOf(sec.id) === -1) sec.style.display = 'none';
     });

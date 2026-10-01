@@ -46,6 +46,10 @@
   function menuVentas() {
     var nav = document.getElementById('crmSidebarNav');
     if (!nav || document.getElementById('crmMenuVentas')) return;
+    // 1-oct-2026: el EDITOR (Manuel) no trabaja ventas — no se le enseña este grupo (solo tiene «Videos que te pidieron»).
+    var _rol = ''; try { _rol = sessionStorage.getItem('admin_role') || ''; } catch (_) {}
+    if (!_rol && typeof currentAdminRole !== 'undefined') _rol = currentAdminRole || '';
+    if (_rol === 'editor') return;
     var despues = nav.querySelector('[data-crm-section="bandeja"]') || nav.querySelector('[data-crm-section="dashboard"]');
     if (!despues) return;
     var grupo = document.createElement('div');

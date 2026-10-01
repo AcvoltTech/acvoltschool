@@ -10,8 +10,32 @@
   var esc = function (s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); };
   var campo = 'padding:8px 10px;border:1px solid #cbd5e1;border-radius:8px;font:inherit';
 
+  // 1-oct-2026 (Mario: «Manuel tiene su zona pero no le aparecen nuestras peticiones»): para el EDITOR el panel
+  // va hasta ARRIBA del Dashboard, se llama «Videos que te pidieron», no trae el formulario de pedir y tiene su
+  // botón en el menú. Antes la zona del editor escondía este panel (zm-navigation.js) y no tenía cómo llegar a él.
+  function esEditor() {
+    var r = '';
+    try { r = sessionStorage.getItem('admin_role') || ''; } catch (_) {}
+    if (!r && typeof currentAdminRole !== 'undefined') r = currentAdminRole || '';
+    return r === 'editor';
+  }
+  window.verPedidosVideo = function () {
+    if (typeof showCrmSection === 'function') { try { showCrmSection('dashboard'); } catch (_) {} }
+    setTimeout(function () { var el = document.getElementById('adminVideosEditor'); if (el) { el.style.display = ''; el.scrollIntoView({ behavior: 'smooth', block: 'start' }); cargar(); } }, 150);
+  };
+  function menuEditor() {
+    var nav = document.getElementById('crmSidebarNav');
+    if (!nav || document.getElementById('crmMenuVideosEditor')) return;
+    var a = document.createElement('a');
+    a.id = 'crmMenuVideosEditor'; a.className = 'crm-sidebar-item'; a.href = '#adminVideosEditor';
+    a.innerHTML = '<span class="crm-icon">🎬</span> <span>Videos que te pidieron</span>';
+    a.onclick = function (e) { e.preventDefault(); window.verPedidosVideo(); };
+    nav.insertBefore(a, nav.firstChild);
+  }
+
   function montar() {
     if (document.getElementById('adminVideosEditor')) return true;
+    var editor = esEditor();
     var ancla = document.getElementById('adminMiembrosWeb') || document.getElementById('adminProspectos') || document.getElementById('adminFinanzas');
     if (!ancla || !ancla.parentNode) return false;
     var sec = document.createElement('div');
@@ -29,7 +53,17 @@
       '<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><button type="submit" style="background:#16a34a;color:#fff;border:0;border-radius:8px;padding:9px 16px;cursor:pointer;font-weight:800">Pedir video (le llega SMS a Manuel)</button>' +
       '<span id="vedMsg" style="font-size:13px;font-weight:700"></span></div></form>' +
       '<div id="vedLista" style="display:grid;gap:10px"><p style="color:#64748b">Cargando…</p></div>';
-    ancla.parentNode.insertBefore(sec, ancla.nextSibling);
+    if (editor) {
+      // Hasta arriba, antes de cualquier otro panel del Dashboard.
+      var primero = ancla.parentNode.querySelector('.admin-section');
+      ancla.parentNode.insertBefore(sec, primero || ancla.parentNode.firstChild);
+      sec.querySelector('h3').textContent = '🎬 Videos que te pidieron';
+      document.getElementById('vedForm').style.display = 'none';
+      sec.style.display = '';
+      menuEditor();
+    } else {
+      ancla.parentNode.insertBefore(sec, ancla.nextSibling);
+    }
     var nav = document.getElementById('navMiembrosWeb') || document.getElementById('navProspectos') || document.querySelector('.admin-nav-btn');
     if (nav && nav.parentNode && !document.getElementById('navVideosEditor')) {
       var b = document.createElement('button'); b.id = 'navVideosEditor'; b.className = 'admin-nav-btn'; b.textContent = '🎬 Videos';
