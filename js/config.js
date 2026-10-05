@@ -191,10 +191,24 @@
         if (tier2 >= 2) { if (callback) callback(); return; }
         // Membresía WEB ($149/$750, pagada en maestrohvacr.com): el muro solo conocía las del app. Se pregunta a
         // study-access antes de bloquear; si la consulta falla se queda como antes (bloqueado), nunca regala acceso.
-        _membresiaWebActiva(function(activa) { if (activa) { if (callback) callback(); } else _showWebBlockedScreen(); });
+        // 🩹 5-oct-2026 · Francisco Díaz (frankdiaz14266, $119 platino por Stripe el 2-oct) veía este muro aunque el servidor
+        // (web_access_check) ya decía access:true. RAÍZ: este muro viejo solo conocía la membresía del app y la web nueva;
+        // las de Stripe «platino» ($119) registradas después del 3-abr NUNCA pasaban. Ahora se pregunta PRIMERO al servidor
+        // (misma regla que js/web-access-gate.js: cualquier pago activo, token de escuela o admin).
+        _accesoServidor(function(ok) {
+          if (ok) { if (callback) callback(); return; }
+          _membresiaWebActiva(function(activa) { if (activa) { if (callback) callback(); } else _showWebBlockedScreen(); });
+        });
       };
       // Give preloadStudentCRMGroups time to fetch
       setTimeout(_checkAsync, 2500);
+    }
+    function _accesoServidor(cb) {
+      try {
+        var sbc = window.supabaseClient;
+        if (!sbc || typeof sbc.rpc !== 'function') { cb(false); return; }
+        sbc.rpc('web_access_check').then(function(res) { cb(!!(res && res.data && res.data.access === true)); }, function() { cb(false); });
+      } catch (e) { cb(false); }
     }
     function _membresiaWebActiva(cb) {
       try {
