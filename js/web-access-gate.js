@@ -101,6 +101,146 @@
     } catch (_) {}
   }
 
+  // ── 2-nov-2026 · MODO «SOLO GRABACIONES» ─────────────────────────────────────────────
+  // Mario: la membresía vieja de Stripe ($99–$119, etiqueta membresia_119) ve SOLO las
+  // grabaciones de sáb/dom 7–11 AM. Ni cursos, ni herramientas, ni app. Para todo lo demás:
+  // los $149.99. El servidor decide (web_access_check → modo:'solo_grabaciones'); aquí se
+  // pinta una pantalla completa con SUS grabaciones (las que traen una etiqueta suya).
+  var GRAB_ID = 'webGrabacionesModal';
+  var COMPRA_URL = 'https://maestrohvacr.com/estudiar';
+
+  function _removeGrab() {
+    try { var m = document.getElementById(GRAB_ID); if (m) m.remove(); } catch (_) {}
+  }
+
+  function _esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+
+  function _showGrabaciones() {
+    try {
+      _removeWall();
+      if (document.getElementById(GRAB_ID)) return;
+      var es = ((navigator.language || 'es').toLowerCase().indexOf('en') !== 0);
+      var t = es ? {
+        title: 'Tus clases grabadas',
+        sub: 'Sábado y domingo · 7 a 11 AM',
+        loading: 'Cargando tus clases…',
+        empty: 'Todavía no hay clases grabadas para tu membresía.',
+        err: 'No se pudieron cargar las clases. Revisa tu conexión y vuelve a intentar.',
+        ver: 'Ver clase',
+        min: 'min',
+        upTitle: '¿Quieres todo?',
+        upBody: 'Cursos completos, herramientas, la app y clases en vivo: $149.99 al mes.',
+        upBtn: 'Ver el acceso completo',
+        out: 'Cerrar sesión'
+      } : {
+        title: 'Your recorded classes',
+        sub: 'Saturday & Sunday · 7 to 11 AM',
+        loading: 'Loading your classes…',
+        empty: 'There are no recorded classes for your membership yet.',
+        err: 'Classes could not be loaded. Check your connection and try again.',
+        ver: 'Watch class',
+        min: 'min',
+        upTitle: 'Want everything?',
+        upBody: 'Full courses, tools, the app and live classes: $149.99 per month.',
+        upBtn: 'See full access',
+        out: 'Sign out'
+      };
+
+      var d = document.createElement('div');
+      d.id = GRAB_ID;
+      d.setAttribute('role', 'dialog');
+      d.setAttribute('aria-modal', 'true');
+      d.setAttribute('aria-labelledby', 'webGrabTitle');
+      d.style.cssText = 'position:fixed;inset:0;z-index:2147483000;background:#0f2342;overflow:auto;' +
+        'padding:24px 16px;box-sizing:border-box;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;';
+      d.innerHTML =
+        '<div style="max-width:640px;margin:0 auto;">' +
+          '<div style="background:#f4f6f9;border-radius:18px;padding:24px 20px;box-shadow:0 24px 60px rgba(0,0,0,.45);">' +
+            '<h2 id="webGrabTitle" style="margin:0 0 4px;font-size:23px;font-weight:800;color:#0f2342;">🎥 ' + t.title + '</h2>' +
+            '<p style="margin:0 0 18px;font-size:15px;color:#3d4d63;">' + t.sub + '</p>' +
+            '<div id="webGrabList" style="display:flex;flex-direction:column;gap:10px;">' +
+              '<p style="margin:0;font-size:15px;color:#3d4d63;">' + t.loading + '</p>' +
+            '</div>' +
+          '</div>' +
+          '<div style="background:#efd180;border-radius:18px;padding:20px;margin-top:16px;text-align:center;">' +
+            '<div style="font-size:19px;font-weight:800;color:#0f2342;margin-bottom:6px;">' + t.upTitle + '</div>' +
+            '<p style="margin:0 0 14px;font-size:15px;line-height:1.5;color:#0f2342;">' + t.upBody + '</p>' +
+            '<a href="' + COMPRA_URL + '" target="_blank" rel="noopener" style="display:inline-block;min-height:48px;' +
+              'line-height:48px;padding:0 24px;background:#0f2342;color:#fff;text-decoration:none;border-radius:12px;' +
+              'font-weight:800;font-size:16px;">' + t.upBtn + '</a>' +
+          '</div>' +
+          '<div style="text-align:center;margin-top:14px;">' +
+            '<button id="webGrabSignOut" style="background:none;border:none;color:#e2e8f0;font-size:14px;' +
+              'text-decoration:underline;cursor:pointer;padding:10px;">' + t.out + '</button>' +
+          '</div>' +
+        '</div>';
+      (document.body || document.documentElement).appendChild(d);
+      document.documentElement.style.overflow = 'hidden';
+      if (document.body) document.body.style.overflow = 'hidden';
+
+      var btn = document.getElementById('webGrabSignOut');
+      if (btn) btn.addEventListener('click', function () {
+        try { var sb = global.supabaseClient; if (sb && sb.auth && sb.auth.signOut) sb.auth.signOut(); } catch (_) {}
+        try { location.reload(); } catch (_) {}
+      });
+
+      _cargarGrabaciones(t);
+    } catch (_) {}
+  }
+
+  function _cargarGrabaciones(t) {
+    var list = document.getElementById('webGrabList');
+    var fail = function (msg) {
+      if (list) list.innerHTML = '<p style="margin:0;font-size:15px;color:#3d4d63;">' + msg + '</p>';
+    };
+    try {
+      var sb = global.supabaseClient;
+      sb.auth.getSession().then(function (s) {
+        var email = s && s.data && s.data.session && s.data.session.user && s.data.session.user.email;
+        if (!email) { fail(t.err); return; }
+        // NOTA: el builder de Supabase NO es Promise real — 2º arg de then(), nunca .catch().
+        sb.rpc('crm_mis_grupos', { p_email: email.toLowerCase() }).then(function (g) {
+          var mis = g && g.data;
+          if (typeof mis === 'string') { try { mis = JSON.parse(mis); } catch (_) { mis = []; } }
+          if (!Array.isArray(mis)) mis = [];
+          sb.from('zoom_recordings').select('data').eq('id', 'master').maybeSingle().then(function (r) {
+            var recs = [];
+            try {
+              var raw = r && r.data && r.data.data;
+              recs = typeof raw === 'string' ? JSON.parse(raw) : (raw || []);
+            } catch (_) { recs = []; }
+            if (r && r.error) { fail(t.err); return; }
+            var mias = recs.filter(function (e) {
+              if (!e || !e.link || e.visible === false) return false;
+              var gs = Array.isArray(e.groups) ? e.groups : [];
+              for (var i = 0; i < gs.length; i++) if (mis.indexOf(gs[i]) !== -1) return true;
+              return false;
+            }).sort(function (a, b) { return String(b.date || '').localeCompare(String(a.date || '')); });
+            if (!mias.length) { fail(t.empty); return; }
+            list.innerHTML = mias.map(function (e) {
+              var link = /^https:\/\//i.test(e.link) ? e.link : '#';
+              return '<div style="display:flex;align-items:center;gap:12px;background:#fff;border:1px solid #d6dde8;' +
+                'border-radius:12px;padding:12px 14px;">' +
+                  '<div style="flex:1;min-width:0;">' +
+                    '<div style="font-size:15px;font-weight:700;color:#0f2342;">' + _esc(e.day_label || '') + ' ' + _esc(e.date || '') + '</div>' +
+                    '<div style="font-size:13px;color:#5b6b82;">' + _esc(e.category || '') +
+                      (e.duration_min ? ' · ' + _esc(e.duration_min) + ' ' + t.min : '') + '</div>' +
+                  '</div>' +
+                  '<a href="' + _esc(link) + '" target="_blank" rel="noopener" style="flex:none;min-height:44px;line-height:44px;' +
+                    'padding:0 16px;background:#0f2342;color:#fff;text-decoration:none;border-radius:10px;font-weight:700;' +
+                    'font-size:14px;">' + t.ver + '</a>' +
+                '</div>';
+            }).join('');
+          }, function () { fail(t.err); });
+        }, function () { fail(t.err); });
+      }, function () { fail(t.err); });
+    } catch (_) { fail(t.err); }
+  }
+
   function check(force) {
     try {
       if (_checked && !force) return;
@@ -120,7 +260,9 @@
             console.warn('[WebGate] web_access_check no devolvió datos: se deja pasar (fail-open)', res && res.error);
             return;
           }
-          if (d.access === true) { _removeWall(); return; }
+          if (d.access === true && d.modo === 'solo_grabaciones') { _showGrabaciones(); return; }
+          if (d.access === true) { _removeWall(); _removeGrab(); return; }
+          _removeGrab();
           _showWall();
         }, function (err) {
           // Fallo de red/RPC → NO bloquear. Se reintenta al próximo arranque.
@@ -145,5 +287,5 @@
     check();
   }
   document.addEventListener('maestroac:signed-in', function () { _checked = false; check(true); });
-  document.addEventListener('maestroac:signed-out', function () { _checked = false; _removeWall(); });
+  document.addEventListener('maestroac:signed-out', function () { _checked = false; _removeWall(); _removeGrab(); });
 })(window);
