@@ -438,18 +438,49 @@ function lsaHideCreateForm() {
   if (s) s.value = '';
 }
 
+/* ── Credenciales de transmisión (solo personal) ─────────────── */
+// La lista se pide SIN llaves; aquí se pegan rtmps_url / stream_key / whip_url desde la
+// función live_streams_credenciales(). Si la función todavía no existe (SQL sin aplicar),
+// se hace el select('*') de siempre. Si nada funciona, la lista se muestra igual (sin llaves):
+// nunca dejar al admin sin su lista por no poder leer las llaves.
+async function _lsaMergeCredenciales(rows) {
+  try {
+    var cred = await supabaseClient.rpc('live_streams_credenciales');
+    if (!cred.error) {
+      var porId = {};
+      (cred.data || []).forEach(function (c) { porId[c.id] = c; });
+      return rows.map(function (s) {
+        var c = porId[s.id];
+        return c ? Object.assign({}, s, { rtmps_url: c.rtmps_url, stream_key: c.stream_key, whip_url: c.whip_url }) : s;
+      });
+    }
+    console.warn('[LiveStreamAdmin] live_streams_credenciales no disponible, uso select(*):', cred.error.message || cred.error);
+    var viejo = await supabaseClient.from('live_streams').select('*').order('created_at', { ascending: false });
+    if (!viejo.error && viejo.data) return viejo.data;
+    console.warn('[LiveStreamAdmin] sin llaves de transmisión:', (viejo.error && viejo.error.message) || viejo.error);
+  } catch (e) {
+    console.warn('[LiveStreamAdmin] credenciales:', (e && e.message) || e);
+  }
+  return rows;
+}
+
 /* ── Load streams ───────────────────────────────────────────── */
 async function loadAdminStreams() {
   if (_lsaLoading) return;
   _lsaLoading = true;
 
   try {
+    // 🔐 12-nov-2026: ya NO select('*'). Las llaves para TRANSMITIR (rtmps_url, stream_key,
+    // whip_url) dejan de ser legibles por columna para cualquier cuenta; el personal las trae
+    // con la función live_streams_credenciales() (SECURITY DEFINER, solo es_staff_activo()).
+    // Tolerante a base vieja: si la función aún no existe, se pide select('*') como antes.
     var { data, error } = await supabaseClient
       .from('live_streams')
-      .select('*')
+      .select('id, cf_input_id, title, description, instructor_email, instructor_name, status, scheduled_at, started_at, ended_at, playback_url, created_at, class_group, instructor_id, cert_enabled')
       .order('created_at', { ascending: false });
 
     if (error) throw error;
+    data = await _lsaMergeCredenciales(data || []);
     _lsaStreams = data || [];
     renderAdminStreamList();
   } catch (e) {
