@@ -119,6 +119,203 @@
     });
   }
 
+  // ── 12-nov-2026 · GRABACIONES DE ZOOM SIN ENLACES (MaestroZoomSeguro) ───────────────────────
+  // Mario: «Ponles las clases así como les salen a los estudiantes presenciales, a TODOS los de las
+  // membresías. No quiero los enlaces. Que no bajen nada ni hagan click en un enlace.»
+  // El servidor (RPC zoom_mis_grabaciones, identidad = JWT) da la lista YA filtrada y SIN enlace:
+  //   stream (uid de Cloudflare Stream) → se reproduce AQUÍ: video-token firma 2 h + iframe privado
+  //                                        (el mismo mecanismo que abrirZoom del aula).
+  //   pronto                            → «⏳ Disponible pronto». Nunca el enlace.
+  // Nunca <a href> a zoom.us ni window.open para quien no es personal (staff:true sí ve «Abrir en Zoom»).
+  // Compatibilidad: si la RPC no existe todavía (PGRST202 / 404) → estado 'viejo' y cada pantalla
+  // sigue su camino de antes. Cualquier otro error → estado 'error' (la pantalla ofrece reintentar;
+  // ley «nunca negar sin saber»: jamás una lista vacía muda como si no hubiera pagado).
+  // Vive aquí porque este archivo se carga en TODAS las páginas (index.html) y lo usan también
+  // js/crm/zoom-recordings.js y js/crm/zm-navigation.js (pantalla «Clases de Zoom»).
+  var SB_URL = 'https://htklsowiyjwsjnacnvnr.supabase.co';
+  var STREAM_URL = 'https://customer-ehgr1pt7ma9kf78k.cloudflarestream.com/';
+
+  function _enIngles() {
+    try { if (global._lang === 'en' || global._lang === 'es') return global._lang === 'en'; } catch (_) {}
+    return ((navigator.language || 'es').toLowerCase().indexOf('en') === 0);
+  }
+
+  function _rpcNoExiste(res) {
+    var e = res && res.error;
+    if (!e) return false;
+    var code = String(e.code || '');
+    return code === 'PGRST202' || code === '42883' || res.status === 404 || e.status === 404;
+  }
+
+  // Normaliza un objeto del servidor. Quien no es personal NUNCA conserva 'link' (aunque llegara).
+  function _limpia(g, staff) {
+    g = g || {};
+    var uid = (typeof g.stream === 'string' && /^[A-Za-z0-9_-]{6,64}$/.test(g.stream)) ? g.stream : null;
+    var o = {
+      id: String(g.id == null ? '' : g.id),
+      fecha: g.fecha || g.date || '',
+      titulo: g.titulo || g.title || '',
+      categoria: g.categoria || g.category || '',
+      dia: g.dia || g.day_label || '',
+      minutos: Number(g.minutos || g.duration_min) || 0,
+      stream: uid,
+      pronto: !uid
+    };
+    // alias de siempre para las pantallas viejas
+    o.date = o.fecha; o.title = o.titulo; o.category = o.categoria; o.day_label = o.dia; o.duration_min = o.minutos;
+    if (staff) {
+      if (typeof g.link === 'string' && /^https:\/\//i.test(g.link)) o.link = g.link;
+      if (Array.isArray(g.groups)) o.groups = g.groups;
+      if (g.visible === false) o.visible = false;
+    }
+    return o;
+  }
+
+  // → Promise real que SIEMPRE resuelve:
+  //   {estado:'nuevo', staff, grabaciones[]} | {estado:'viejo'} | {estado:'sin_sesion'} | {estado:'error', error}
+  function cargarMisGrabaciones(sb) {
+    return new Promise(function (resolve) {
+      try {
+        sb = sb || global.supabaseClient;
+        if (!sb || !sb.rpc) { resolve({ estado: 'error', error: 'sin cliente de Supabase' }); return; }
+        // NOTA: el builder de Supabase NO es Promise real — 2º arg de then(), nunca .catch().
+        sb.rpc('zoom_mis_grabaciones', {}).then(function (res) {
+          if (_rpcNoExiste(res)) { resolve({ estado: 'viejo' }); return; }
+          if (res && res.error) { resolve({ estado: 'error', error: res.error }); return; }
+          var d = res && res.data;
+          if (typeof d === 'string') { try { d = JSON.parse(d); } catch (_) { d = null; } }
+          if (!d || typeof d !== 'object') { resolve({ estado: 'error', error: 'respuesta vacía' }); return; }
+          if (d.sesion === false) { resolve({ estado: 'sin_sesion' }); return; }
+          var staff = d.staff === true;
+          var lista = (Array.isArray(d.grabaciones) ? d.grabaciones : []).map(function (g) { return _limpia(g, staff); });
+          resolve({ estado: 'nuevo', staff: staff, grabaciones: lista });
+        }, function (err) {
+          if (_rpcNoExiste({ error: err, status: err && err.status })) { resolve({ estado: 'viejo' }); return; }
+          resolve({ estado: 'error', error: err });
+        });
+      } catch (e) { resolve({ estado: 'error', error: e }); }
+    });
+  }
+
+  function _msg(caja, texto, reintentar, en) {
+    caja.replaceChildren();
+    var p = document.createElement('p');
+    p.style.cssText = 'position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;' +
+      'gap:12px;margin:0;padding:12px;text-align:center;color:#fff;font-size:15px;line-height:1.45;';
+    p.appendChild(document.createTextNode(texto));
+    if (reintentar) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.textContent = en ? 'Try again' : 'Intentar de nuevo';
+      b.style.cssText = 'min-height:44px;padding:0 18px;border:0;border-radius:10px;background:#efd180;color:#0f2342;font-weight:800;font-size:15px;cursor:pointer;';
+      b.addEventListener('click', reintentar);
+      p.appendChild(b);
+    }
+    caja.appendChild(p);
+  }
+
+  // Marca de agua: nombre o correo de la sesión, semitransparente, sin capturar clics, cambia de
+  // lugar cada ~20 s. Disuasivo (no es DRM): si alguien graba la pantalla, se ve de quién es.
+  function _marcaDeAgua(cont, quien) {
+    var m = document.createElement('div');
+    m.className = 'mh-zoom-marca';
+    m.setAttribute('aria-hidden', 'true');
+    m.textContent = quien;
+    m.style.cssText = 'position:absolute;z-index:3;pointer-events:none;user-select:none;-webkit-user-select:none;' +
+      'color:rgba(255,255,255,.38);font:700 14px/1.2 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;' +
+      'text-shadow:0 0 3px rgba(0,0,0,.65);white-space:nowrap;transform:rotate(-12deg);transition:left 1.2s,top 1.2s;';
+    var mover = function () {
+      m.style.left = (4 + Math.floor(Math.random() * 56)) + '%';
+      m.style.top = (8 + Math.floor(Math.random() * 74)) + '%';
+    };
+    mover();
+    cont.appendChild(m);
+    var iv = setInterval(function () {
+      if (!m.isConnected) { clearInterval(iv); return; }
+      mover();
+    }, 20000);
+    return m;
+  }
+
+  // Pinta el reproductor dentro de 'caja' (se vacía). g = objeto de cargarMisGrabaciones.
+  function reproducir(caja, g, opts) {
+    opts = opts || {};
+    var en = typeof opts.en === 'boolean' ? opts.en : _enIngles();
+    if (!caja) return;
+    caja.replaceChildren();
+    var marco = document.createElement('div');
+    marco.className = 'mh-zoom-marco';
+    marco.style.cssText = 'position:relative;width:100%;padding-top:56.25%;background:#000;border-radius:10px;overflow:hidden;';
+    caja.appendChild(marco);
+    var otraVez = function () { reproducir(caja, g, opts); };
+
+    if (!g || !g.stream) {
+      _msg(marco, en ? '⏳ Available soon' : '⏳ Disponible pronto', null, en);
+      return;
+    }
+    _msg(marco, en ? 'Checking your access…' : 'Comprobando tu acceso…', null, en);
+
+    var sb = opts.sb || global.supabaseClient;
+    if (!sb || !sb.auth || !sb.auth.getSession || typeof fetch !== 'function') {
+      _msg(marco, en ? 'We could not open the video. Try again.' : 'No pudimos abrir el video. Intenta de nuevo.', otraVez, en);
+      return;
+    }
+    sb.auth.getSession().then(function (s) {
+      var ses = s && s.data && s.data.session;
+      var tk = ses && ses.access_token;
+      if (!tk) { _msg(marco, en ? 'Sign in to watch your class.' : 'Inicia sesión para ver tu clase.', otraVez, en); return; }
+      var u = ses.user || {};
+      var md = u.user_metadata || {};
+      var quien = String(md.full_name || md.name || md.nombre || u.email || '').trim() || 'Maestro HVACR';
+      if (u.email && quien !== u.email) quien += ' · ' + u.email;
+      fetch(SB_URL + '/functions/v1/video-token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + tk },
+        body: JSON.stringify({ uid: g.stream })
+      }).then(function (r) {
+        return r.json().then(function (d) { return { r: r, d: d || {} }; }, function () { return { r: r, d: {} }; });
+      }).then(function (x) {
+        var d = x.d;
+        if (!x.r.ok || typeof d.token !== 'string' || !/^[A-Za-z0-9_.-]+$/.test(d.token)) {
+          // 503 = algo del servidor: reintentar. NUNCA decir «no pagaste» por un error.
+          _msg(marco, d.error || (en ? 'We could not open the video. Try again.' : 'No pudimos abrir el video. Intenta de nuevo.'), otraVez, en);
+          return;
+        }
+        if (!marco.isConnected) return; // lo cerraron o lo reemplazaron mientras cargaba
+        var portada = STREAM_URL + d.token + '/thumbnails/thumbnail.jpg?time=180s&height=720';
+        var f = document.createElement('iframe');
+        f.title = g.titulo || g.title || 'Clase';
+        // Pantalla completa: la del CONTENEDOR (así la marca de agua sigue encima). Solo si el
+        // navegador no la soporta (iPhone) se deja la del reproductor.
+        var fsCont = !!(marco.requestFullscreen || marco.webkitRequestFullscreen) && document.fullscreenEnabled !== false;
+        f.allow = 'accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture' + (fsCont ? '' : '; fullscreen');
+        f.allowFullscreen = !fsCont;
+        f.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;border:0;';
+        f.src = STREAM_URL + d.token + '/iframe?preload=auto' + (en ? '&defaultTextTrack=en' : '') + '&poster=' + encodeURIComponent(portada);
+        marco.replaceChildren(f);
+        _marcaDeAgua(marco, quien);
+        if (fsCont) {
+          var b = document.createElement('button');
+          b.type = 'button';
+          b.textContent = en ? '⛶ Full screen' : '⛶ Pantalla completa';
+          b.style.cssText = 'margin-top:8px;min-height:40px;padding:0 14px;border:1px solid #d6dde8;border-radius:10px;background:#fff;color:#0f2342;font-weight:700;font-size:14px;cursor:pointer;';
+          b.addEventListener('click', function () {
+            try { (marco.requestFullscreen || marco.webkitRequestFullscreen).call(marco); } catch (e) { console.warn('[ZoomSeguro] pantalla completa:', (e && e.message) || e); }
+          });
+          caja.appendChild(b);
+        }
+      }, function (e) {
+        console.warn('[ZoomSeguro] video-token falló:', (e && e.message) || e);
+        _msg(marco, en ? 'We could not open the video. Check your connection and try again.' : 'No pudimos abrir el video. Revisa tu conexión e intenta de nuevo.', otraVez, en);
+      });
+    }, function (e) {
+      console.warn('[ZoomSeguro] no se pudo leer la sesión:', (e && e.message) || e);
+      _msg(marco, en ? 'We could not open the video. Try again.' : 'No pudimos abrir el video. Intenta de nuevo.', otraVez, en);
+    });
+  }
+
+  global.MaestroZoomSeguro = { cargar: cargarMisGrabaciones, reproducir: reproducir, rpcNoExiste: _rpcNoExiste };
+
   function _showGrabaciones() {
     try {
       _removeWall();
@@ -135,7 +332,13 @@
         upTitle: '¿Quieres todo?',
         upBody: 'Cursos completos, herramientas, la app y clases en vivo: $149.99 al mes.',
         upBtn: 'Ver el acceso completo',
-        out: 'Cerrar sesión'
+        out: 'Cerrar sesión',
+        pronto: '⏳ Disponible pronto',
+        retry: 'Intentar de nuevo',
+        errNuevo: 'No pudimos cargar tus grabaciones. Intenta de nuevo.',
+        zoomStaff: 'Abrir en Zoom (personal)',
+        cerrar: '✕ Cerrar video',
+        en: false
       } : {
         title: 'Your recorded classes',
         sub: 'Saturday & Sunday · 7 to 11 AM',
@@ -147,7 +350,13 @@
         upTitle: 'Want everything?',
         upBody: 'Full courses, tools, the app and live classes: $149.99 per month.',
         upBtn: 'See full access',
-        out: 'Sign out'
+        out: 'Sign out',
+        pronto: '⏳ Available soon',
+        retry: 'Try again',
+        errNuevo: 'We could not load your recordings. Please try again.',
+        zoomStaff: 'Open in Zoom (staff)',
+        cerrar: '✕ Close video',
+        en: true
       };
 
       var d = document.createElement('div');
@@ -162,6 +371,12 @@
           '<div style="background:#f4f6f9;border-radius:18px;padding:24px 20px;box-shadow:0 24px 60px rgba(0,0,0,.45);">' +
             '<h2 id="webGrabTitle" style="margin:0 0 4px;font-size:23px;font-weight:800;color:#0f2342;">🎥 ' + t.title + '</h2>' +
             '<p style="margin:0 0 18px;font-size:15px;color:#3d4d63;">' + t.sub + '</p>' +
+            '<section id="webGrabPlayer" hidden style="margin:0 0 16px;padding:12px;border-radius:14px;background:#0b1b33;color:#fff;">' +
+              '<p class="web-grab-player-titulo" style="margin:0 0 8px;font-weight:800;font-size:15px;"></p>' +
+              '<div class="web-grab-player-video"></div>' +
+              '<button type="button" id="webGrabPlayerCerrar" style="margin-top:8px;min-height:40px;padding:0 14px;border:0;' +
+                'border-radius:10px;background:#efd180;color:#0f2342;font-weight:800;font-size:14px;cursor:pointer;">' + t.cerrar + '</button>' +
+            '</section>' +
             '<div id="webGrabList" style="display:flex;flex-direction:column;gap:10px;">' +
               '<p style="margin:0;font-size:15px;color:#3d4d63;">' + t.loading + '</p>' +
             '</div>' +
@@ -188,15 +403,111 @@
         try { location.reload(); } catch (_) {}
       });
 
+      var cerrar = document.getElementById('webGrabPlayerCerrar');
+      if (cerrar) cerrar.addEventListener('click', _cerrarReproductor);
+
       _cargarGrabaciones(t);
-    } catch (_) {}
+    } catch (e) { console.warn('[WebGate] pantalla de grabaciones:', (e && e.message) || e); }
   }
 
+  // 12-nov-2026: primero la RPC segura (sin enlaces). Solo si NO existe todavía (ventana entre
+  // publicar este código y aplicar el paso A en la base) se usa el camino viejo.
   function _cargarGrabaciones(t) {
     var list = document.getElementById('webGrabList');
-    var fail = function (msg) {
-      if (list) list.innerHTML = '<p style="margin:0;font-size:15px;color:#3d4d63;">' + msg + '</p>';
+    if (!list) return;
+    var fail = function (msg, reintentar) {
+      list.innerHTML = '<p style="margin:0;font-size:15px;color:#3d4d63;">' + _esc(msg) + '</p>';
+      if (reintentar) {
+        var b = document.createElement('button');
+        b.type = 'button';
+        b.id = 'webGrabRetry';
+        b.textContent = t.retry;
+        b.style.cssText = 'align-self:flex-start;min-height:44px;padding:0 18px;border:0;border-radius:10px;' +
+          'background:#0f2342;color:#fff;font-weight:700;font-size:15px;cursor:pointer;';
+        b.addEventListener('click', function () { _cargarGrabaciones(t); });
+        list.appendChild(b);
+      }
     };
+    list.innerHTML = '<p style="margin:0;font-size:15px;color:#3d4d63;">' + _esc(t.loading) + '</p>';
+    var Z = global.MaestroZoomSeguro;
+    try {
+      Z.cargar(global.supabaseClient).then(function (r) {
+        if (r.estado === 'viejo') { _cargarGrabacionesViejo(t, list, fail); return; }
+        if (r.estado !== 'nuevo') {
+          console.warn('[WebGate] zoom_mis_grabaciones:', r.estado, (r.error && (r.error.message || r.error.code)) || r.error || '');
+          fail(t.errNuevo, true);
+          return;
+        }
+        _pintarGrabaciones(t, list, r);
+      });
+    } catch (e) {
+      console.warn('[WebGate] no se pudieron cargar las grabaciones:', (e && e.message) || e);
+      fail(t.errNuevo, true);
+    }
+  }
+
+  function _pintarGrabaciones(t, list, r) {
+    var mias = r.grabaciones.filter(function (g) { return g && g.visible !== false; })
+      .sort(function (a, b) { return String(b.fecha || '').localeCompare(String(a.fecha || '')); });
+    if (!mias.length) { list.innerHTML = '<p style="margin:0;font-size:15px;color:#3d4d63;">' + _esc(t.empty) + '</p>'; return; }
+    list.replaceChildren();
+    mias.forEach(function (g) {
+      var fila = document.createElement('div');
+      fila.className = 'web-grab-fila';
+      fila.style.cssText = 'display:flex;align-items:center;flex-wrap:wrap;gap:12px;background:#fff;border:1px solid #d6dde8;' +
+        'border-radius:12px;padding:12px 14px;';
+      fila.innerHTML =
+        '<div style="flex:1;min-width:0;">' +
+          '<div style="font-size:15px;font-weight:700;color:#0f2342;">' + _esc(g.dia) + ' ' + _esc(g.fecha) + '</div>' +
+          '<div style="font-size:13px;color:#5b6b82;">' + _esc(g.categoria || g.titulo) +
+            (g.minutos ? ' · ' + _esc(g.minutos) + ' ' + t.min : '') + '</div>' +
+        '</div>';
+      if (g.stream) {
+        var b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'web-grab-ver';
+        b.textContent = '▶ ' + t.ver;
+        b.style.cssText = 'flex:none;min-height:44px;padding:0 16px;background:#0f2342;color:#fff;border:0;border-radius:10px;' +
+          'font-weight:700;font-size:14px;cursor:pointer;';
+        b.addEventListener('click', function () { _abrirEnPagina(t, g); });
+        fila.appendChild(b);
+      } else {
+        var s = document.createElement('span');
+        s.className = 'web-grab-pronto';
+        s.textContent = t.pronto;
+        s.style.cssText = 'flex:none;padding:8px 12px;background:#fff7e0;color:#7a5a00;border-radius:10px;font-weight:700;font-size:14px;';
+        fila.appendChild(s);
+      }
+      // Solo el PERSONAL (staff:true, lo decide el servidor) conserva el botón a Zoom.
+      if (r.staff && g.link) {
+        var a = document.createElement('a');
+        a.href = g.link; a.target = '_blank'; a.rel = 'noopener';
+        a.textContent = t.zoomStaff;
+        a.style.cssText = 'flex:none;font-size:13px;color:#0b5cff;';
+        fila.appendChild(a);
+      }
+      list.appendChild(fila);
+    });
+  }
+
+  function _abrirEnPagina(t, g) {
+    var box = document.getElementById('webGrabPlayer');
+    if (!box) return;
+    box.hidden = false;
+    box.querySelector('.web-grab-player-titulo').textContent = '🎥 ' + [g.dia, g.fecha, g.categoria || g.titulo].filter(Boolean).join(' · ');
+    global.MaestroZoomSeguro.reproducir(box.querySelector('.web-grab-player-video'), g, { en: t.en });
+    try { box.scrollIntoView({ block: 'start', behavior: 'smooth' }); } catch (e) { console.warn('[WebGate] scroll:', (e && e.message) || e); }
+  }
+
+  function _cerrarReproductor() {
+    var box = document.getElementById('webGrabPlayer');
+    if (!box) return;
+    box.querySelector('.web-grab-player-video').replaceChildren();
+    box.hidden = true;
+  }
+
+  // Camino de ANTES (2-nov): solo mientras la RPC zoom_mis_grabaciones no exista en la base.
+  function _cargarGrabacionesViejo(t, list, fail) {
     try {
       var sb = global.supabaseClient;
       sb.auth.getSession().then(function (s) {
@@ -213,7 +524,7 @@
               var raw = r && r.data && r.data.data;
               recs = typeof raw === 'string' ? JSON.parse(raw) : (raw || []);
             } catch (_) { recs = []; }
-            if (r && r.error) { fail(t.err); return; }
+            if (r && r.error) { fail(t.err, true); return; }
             var mias = recs.filter(function (e) {
               if (!e || !e.link || e.visible === false) return false;
               var gs = Array.isArray(e.groups) ? e.groups : [];
@@ -235,10 +546,13 @@
                     'font-size:14px;">' + t.ver + '</a>' +
                 '</div>';
             }).join('');
-          }, function () { fail(t.err); });
-        }, function () { fail(t.err); });
-      }, function () { fail(t.err); });
-    } catch (_) { fail(t.err); }
+          }, function () { fail(t.err, true); });
+        }, function () { fail(t.err, true); });
+      }, function () { fail(t.err, true); });
+    } catch (e) {
+      console.warn('[WebGate] camino viejo de grabaciones:', (e && e.message) || e);
+      fail(t.err, true);
+    }
   }
 
   function check(force) {

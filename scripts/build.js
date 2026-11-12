@@ -174,7 +174,8 @@ const ROOT_DATA_JS = [
   'fixes-workbooks-exams-calendar.js',
   'pipeline.js',
   'questions.js',
-  'zoom.js',
+  // 'zoom.js' — BORRADO 12-nov-2026: copia muerta (feb) que nadie cargaba y abría enlaces de Zoom
+  //   con window.open; lo vivo es js/crm/zoom-recordings.js + js/crm/zm-navigation.js.
 ];
 
 // CSS files

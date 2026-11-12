@@ -3,7 +3,7 @@
 window.MaestroLoader = {
   _loaded: {},
   _loading: {},
-  _v: 'v484',
+  _v: 'v485',  // 12-nov-2026: zoom sin enlaces (zoom-recordings.js / zm-navigation.js)
 
   _bust: function(url) {
     var sep = url.indexOf('?') === -1 ? '?' : '&';

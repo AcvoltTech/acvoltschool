@@ -66,6 +66,13 @@ if (typeof _addTranslations === 'function') _addTranslations({
   zmn_no_classes:        { es: 'No hay clases disponibles', en: 'No classes available' },
   zmn_video_editor:      { es: 'Editor de Videos', en: 'Video Editor' },
   zmn_video_tech:        { es: 'Técnico de Video', en: 'Video Technician' },
+  zmn_pronto:            { es: '⏳ Disponible pronto', en: '⏳ Available soon' },
+  zmn_retry:             { es: 'Intentar de nuevo', en: 'Try again' },
+  zmn_load_err:          { es: 'No pudimos cargar tus grabaciones. Intenta de nuevo.', en: 'We could not load your recordings. Please try again.' },
+  zmn_login_needed:      { es: 'Inicia sesión con tu cuenta para ver tus clases grabadas.', en: 'Sign in with your account to see your recorded classes.' },
+  zmn_loading_recs:      { es: 'Cargando tus clases…', en: 'Loading your classes…' },
+  zmn_close_video:       { es: '✕ Cerrar video', en: '✕ Close video' },
+  zmn_open_zoom_staff:   { es: 'Abrir en Zoom (personal)', en: 'Open in Zoom (staff)' },
 });
 
 // === RADIO Y PODCAST ===
@@ -79,10 +86,80 @@ function zoomLogout() {
   document.getElementById('zoomVerifyEmail').value = '';
 }
 
-// --- Render Recordings (card filter system — see zoom.js for primary definitions) ---
-// These inline versions override zoom.js since index.html <script> runs after zoom.js
+// --- Render Recordings (card filter system) ---
+// (zoom.js de la raíz se borró el 12-nov-2026: era una copia muerta con window.open(link).)
 
 var zoomCardFilter = 'none';
+
+// ── 12-nov-2026 · lista del ALUMNO sin enlaces (ver _zoomSeguro en js/crm/zoom-recordings.js) ──
+// → { modo: 'nuevo'|'viejo'|'cargando'|'error'|'sin_sesion', staff, recs }
+// 'nuevo': la lista ya viene filtrada por el servidor → aquí NO se vuelve a filtrar por grupos.
+// 'viejo': la RPC aún no existe (o admin del CRM sin lista nueva) → el filtro de siempre.
+function _zoomListaPantalla() {
+  var isAdmin = (typeof isAdminAuthenticated === 'function' && isAdminAuthenticated()) ||
+                (typeof isAdminStudent === 'function' && isAdminStudent());
+  var S = (typeof _zoomSeguro !== 'undefined' && _zoomSeguro) ? _zoomSeguro : { estado: 'error', grabaciones: [] };
+  if (S.estado === 'nuevo') {
+    return { modo: 'nuevo', staff: !!S.staff, recs: (S.grabaciones || []).filter(function(r) { return r && r.visible !== false; }) };
+  }
+  if (S.estado === 'viejo' || isAdmin) {
+    var recs = getZoomRecs().filter(function(r) { return r.visible !== false; });
+    if (!isAdmin) {
+      var session = getZoomSession();
+      var userEmail = session ? session.email : (typeof currentUser !== 'undefined' && currentUser ? currentUser.email : '');
+      var userGroups = getStudentGroupsForEmail(userEmail);
+      recs = recs.filter(function(r) {
+        if (!r.groups || r.groups.length === 0) return true; // No groups = visible to all
+        if (userGroups.length === 0) return false; // User not in any group can only see unassigned ("Todos")
+        return r.groups.some(function(g) { return userGroups.indexOf(g) !== -1; });
+      });
+    }
+    return { modo: 'viejo', staff: isAdmin, recs: recs };
+  }
+  if (S.estado === null) return { modo: 'cargando', staff: false, recs: [] };
+  return { modo: S.estado === 'sin_sesion' ? 'sin_sesion' : 'error', staff: false, recs: [] };
+}
+
+// Aviso visible (nunca una lista vacía muda) cuando no hay lista que mostrar.
+function _zoomAvisoHtml(L) {
+  if (L.modo === 'cargando') return '<div style="text-align:center;padding:30px;color:#475569;">' + _t('zmn_loading_recs', 'Cargando tus clases…') + '</div>';
+  if (L.modo === 'sin_sesion') return '<div style="text-align:center;padding:30px;color:#334155;font-weight:600;">' + _t('zmn_login_needed', 'Inicia sesión con tu cuenta para ver tus clases grabadas.') + '</div>';
+  if (L.modo === 'error') return '<div style="text-align:center;padding:30px;color:#334155;"><p style="margin:0 0 12px;font-weight:600;">' +
+    _t('zmn_load_err', 'No pudimos cargar tus grabaciones. Intenta de nuevo.') + '</p><button type="button" onclick="_zoomReintentar()" ' +
+    'style="min-height:44px;padding:0 18px;border:0;border-radius:10px;background:#0B5CFF;color:#fff;font-weight:700;cursor:pointer;">' +
+    _t('zmn_retry', 'Intentar de nuevo') + '</button></div>';
+  return '';
+}
+
+function _zoomIdSeguro(id) { return String(id == null ? '' : id).replace(/[^A-Za-z0-9_-]/g, ''); }
+
+// Reproductor EN LA PÁGINA (video-token + iframe privado de Stream + marca de agua). Sin enlaces.
+function _zoomAbrirReproductor(rec) {
+  var ex = document.getElementById('zoomPlayerOverlay'); if (ex) ex.remove();
+  var d = document.createElement('div');
+  d.id = 'zoomPlayerOverlay';
+  d.setAttribute('role', 'dialog');
+  d.setAttribute('aria-modal', 'true');
+  d.style.cssText = 'position:fixed;inset:0;z-index:999998;background:#0b1b33;overflow:auto;padding:20px 14px;box-sizing:border-box;';
+  var w = document.createElement('div');
+  w.style.cssText = 'max-width:960px;margin:0 auto;color:#fff;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;';
+  var h = document.createElement('p');
+  h.style.cssText = 'margin:0 0 10px;font-weight:800;font-size:16px;';
+  h.textContent = '🎥 ' + [rec.day_label || rec.dia, rec.date || rec.fecha, rec.title || rec.titulo].filter(Boolean).join(' · ');
+  var caja = document.createElement('div');
+  var b = document.createElement('button');
+  b.type = 'button';
+  b.textContent = _t('zmn_close_video', '✕ Cerrar video');
+  b.style.cssText = 'margin-top:12px;min-height:44px;padding:0 18px;border:0;border-radius:10px;background:#efd180;color:#0f2342;font-weight:800;font-size:15px;cursor:pointer;';
+  b.addEventListener('click', function() { d.remove(); });
+  w.appendChild(h); w.appendChild(caja); w.appendChild(b); d.appendChild(w);
+  document.body.appendChild(d);
+  if (window.MaestroZoomSeguro) {
+    window.MaestroZoomSeguro.reproducir(caja, rec, { en: window._lang === 'en' });
+  } else {
+    caja.textContent = _t('zmn_load_err', 'No pudimos cargar tus grabaciones. Intenta de nuevo.');
+  }
+}
 
 function toggleZoomCardFilter(mode) {
   if (zoomCardFilter === mode) {
@@ -111,20 +188,13 @@ function toggleZoomCardFilter(mode) {
 }
 
 function updateZoomCardCounts() {
-  var recs = getZoomRecs().filter(function(r) { return r.visible !== false; });
-
-  // Filter by student groups (non-admin only)
-  var isAdmin = (typeof isAdminAuthenticated === 'function' && isAdminAuthenticated()) ||
-                (typeof isAdminStudent === 'function' && isAdminStudent());
-  if (!isAdmin) {
-    var session = getZoomSession();
-    var userEmail = session ? session.email : (typeof currentUser !== 'undefined' && currentUser ? currentUser.email : '');
-    var userGroups = getStudentGroupsForEmail(userEmail);
-    recs = recs.filter(function(r) {
-      if (!r.groups || r.groups.length === 0) return true;
-      if (userGroups.length === 0) return false;
-      return r.groups.some(function(g) { return userGroups.indexOf(g) !== -1; });
-    });
+  // 12-nov-2026: la lista sale de _zoomListaPantalla() (servidor, sin enlaces) — ya no se filtra aquí.
+  var L = _zoomListaPantalla();
+  var recs = L.recs;
+  var aviso = _zoomAvisoHtml(L);
+  if (aviso) {
+    var cont = document.getElementById('zoomRecordingsContainer');
+    if (cont) { cont.innerHTML = aviso; cont.style.display = ''; }
   }
 
   var watched = getZoomWatched();
@@ -183,23 +253,15 @@ function zoomGoHome() {
 }
 
 function renderZoomRecordings() {
-  var recs = getZoomRecs().filter(function(r) { return r.visible !== false; }).sort(function(a,b) { return new Date(b.date) - new Date(a.date); });
-
-  // Filter by student groups (non-admin only)
-  var isAdmin = (typeof isAdminAuthenticated === 'function' && isAdminAuthenticated()) ||
-                (typeof isAdminStudent === 'function' && isAdminStudent());
-  if (!isAdmin) {
-    var session = getZoomSession();
-    var userEmail = session ? session.email : (typeof currentUser !== 'undefined' && currentUser ? currentUser.email : '');
-    var userGroups = getStudentGroupsForEmail(userEmail);
-    // Log group count only (avoid exposing PII in console)
-    console.log('[Zoom Filter] groups:', userGroups.length);
-    recs = recs.filter(function(r) {
-      if (!r.groups || r.groups.length === 0) return true; // No groups = visible to all
-      if (userGroups.length === 0) return false; // User not in any group can only see unassigned ("Todos")
-      return r.groups.some(function(g) { return userGroups.indexOf(g) !== -1; });
-    });
+  // 12-nov-2026: lista del servidor (sin enlaces); el filtro por grupos solo queda en el camino viejo.
+  var L = _zoomListaPantalla();
+  var _aviso = _zoomAvisoHtml(L);
+  if (_aviso) {
+    var _c = document.getElementById('zoomRecordingsContainer');
+    if (_c) _c.innerHTML = _aviso;
+    return;
   }
+  var recs = L.recs.slice().sort(function(a,b) { return new Date(b.date) - new Date(a.date); });
 
   var _zoomSearchEl = document.getElementById('zoomSearchInput');
   var search = (_zoomSearchEl ? _zoomSearchEl.value : '').toLowerCase();
@@ -224,7 +286,7 @@ function renderZoomRecordings() {
       case 'unwatched': if (isWatched) return false; break;
       case 'watched': if (!isWatched) return false; break;
     }
-    if (search && r.title.toLowerCase().indexOf(search) === -1) return false;
+    if (search && String(r.title || '').toLowerCase().indexOf(search) === -1) return false;
     return true;
   });
 
@@ -254,9 +316,15 @@ function renderZoomRecordings() {
     html += '</div>';
     html += '</div>';
     html += '<div style="display:flex;gap:6px;margin-top:8px;">';
-    html += '<button onclick="openZoomRec(\'' + r.id + '\')" style="flex:1;padding:8px;background:linear-gradient(135deg,#2D8CFF,#0B5CFF);color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;">' + _t('zmn_view_class_btn','▶️ Ver Clase') + '</button>';
+    var _rid = _zoomIdSeguro(r.id);
+    if (L.modo === 'nuevo' && !r.stream && !(L.staff && r.link)) {
+      // Sin copia en Stream todavía → «Disponible pronto». NUNCA el enlace de Zoom.
+      html += '<span style="flex:1;padding:8px;background:#fff7e0;color:#7a5a00;border-radius:8px;font-size:12px;font-weight:700;text-align:center;">' + _t('zmn_pronto','⏳ Disponible pronto') + '</span>';
+    } else {
+      html += '<button onclick="openZoomRec(\'' + _rid + '\')" style="flex:1;padding:8px;background:linear-gradient(135deg,#2D8CFF,#0B5CFF);color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;">' + _t('zmn_view_class_btn','▶️ Ver Clase') + '</button>';
+    }
     if (!isWatched) {
-      html += '<button onclick="markZoomWatched(\'' + r.id + '\')" style="padding:8px 12px;background:#f0fdf4;color:#27ae60;border:1px solid #bbf7d0;border-radius:8px;font-size:11px;cursor:pointer;">✅</button>';
+      html += '<button onclick="markZoomWatched(\'' + _rid + '\')" style="padding:8px 12px;background:#f0fdf4;color:#27ae60;border:1px solid #bbf7d0;border-radius:8px;font-size:11px;cursor:pointer;">✅</button>';
     }
     html += '</div></div>';
   });
@@ -264,8 +332,24 @@ function renderZoomRecordings() {
 }
 
 function openZoomRec(id) {
-  var recs = getZoomRecs();
-  var rec = recs.find(function(r) { return r.id === id; });
+  var L = _zoomListaPantalla();
+  if (L.modo !== 'viejo') {
+    // 12-nov-2026: se reproduce EN LA PÁGINA o «Disponible pronto». Jamás window.open(link) para el alumno.
+    var r2 = L.recs.find(function(r) { return _zoomIdSeguro(r.id) === id; });
+    if (!r2) return;
+    try {
+      var s2 = getZoomSession();
+      var log2 = JSON.parse(localStorage.getItem('zoom_view_log') || '[]');
+      log2.push({ id: id, user: s2 ? s2.email : '', ts: Date.now() });
+      localStorage.setItem('zoom_view_log', JSON.stringify(log2.slice(-200)));
+    } catch (e) { console.warn('[ZmNavigation] zoom_view_log:', (e && e.message) || e); }
+    if (r2.stream) { _zoomAbrirReproductor(r2); return; }
+    if (L.staff && r2.link) { window.open(r2.link, '_blank', 'noopener'); return; }   // solo personal (lo dijo el servidor)
+    alert(_t('zmn_pronto', '⏳ Disponible pronto'));
+    return;
+  }
+  var recs = L.recs;
+  var rec = recs.find(function(r) { return _zoomIdSeguro(r.id) === id; });
   if (rec && rec.link) {
     // Double-check group access (non-admin)
     var isAdmin = (typeof isAdminAuthenticated === 'function' && isAdminAuthenticated()) ||

@@ -49,6 +49,59 @@ function saveZoomVerified(v) {
   syncZoomVerifiedToSupabase(v);
 }
 
+// ── 12-nov-2026 · Grabaciones SIN enlaces para quien no es personal ─────────────────────────
+// Mario: «No quiero los enlaces. Que no bajen nada ni hagan click en un enlace.»
+// La pantalla «Clases de Zoom» del alumno ya NO lee la fila 'master' (166 enlaces de Zoom): pide
+// zoom_mis_grabaciones() (servidor, ya filtrada, sin enlace) vía MaestroZoomSeguro (js/web-access-gate.js).
+// El CRM/admin sigue igual (getZoomRecs/saveZoomRecs con la tabla). Estados de _zoomSeguro.estado:
+//   null = cargando · 'nuevo' = lista del servidor · 'viejo' = la RPC aún no existe (camino de antes)
+//   'sin_sesion' = sin cuenta iniciada · 'error' = falló (se ofrece reintentar; nunca lista vacía muda)
+var _zoomSeguro = { estado: null, staff: false, grabaciones: [] };
+
+function _zoomEsAdminCRM() {
+  return (typeof isAdminAuthenticated === 'function' && isAdminAuthenticated()) ||
+         (typeof isAdminStudent === 'function' && isAdminStudent());
+}
+
+// Alumno (servidor dice staff:false y no es admin en este aparato): sin caché de enlaces ni de
+// listas del personal. Solo se borra cuando el SERVIDOR ya contestó, nunca por adivinar.
+function _zoomLimpiarCacheAlumno() {
+  try {
+    var viejo = localStorage.getItem('maestroac_zoom_recs') || '';
+    if (/"link"\s*:|zoom\.us/i.test(viejo)) localStorage.removeItem('maestroac_zoom_recs');
+    localStorage.removeItem('maestroac_zoom_verified');
+    localStorage.removeItem('maestroac_student_groups');
+  } catch (e) { console.warn('[ZoomRecordings] limpiar caché:', (e && e.message) || e); }
+}
+
+// Pide la lista segura. Devuelve true si este aparato debe seguir leyendo la tabla (admin, personal
+// o la RPC todavía no existe); false si NO (alumno con RPC nueva, o error/sin sesión: no adivinar).
+function _zoomCargarSeguro() {
+  if (!window.MaestroZoomSeguro || typeof supabaseClient === 'undefined' || !supabaseClient) {
+    // Sin el módulo seguro no se puede pedir la lista nueva: el admin sigue, el alumno ve «reintentar».
+    _zoomSeguro = { estado: 'error', staff: false, grabaciones: [] };
+    return Promise.resolve(_zoomEsAdminCRM());
+  }
+  return window.MaestroZoomSeguro.cargar(supabaseClient).then(function (r) {
+    _zoomSeguro = { estado: r.estado, staff: !!r.staff, grabaciones: r.grabaciones || [], error: r.error };
+    if (r.estado === 'viejo') return true;
+    if (_zoomEsAdminCRM()) return true;
+    if (r.estado === 'nuevo' && r.staff) return true;
+    if (r.estado === 'nuevo') _zoomLimpiarCacheAlumno();
+    else console.warn('[ZoomRecordings] zoom_mis_grabaciones:', r.estado, (r.error && (r.error.message || r.error.code)) || '');
+    return false;
+  });
+}
+
+function _zoomReintentar() {
+  _zoomSeguro = { estado: null, staff: false, grabaciones: [] };
+  try { if (typeof renderZoomRecordings === 'function') renderZoomRecordings(); } catch (e) { console.warn('[ZoomRecordings]', e.message || e); }
+  _zoomCargarSeguro().then(function () {
+    try { if (typeof updateZoomCardCounts === 'function') updateZoomCardCounts(); } catch (e) { console.warn('[ZoomRecordings]', e.message || e); }
+    try { if (typeof renderZoomRecordings === 'function') renderZoomRecordings(); } catch (e) { console.warn('[ZoomRecordings]', e.message || e); }
+  });
+}
+
 // === STUDENT GROUPS SYSTEM ===
 var STUDENT_GROUP_DEFS = [
   { id: 'hibridos', name: 'Híbridos', emoji: '🟣', color: '#8b5cf6', bg: '#f5f3ff', border: '#c4b5fd', desc: 'Martes/Miércoles presenciales', parent: null },
@@ -414,6 +467,8 @@ async function syncZoomVerifiedToSupabase(verified) {
 // Load recordings FROM Supabase (all devices)
 async function loadZoomRecsFromSupabase() {
   if (typeof supabaseClient === 'undefined' || !supabaseClient) return;
+  // 12-nov-2026: el alumno ya no baja 'master' (enlaces) ni 'verified'/'student_groups' (correos).
+  if (!(await _zoomCargarSeguro())) return;
   try {
     var { data, error } = await supabaseClient.from('zoom_recordings').select('*').eq('id', 'master').single();
     if (data && data.data && !error) {
@@ -457,7 +512,7 @@ async function loadZoomRecsFromSupabase() {
         }
       }
     }
-  } catch(e) { /* student groups sync silently fails if row doesn't exist */ }
+  } catch(e) { console.warn('[ZoomRecordings] student groups sync (la fila puede no existir):', (e && e.message) || e); }
 }
 
 // Auto-load on app start and re-render zoom sections after sync
@@ -472,6 +527,8 @@ setTimeout(function() {
 // Reload zoom data fresh from Supabase when entering zoom screens
 async function refreshZoomFromSupabase() {
   if (typeof supabaseClient === 'undefined' || !supabaseClient) return;
+  // 12-nov-2026: el alumno ya no baja 'master' (enlaces) ni 'verified'/'student_groups' (correos).
+  if (!(await _zoomCargarSeguro())) return;
   try {
     var { data, error } = await supabaseClient.from('zoom_recordings').select('*').eq('id', 'master').single();
     if (data && data.data && !error) {
