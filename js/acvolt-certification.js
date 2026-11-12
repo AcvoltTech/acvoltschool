@@ -72,7 +72,9 @@ async function _acvoltLoadData() {
 
 // ---- Load questions for a specific lesson ----
 async function _acvoltLoadQuiz(lessonId) {
-  var questions = await _acvoltQuery('acvolt_questions', 'select=*&lesson_id=eq.' + lessonId + '&status=eq.1&order=old_id');
+  // 🔐 12-nov-2026: columnas explícitas — correct_answer_old_id (la respuesta) ya no es legible
+  // por columna; con select=* la consulta daría 42501. Califica la edge verify-answer.
+  var questions = await _acvoltQuery('acvolt_questions', 'select=id,old_id,lesson_id,old_lesson_id,question,question_type,status&lesson_id=eq.' + lessonId + '&status=eq.1&order=old_id');
   _acvoltData.questions = questions || [];
   if (_acvoltData.questions.length === 0) return [];
   // Load only answers for these specific questions
