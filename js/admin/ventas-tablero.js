@@ -511,7 +511,7 @@
     try { await window.CitaVirtual.entrar({ contenedor: cont, token: r.token, nombre: r.nombre, anfitriona: true, alSalir: function () { modal.remove(); } }); }
     catch (e) { cont.appendChild(h('div', { class: 'vt-error', text: e.message })); cont.appendChild(h('button', { class: 'vt-btn', text: 'Cerrar', onclick: function () { modal.remove(); } })); }
   }
-  async function citaEstado(c, estado, compro) { try { await api('cita_estado', { cita_id: c.id, estado: estado, compro: compro }); cargar({ ok: 'Cita actualizada.' }); } catch (e) { alert(e.message); } }
+  async function citaEstado(c, estado, compro) { try { var r = await api('cita_estado', { cita_id: c.id, estado: estado, compro: compro }); cargar({ ok: 'Cita actualizada.', aviso: r.aviso || null }); } catch (e) { alert(e.message); } }
 
   // ── pestaña de Mario (solo puede_auditar_ventas; el servidor lo vuelve a revisar) ──
   function pintarMario(der) {
