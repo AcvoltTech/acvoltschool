@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<meta name="referrer" content="no-referrer">
+<title>Recorrido virtual · Maestro HVACR</title>
+<link rel="icon" href="favicon-32.png">
+<style>
+  *{box-sizing:border-box}
+  body{margin:0;background:#f4f6f9;color:#14202e;font:17px/1.5 -apple-system,"Segoe UI",system-ui,sans-serif}
+  header{background:#0f2a47;color:#fff;padding:14px 18px;display:flex;align-items:center;gap:10px}
+  header img{width:40px;height:40px;border-radius:8px}
+  header b{font-size:18px}
+  main{max-width:1100px;margin:0 auto;padding:18px 16px 40px}
+  .tarjeta{background:#fff;border:1px solid #dde2e8;border-radius:12px;padding:18px}
+  h1{font-size:24px;margin:0 0 8px;color:#0f2a47}
+  .aviso{background:#fff4e0;color:#7a4a05;border-radius:8px;padding:10px 12px;margin:12px 0;font-size:15px}
+  .error{background:#fde8e8;color:#8a1c1c;border-radius:8px;padding:10px 12px;margin:12px 0;font-weight:600}
+  #entrar{border:0;border-radius:10px;padding:14px 20px;font:700 18px system-ui,sans-serif;background:#d9411e;color:#fff;cursor:pointer}
+  #entrar:disabled{opacity:.5}
+  footer{color:#5a6675;font-size:14px;margin-top:18px}
+  a{color:#0754b8}
+</style>
+</head>
+<body>
+<header><img src="maestro-hvacr-logo.png" alt=""><b>Maestro HVACR</b></header>
+<main>
+  <div class="tarjeta" id="sala">
+    <h1>Su recorrido virtual por la escuela</h1>
+    <p id="saludo">Su asesora le va a enseñar la escuela, los cursos en 3D, los simuladores y las fechas de 2027.</p>
+    <p class="aviso">Use audífonos si puede. El navegador le va a pedir permiso para el micrófono y la cámara. Si la reunión se graba, su asesora se lo dice antes y usted decide.</p>
+    <p id="error" class="error" role="alert" hidden></p>
+    <button id="entrar" type="button">Entrar a la reunión</button>
+  </div>
+  <footer>¿Problemas para entrar? Llame a la oficina al <a href="tel:+19098244849">(909) 824-4849</a>. Maestro HVACR · Colton, California.</footer>
+</main>
+<script src="js/vendor/hms-sdk-bundle.min.js"></script>
+<script src="js/cita-virtual.js?v=20261113"></script>
+<script>
+(function () {
+  'use strict';
+  var FN = 'https://htklsowiyjwsjnacnvnr.supabase.co/functions/v1/ventas-cita';
+  var q = new URLSearchParams(location.search);
+  var c = q.get('c') || '';
+  // El token del enlace no se queda en la barra ni en el historial.
+  if (c) { try { sessionStorage.setItem('cita_c', c); history.replaceState(null, '', location.pathname); } catch (_) {} }
+  try { c = c || sessionStorage.getItem('cita_c') || ''; } catch (_) {}
+  var btn = document.getElementById('entrar'), err = document.getElementById('error');
+  function falla(t) { err.textContent = t; err.hidden = false; btn.disabled = false; }
+  async function unir(datos) {
+    await window.CitaVirtual.entrar({ contenedor: document.getElementById('sala'), token: datos.token, nombre: datos.nombre, anfitriona: false,
+      alSalir: function () { try { sessionStorage.removeItem('cita_sesion'); } catch (_) {} location.reload(); } });
+  }
+  btn.onclick = async function () {
+    btn.disabled = true; err.hidden = true;
+    try {
+      // Si ya entró en esta pestaña (se recargó la página), se reusa el pase de 100ms: el enlace es de un solo uso.
+      var guardado = null; try { guardado = JSON.parse(sessionStorage.getItem('cita_sesion') || 'null'); } catch (_) {}
+      if (guardado && guardado.token) return await unir(guardado);
+      if (!c) return falla('Este enlace no es válido. Llame al (909) 824-4849.');
+      var r = await fetch(FN, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ c: c }) });
+      var j = await r.json().catch(function () { return {}; });
+      if (!r.ok || !j.token) return falla(j.error || 'No se pudo entrar. Llame al (909) 824-4849.');
+      try { sessionStorage.setItem('cita_sesion', JSON.stringify(j)); sessionStorage.removeItem('cita_c'); } catch (_) {}
+      await unir(j);
+    } catch (e) { falla((e && e.message) || 'No se pudo entrar.'); }
+  };
+})();
+</script>
+</body>
+</html>

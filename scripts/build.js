@@ -58,6 +58,7 @@ const TIER1_SCRIPTS = [
 // Lazy-loaded scripts (individually minified, loaded by MaestroLoader)
 const LAZY_JS_DIRS = ['js/admin', 'js/crm'];
 const LAZY_JS_ROOT = [
+  'js/cita-virtual.js',   // 🎥 13-nov-2026 · cita virtual (tour) en 100ms: tablero de ventas y cita.html
   // 🔴 FALTABA (9-sep-2026). `js/membresias.js` sí existe y sí lo carga
   // `SCREEN_SCRIPTS.membresiasScreen` (js/navigation.js:85), pero no estaba en
   // NINGUNA lista de este archivo: `npm run build` nunca lo copiaba a `dist/`.
@@ -198,7 +199,7 @@ const STATIC_PATTERNS = [
   '*.png', '*.jpg', '*.ico',
   'manifest.json', 'assetlinks.json', 'robots.txt', 'sitemap.xml',
   '_headers', '_redirects',
-  'app.html', 'verify.html', 'privacy.html', 'privacy-policy.html', 'terms.html',
+  'app.html', 'verify.html', 'privacy.html', 'privacy-policy.html', 'terms.html', 'cita.html',
   'browserconfig.xml',
 ];
 

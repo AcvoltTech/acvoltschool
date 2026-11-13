@@ -113,7 +113,10 @@
         '<div style="margin:6px 0;font-size:13.5px">🎯 <b>' + esc(p.interes || '—') + '</b> · ' + esc((p.modalidad || 'sin_definir').replace('_', ' ')) +
         (o.utm_source || o.utm_campaign ? ' · 📣 ' + esc([o.utm_source, o.utm_campaign].filter(Boolean).join(' / ')) : '') + '</div>' +
         '<div style="display:flex;gap:8px;flex-wrap:wrap;margin:6px 0">' +
-        (p.telefono ? '<a href="tel:+' + tel(p.telefono) + '" style="text-decoration:none">📞 ' + esc(p.telefono) + '</a><a target="_blank" rel="noopener" href="https://wa.me/' + tel(p.telefono) + '" style="text-decoration:none">💬 WhatsApp</a>' : '') +
+        // 13-nov-2026 (call center): a quien no audita, la base le manda el teléfono TAPADO (***-***-1234). Ese no se marca
+        // desde aquí: se llama desde el 📞 Tablero de ventas, que graba y pide la encuesta.
+        (p.telefono && String(p.telefono).indexOf('*') >= 0 ? '<span>📞 ' + esc(p.telefono) + '</span> <a href="#tablero-ventas" data-a="tablero" style="text-decoration:none;font-weight:700">Llamar desde el Tablero de ventas</a>' :
+         p.telefono ? '<a href="tel:+' + tel(p.telefono) + '" style="text-decoration:none">📞 ' + esc(p.telefono) + '</a><a target="_blank" rel="noopener" href="https://wa.me/' + tel(p.telefono) + '" style="text-decoration:none">💬 WhatsApp</a>' : '') +
         (p.correo ? '<a href="mailto:' + esc(p.correo) + '" style="text-decoration:none">✉️ ' + esc(p.correo) + '</a>' : '') + '</div>' +
         '<p style="margin:6px 0;color:#334155;font-size:13.5px">' + esc(p.resumen || '') + '</p>' +
         '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">' +
@@ -130,7 +133,18 @@
         // Solo se dice "guardado" si la base lo confirmó.
         if (u.error || u.data !== true) { m.textContent = 'No se guardó: ' + ((u.error && u.error.message) || 'sin cambios'); m.style.color = '#b91c1c'; return; }
         m.textContent = '✅ Guardado'; m.style.color = '#16a34a'; setTimeout(cargar, 700);
+        // Si cambió la responsable, se apaga YA la sala de video de sus citas (call center, Codex vuelta 5).
+        if (card.querySelector('[data-f="responsable"]').value !== (p.responsable || '')) {
+          try {
+            var ss = await supabaseClient.auth.getSession(); var tk = (ss && ss.data && ss.data.session && ss.data.session.access_token) || '';
+            var sbu = (typeof SUPABASE_URL !== 'undefined' && SUPABASE_URL) || window.SUPABASE_URL || 'https://htklsowiyjwsjnacnvnr.supabase.co';
+            var rr = await fetch(sbu + '/functions/v1/ventas-tablero', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + tk }, body: JSON.stringify({ accion: 'cerrar_salas' }) });
+            if (!rr.ok) { m.textContent = '✅ Guardado · ⚠️ no se pudo cerrar la sala de video de la asesora anterior; se cierra sola en unos minutos.'; m.style.color = '#b45309'; }
+          } catch (_) {}
+        }
       };
+      var irTablero = card.querySelector('[data-a="tablero"]');
+      if (irTablero) irTablero.onclick = function (e) { e.preventDefault(); if (window.VentasTablero) window.VentasTablero.abrir(); };
       card.querySelector('[data-a="chat"]').onclick = async function () {
         var c = card.querySelector('[data-f="conv"]');
         if (!c.hidden) { c.hidden = true; return; }

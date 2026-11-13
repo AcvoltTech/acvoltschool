@@ -150,7 +150,9 @@
       '<div style="color:#64748b;font-size:12.5px">' + (FUENTE[l.fuente] || esc(l.fuente)) + (anuncio ? ' · 📣 ' + esc(anuncio) : '') + ' · llegó ' + hace(l.created_at) + '</div></div>' +
       '<button data-a="cerrar" style="border:0;background:#f1f5f9;border-radius:50%;width:36px;height:36px;font-size:18px">✕</button></div>' +
       '<div style="display:flex;gap:8px;flex-wrap:wrap;margin:12px 0">' +
-      (l.telefono ? '<a data-a="llamar" href="tel:+' + tel(l.telefono) + '" class="crm-btn" style="background:#065cff;text-decoration:none">📞 Llamar ' + esc(l.telefono) + '</a>' +
+      // 13-nov-2026 (call center): teléfono TAPADO para quien no audita → se llama desde el 📞 Tablero de ventas (graba y pide encuesta).
+      (l.telefono && String(l.telefono).indexOf('*') >= 0 ? '<a data-a="tablero" href="#tablero-ventas" class="crm-btn" style="background:#d9411e;text-decoration:none">📞 Llamar desde el Tablero de ventas · ' + esc(l.telefono) + '</a>' :
+       l.telefono ? '<a data-a="llamar" href="tel:+' + tel(l.telefono) + '" class="crm-btn" style="background:#065cff;text-decoration:none">📞 Llamar ' + esc(l.telefono) + '</a>' +
         '<a data-a="whatsapp" target="_blank" rel="noopener" href="https://wa.me/' + tel(l.telefono) + '" class="crm-btn" style="background:#16a34a;text-decoration:none">💬 WhatsApp</a>' : '') +
       (l.correo ? '<a href="mailto:' + esc(l.correo) + '" class="crm-btn" style="background:#475569;text-decoration:none">✉️ ' + esc(l.correo) + '</a>' : '') + '</div>' +
       '<div style="font-weight:800;font-size:13px;color:#475569;margin-top:6px">ETAPA</div><div data-etapas style="display:flex;gap:6px;flex-wrap:wrap;margin:6px 0 12px"></div>' +
@@ -178,8 +180,22 @@
     });
     F.querySelector('[data-a="cerrar"]').onclick = cerrar;
     var ll = F.querySelector('[data-a="llamar"]'); if (ll) ll.addEventListener('click', function () { setTimeout(function () { var n = prompt('¿Cómo fue la llamada? (opcional)', ''); registrar(l.id, 'llamada', n); }, 600); });
+    var tb = F.querySelector('[data-a="tablero"]'); if (tb) tb.addEventListener('click', function (e) { e.preventDefault(); if (window.VentasTablero) window.VentasTablero.abrir(); });
     var wa = F.querySelector('[data-a="whatsapp"]'); if (wa) wa.addEventListener('click', function () { registrar(l.id, 'whatsapp', 'Abrió WhatsApp'); });
-    F.querySelector('[data-a="asesora"]').onchange = async function (e) { var r = await supabaseClient.rpc('crm_lead_asignar', { p_id: l.id, p_responsable: e.target.value }); if (r.error) alert(r.error.message); cargar(); };
+    F.querySelector('[data-a="asesora"]').onchange = async function (e) {
+      var r = await supabaseClient.rpc('crm_lead_asignar', { p_id: l.id, p_responsable: e.target.value });
+      if (r.error) alert(r.error.message);
+      else {
+        // Cambió la responsable: se apaga YA la sala de video de sus citas (call center, Codex vuelta 6).
+        try {
+          var ss = await supabaseClient.auth.getSession(); var tk = (ss && ss.data && ss.data.session && ss.data.session.access_token) || '';
+          var sbu = (typeof SUPABASE_URL !== 'undefined' && SUPABASE_URL) || window.SUPABASE_URL || 'https://htklsowiyjwsjnacnvnr.supabase.co';
+          var rr = await fetch(sbu + '/functions/v1/ventas-tablero', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + tk }, body: JSON.stringify({ accion: 'cerrar_salas' }) });
+          if (!rr.ok) alert('Se cambió la asesora, pero no se pudo cerrar la sala de video de la anterior. Se cierra sola en unos minutos.');
+        } catch (_) {}
+      }
+      cargar();
+    };
     F.querySelector('[data-a="nota"]').onclick = function () { var t = F.querySelector('[data-a="notaTxt"]').value.trim(); if (t) registrar(l.id, 'nota', t); };
     var fechaIn = F.querySelector('[data-a="tareaFecha"]');
     var local = function (d) { var z = new Date(d.getTime() - d.getTimezoneOffset() * 60000); return z.toISOString().slice(0, 16); };
