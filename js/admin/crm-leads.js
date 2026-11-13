@@ -182,7 +182,20 @@
     var ll = F.querySelector('[data-a="llamar"]'); if (ll) ll.addEventListener('click', function () { setTimeout(function () { var n = prompt('¿Cómo fue la llamada? (opcional)', ''); registrar(l.id, 'llamada', n); }, 600); });
     var tb = F.querySelector('[data-a="tablero"]'); if (tb) tb.addEventListener('click', function (e) { e.preventDefault(); if (window.VentasTablero) window.VentasTablero.abrir(); });
     var wa = F.querySelector('[data-a="whatsapp"]'); if (wa) wa.addEventListener('click', function () { registrar(l.id, 'whatsapp', 'Abrió WhatsApp'); });
-    F.querySelector('[data-a="asesora"]').onchange = async function (e) { var r = await supabaseClient.rpc('crm_lead_asignar', { p_id: l.id, p_responsable: e.target.value }); if (r.error) alert(r.error.message); cargar(); };
+    F.querySelector('[data-a="asesora"]').onchange = async function (e) {
+      var r = await supabaseClient.rpc('crm_lead_asignar', { p_id: l.id, p_responsable: e.target.value });
+      if (r.error) alert(r.error.message);
+      else {
+        // Cambió la responsable: se apaga YA la sala de video de sus citas (call center, Codex vuelta 6).
+        try {
+          var ss = await supabaseClient.auth.getSession(); var tk = (ss && ss.data && ss.data.session && ss.data.session.access_token) || '';
+          var sbu = (typeof SUPABASE_URL !== 'undefined' && SUPABASE_URL) || window.SUPABASE_URL || 'https://htklsowiyjwsjnacnvnr.supabase.co';
+          var rr = await fetch(sbu + '/functions/v1/ventas-tablero', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + tk }, body: JSON.stringify({ accion: 'cerrar_salas' }) });
+          if (!rr.ok) alert('Se cambió la asesora, pero no se pudo cerrar la sala de video de la anterior. Se cierra sola en unos minutos.');
+        } catch (_) {}
+      }
+      cargar();
+    };
     F.querySelector('[data-a="nota"]').onclick = function () { var t = F.querySelector('[data-a="notaTxt"]').value.trim(); if (t) registrar(l.id, 'nota', t); };
     var fechaIn = F.querySelector('[data-a="tareaFecha"]');
     var local = function (d) { var z = new Date(d.getTime() - d.getTimezoneOffset() * 60000); return z.toISOString().slice(0, 16); };
