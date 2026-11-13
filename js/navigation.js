@@ -1797,6 +1797,9 @@ function showScreen(screenId) {
           'js/admin/class-schedule.js',
           'js/admin/finanzas.js',
           'js/admin/prospectos-escuela.js',   // Prospectos de maestrohvacr.com (24-sep-2026)
+          'js/cita-virtual.js',               // 🎥 Cita virtual (tour) en 100ms, la usa el tablero (13-nov-2026)
+          'js/admin/ventas-reglas.js',        // 📞 Tablero de ventas: reglas de pantalla (13-nov-2026)
+          'js/admin/ventas-tablero.js',       // 📞 Tablero de ventas: call center con Twilio en el navegador (13-nov-2026)
           'js/admin/miembros-web.js',         // Miembros web $149/$750 de maestrohvacr.com (30-sep-2026)
           'js/admin/student-id-tarjeta.js',   // 🪪 diseño de la credencial (copia de maestroac-app; 1-oct-2026)
           'js/admin/student-ids.js',          // 🪪 Student ID: pedidos, verificación, impresión y envío (1-oct-2026)
