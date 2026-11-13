@@ -133,6 +133,15 @@
         // Solo se dice "guardado" si la base lo confirmó.
         if (u.error || u.data !== true) { m.textContent = 'No se guardó: ' + ((u.error && u.error.message) || 'sin cambios'); m.style.color = '#b91c1c'; return; }
         m.textContent = '✅ Guardado'; m.style.color = '#16a34a'; setTimeout(cargar, 700);
+        // Si cambió la responsable, se apaga YA la sala de video de sus citas (call center, Codex vuelta 5).
+        if (card.querySelector('[data-f="responsable"]').value !== (p.responsable || '')) {
+          try {
+            var ss = await supabaseClient.auth.getSession(); var tk = (ss && ss.data && ss.data.session && ss.data.session.access_token) || '';
+            var sbu = (typeof SUPABASE_URL !== 'undefined' && SUPABASE_URL) || window.SUPABASE_URL || 'https://htklsowiyjwsjnacnvnr.supabase.co';
+            var rr = await fetch(sbu + '/functions/v1/ventas-tablero', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + tk }, body: JSON.stringify({ accion: 'cerrar_salas' }) });
+            if (!rr.ok) { m.textContent = '✅ Guardado · ⚠️ no se pudo cerrar la sala de video de la asesora anterior; se cierra sola en unos minutos.'; m.style.color = '#b45309'; }
+          } catch (_) {}
+        }
       };
       var irTablero = card.querySelector('[data-a="tablero"]');
       if (irTablero) irTablero.onclick = function (e) { e.preventDefault(); if (window.VentasTablero) window.VentasTablero.abrir(); };
