@@ -311,7 +311,11 @@
 
   async function abrirLead(id) {
     st.abiertoId = id; st.llamada = null;
-    try { st.abierto = await api('abrir', { prospecto_id: id }); st.msg = null; }
+    try {
+      st.abierto = await api('abrir', { prospecto_id: id }); st.msg = null;
+      // La encuesta pendiente la dice el SERVIDOR: con ella, los demás leads quedan bloqueados en la lista.
+      if (st.ini && st.abierto && 'pendiente' in st.abierto) st.ini.pendiente = st.abierto.pendiente || null;
+    }
     catch (e) {
       st.abierto = null; st.msg = { error: e.message };
       if (e.datos && e.datos.pendiente) { st.ini.pendiente = e.datos.pendiente; return abrirLead(e.datos.pendiente.prospecto_id); }
