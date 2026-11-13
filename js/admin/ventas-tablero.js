@@ -295,7 +295,7 @@
     if (ini.staff.auditor) fila.appendChild(h('button', { class: 'vt-btn ok', text: '💵 Marcar depósito', onclick: function () { deposito(l); } }));
     card.appendChild(fila);
     card.appendChild(h('div', { class: 'vt-aviso', style: 'background:#eef4ff;color:#0f2a47' }, [h('b', { text: 'Explica la diferencia: ' }),
-      'el programa EN LÍNEA (12, 8 o 4 meses, o Calefacción) trae las clases EN VIVO — la misma clase del salón, transmitida — más los cursos 3D. La MEMBRESÍA de $149 solo da los cursos en el sitio y la app, sin clases en vivo.']));
+      'el programa EN LÍNEA (12, 8 o 4 meses, o Calefacción) trae las clases EN VIVO — la misma clase del salón, transmitida — más los cursos 3D. La MEMBRESÍA solo da los cursos, sin clases en vivo, y es UNA sola: si paga en el sitio ($149, tarjeta) entra también a la app; si paga en la app ($149.99, Apple Pay o Google Pay) entra también al sitio.']));
     card.appendChild(h('p', { class: 'vt-mini', text: 'Ponte los audífonos. La llamada sale con el número de la escuela y se graba: al contestar, el cliente oye «Esta llamada se graba para darle mejor servicio y para capacitación».' }));
     der.appendChild(card);
     if ((a.historial || []).length) {
