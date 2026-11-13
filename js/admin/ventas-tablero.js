@@ -319,11 +319,12 @@
     catch (e) {
       st.abierto = null; st.msg = { error: e.message };
       if (e.datos && e.datos.pendiente) { st.ini.pendiente = e.datos.pendiente; if (e.datos.pendiente.prospecto_id !== id) return abrirLead(e.datos.pendiente.prospecto_id); }
-      // Mario le pasó el lead a otra asesora, pero la encuesta de TU llamada sigue pendiente: se contesta igual (Codex, vuelta 8).
+      // El lead ya no se puede abrir (Mario lo pasó a otra asesora, apagó la lista o el número pidió no llamar),
+      // pero la encuesta de TU llamada sigue pendiente: se contesta igual, si no te quedas bloqueada (Codex, vueltas 8 y 9).
       var pend = st.ini && st.ini.pendiente;
-      if (e.status === 403 && pend && pend.prospecto_id === id) {
-        st.abierto = { pendiente: pend, lead: null, reasignado: true };
-        st.msg = { aviso: 'Este lead ya es de otra asesora. Contesta la encuesta de tu llamada para seguir trabajando.' };
+      if (e.status && e.status >= 400 && e.status < 500 && pend && pend.prospecto_id === id) {
+        st.abierto = { pendiente: pend, lead: null, reasignado: e.status === 403 };
+        st.msg = { aviso: (e.status === 403 ? 'Este lead ya es de otra asesora. ' : e.message + ' ') + 'Contesta la encuesta de tu llamada para seguir trabajando.' };
       }
     }
     pintar();

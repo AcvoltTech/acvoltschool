@@ -115,6 +115,15 @@ describe('tablero en pantalla', () => {
     } finally { vi.useRealTimers(); }
   });
 
+  it('lista apagada o número en no llamar con encuesta pendiente: la encuesta sale igual (Codex, vuelta 9)', async () => {
+    for (const status of [423, 410]) {
+      const pend = { id: 'c8', prospecto_id: '11111111-1111-1111-1111-111111111111', lista_tipo: 'caliente' };
+      servidor({ inicio: INICIO({ pendiente: pend }), abrir: { __status: status, error: 'No se puede abrir.' } });
+      window.VentasTablero.abrir(); await esperar(10);
+      expect(document.getElementById('vtEncuesta')).not.toBeNull();
+    }
+  });
+
   it('lead reasignado con encuesta pendiente: la encuesta sale igual (Codex, vuelta 8)', async () => {
     const pend = { id: 'c7', prospecto_id: '11111111-1111-1111-1111-111111111111', lista_tipo: 'caliente' };
     servidor({ inicio: INICIO({ pendiente: pend }), abrir: { __status: 403, error: 'Este lead no es tuyo.' } });
