@@ -318,7 +318,13 @@
     }
     catch (e) {
       st.abierto = null; st.msg = { error: e.message };
-      if (e.datos && e.datos.pendiente) { st.ini.pendiente = e.datos.pendiente; return abrirLead(e.datos.pendiente.prospecto_id); }
+      if (e.datos && e.datos.pendiente) { st.ini.pendiente = e.datos.pendiente; if (e.datos.pendiente.prospecto_id !== id) return abrirLead(e.datos.pendiente.prospecto_id); }
+      // Mario le pasó el lead a otra asesora, pero la encuesta de TU llamada sigue pendiente: se contesta igual (Codex, vuelta 8).
+      var pend = st.ini && st.ini.pendiente;
+      if (e.status === 403 && pend && pend.prospecto_id === id) {
+        st.abierto = { pendiente: pend, lead: null, reasignado: true };
+        st.msg = { aviso: 'Este lead ya es de otra asesora. Contesta la encuesta de tu llamada para seguir trabajando.' };
+      }
     }
     pintar();
   }

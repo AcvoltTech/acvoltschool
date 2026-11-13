@@ -115,6 +115,14 @@ describe('tablero en pantalla', () => {
     } finally { vi.useRealTimers(); }
   });
 
+  it('lead reasignado con encuesta pendiente: la encuesta sale igual (Codex, vuelta 8)', async () => {
+    const pend = { id: 'c7', prospecto_id: '11111111-1111-1111-1111-111111111111', lista_tipo: 'caliente' };
+    servidor({ inicio: INICIO({ pendiente: pend }), abrir: { __status: 403, error: 'Este lead no es tuyo.' } });
+    window.VentasTablero.abrir(); await esperar(10);
+    expect(document.getElementById('vtEncuesta')).not.toBeNull();
+    expect(document.body.textContent).toMatch(/ya es de otra asesora/);
+  });
+
   it('con encuesta pendiente: abre directo la encuesta y los otros leads quedan bloqueados', async () => {
     servidor({ inicio: INICIO({ pendiente: { id: 'c1', prospecto_id: '11111111-1111-1111-1111-111111111111', lista_tipo: 'caliente' } }), abrir: { ...LEAD, pendiente: { id: 'c1', prospecto_id: '11111111-1111-1111-1111-111111111111', lista_tipo: 'caliente' } } });
     window.VentasTablero.abrir(); await esperar(10);
