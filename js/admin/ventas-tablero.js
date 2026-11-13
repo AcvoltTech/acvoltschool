@@ -445,7 +445,7 @@
       try {
         var r = await api('encuesta', { llamada_id: a.pendiente.id, respuestas: resp });
         st.enc = {}; st.abierto = null;
-        var aviso = r.cita ? (r.cita.aviso || ('Cita virtual agendada.' + (r.cita.correo_enviado ? ' Al cliente le llegó su enlace por correo.' : ''))) : null;
+        var aviso = r.cita ? (r.cita.aviso || ('Cita virtual agendada.' + (r.cita.correo_enviado ? ' Al cliente le llegó su enlace por correo.' : ''))) : (r.aviso || null);
         await cargar({ ok: 'Encuesta guardada. Ya puedes abrir el siguiente lead.', aviso: aviso });
       } catch (err) { st.msg = { error: err.message + (err.datos && err.datos.errores ? ': ' + err.datos.errores.join(' · ') : '') }; pintarPanel(der); }
     } }));
