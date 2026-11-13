@@ -22,7 +22,7 @@ function servidorFalso() {
   });
   const abierto = () => ({ lead: { ...inicio().leads[0], idioma: 'es', modalidad: 'presencial', resumen: 'Quiere estudiar los fines de semana.', ultimo_mensaje: '¿Cuánto cuesta el de 8 meses?', origen: { utm_campaign: 'tiktok-8meses' } },
     apertura: '«Hola, ¿hablo con Juan? Le habla Brenda, de Maestro HVACR, la escuela de técnicos en HVAC, Refrigeración y Electricidad en Colton…»', historial: [], puede_llamar: { ok: true }, pendiente: s.pendiente });
-  const guion = () => ({ necesita_guion: true, guion: { version: 'v0.2', minimo_seg: 45, texto: '# TARJETA CORTA\n**Somos una tiendita: ya llegó, véndele algo.**\n' + Array.from({ length: 40 }, (_, i) => '- Paso ' + (i + 1) + ' de la escalera: ofrece y escucha.').join('\n') + '\n> «Antes de colgar, siempre la membresía de $149 con tu enlace.»' }, apertura: abierto().apertura, tipo: 'caliente', nombre_corto: 'Juan' });
+  const guion = () => ({ necesita_guion: true, guion: { version: 'v0.2', minimo_seg: 45, texto: '# GUION DE PRUEBA\n**Texto ficticio: el guion real lo da el servidor.**\n' + Array.from({ length: 40 }, (_, i) => '- Línea de prueba ' + (i + 1) + '.').join('\n') + '\n> «Fin del texto de prueba.»' }, apertura: abierto().apertura, tipo: 'caliente', nombre_corto: 'Juan' });
   const responder = (b) => {
     s.llamadas.push(b.accion);
     if (b.accion === 'inicio') return inicio();

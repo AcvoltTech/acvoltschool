@@ -372,7 +372,7 @@
         h('span', { text: (st.llamada && st.llamada.estado) || '' }), h('span', { style: 'flex:1' }),
         h('button', { class: 'vt-btn', text: mudo ? '🎙️ Quitar silencio' : '🔇 Silencio', onclick: function () { if (st.call) { st.call.mute(!st.call.isMuted()); pintarLlamada(); } } }),
         h('button', { class: 'vt-btn pri', text: '⏹ Colgar', onclick: function () { if (st.call) st.call.disconnect(); else terminoLlamada(); } })]),
-      h('p', { class: 'vt-mini', text: 'El cliente oye el aviso de grabación al contestar. Sigue la escalera: 12 → 8 → 4 meses → en línea → membresía o cita. Antes de colgar, siempre la membresía de $149 con tu enlace.' }),
+      h('p', { class: 'vt-mini', text: 'El cliente oye el aviso de grabación al contestar. Sigue el guion aprobado (botón «Carpeta de ventas»).' }),
       st.abierto && st.abierto.apertura ? h('div', { class: 'vt-apertura', text: st.abierto.apertura }) : null,
     ]));
     clearTimeout(st.relojLlamada);
