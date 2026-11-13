@@ -23,7 +23,7 @@ describe('reglas de pantalla', () => {
   it('encuesta: dice lo que falta', () => {
     expect(R.encuestaFaltantes({}, 'caliente')).toEqual(['¿Contestó?']);
     expect(R.encuestaFaltantes({ contesto: 'buzon' }, 'caliente')).toEqual([]);
-    expect(R.encuestaFaltantes({ contesto: 'si', ofrecio: ['12_meses'], cerro: 'no', no_interesa_motivo: 'precio' }, 'caliente').join()).toMatch(/membresía/);
+    expect(R.encuestaFaltantes({ contesto: 'si', ofrecio: ['12_meses'], cerro: 'no', no_interesa_motivo: 'precio' }, 'caliente').join()).toMatch(/antes de colgar/);
     expect(R.encuestaFaltantes({ contesto: 'si', ofrecio: ['12_meses', 'membresia'], cerro: 'no', no_interesa_motivo: 'precio' }, 'caliente')).toEqual([]);
     expect(R.encuestaFaltantes({ contesto: 'si', ofrecio: ['cita_virtual'], cerro: 'cita_virtual' }, 'caliente').join()).toMatch(/Fecha/);
   });
@@ -127,7 +127,7 @@ describe('tablero en pantalla', () => {
     const clic = (txt) => [...document.querySelectorAll('#vtEncuesta .vt-opc button')].find((b) => b.textContent === txt).click();
     clic('Sí contestó'); clic('12 meses'); clic('No le interesa'); clic('Precio');
     expect(document.getElementById('vtGuardarEncuesta').disabled).toBe(true);
-    expect(document.getElementById('vtEncuesta').textContent).toMatch(/membresía de \$149/);
+    expect(document.getElementById('vtEncuesta').textContent).toMatch(/antes de colgar/);
     clic('Membresía $149');
     expect(document.getElementById('vtGuardarEncuesta').disabled).toBe(false);
   });

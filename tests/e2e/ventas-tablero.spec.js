@@ -95,7 +95,7 @@ test('recorrido completo del tablero a 1280 px', async ({ page }) => {
   await enc.getByRole('button', { name: 'No le interesa', exact: true }).click();
   await enc.getByRole('button', { name: 'Precio', exact: true }).click();
   await expect(page.locator('#vtGuardarEncuesta')).toBeDisabled();
-  await expect(enc).toContainText(/membresía de \$149/);
+  await expect(enc).toContainText(/antes de colgar/);
   await page.screenshot({ path: 'capturas/ventas-5-encuesta.png' });
   await enc.getByRole('button', { name: 'Membresía $149', exact: true }).click();
   await expect(page.locator('#vtGuardarEncuesta')).toBeEnabled();

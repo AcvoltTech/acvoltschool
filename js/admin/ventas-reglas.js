@@ -49,7 +49,7 @@
     if (e.cerro === 'no' && !e.no_llamar) {
       if (!e.no_interesa_motivo) f.push('¿Por qué no le interesa?');
       if (e.no_interesa_motivo === 'otra' && String(e.motivo_texto || '').trim().length < 3) f.push('Escribe la razón');
-      if (tipo !== 'fria' && of.indexOf('membresia') < 0 && of.indexOf('cita') < 0 && of.indexOf('cita_virtual') < 0) f.push('Antes de colgar se ofrece la membresía de $149 o una cita');
+      if (tipo !== 'fria' && of.indexOf('membresia') < 0 && of.indexOf('cita') < 0 && of.indexOf('cita_virtual') < 0) f.push('Falta una condición de la encuesta (ver el guion: qué se ofrece antes de colgar)');
     }
     return f;
   }
