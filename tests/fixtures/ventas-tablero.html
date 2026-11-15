@@ -1,0 +1,10 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Prueba · Tablero de ventas</title>
+<style>body{margin:0;font-family:system-ui;background:#f8fafc}</style></head>
+<body>
+<!-- Página de PRUEBA (13-nov-2026): carga el tablero real con el servidor y Twilio simulados por la prueba de Playwright. -->
+<div style="padding:10px"><button class="admin-nav-btn">Inicio</button></div>
+<script>window.supabaseClient = { auth: { getSession: async function () { return { data: { session: { access_token: 'jwt-de-prueba' } } }; } } };</script>
+<script src="/js/admin/ventas-reglas.js"></script>
+<script src="/js/admin/ventas-tablero.js"></script>
+</body></html>
