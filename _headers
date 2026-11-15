@@ -12,8 +12,12 @@
 # 🪤 Estos comentarios van ARRIBA del bloque `/*` y en la columna 0 a proposito:
 #    un `#` indentado DENTRO de una regla se puede leer como cabecera invalida,
 #    y este es justamente el archivo que carga la politica de seguridad.
+# 14-nov-2026 · Mario: «hay mucha confusión en la búsqueda del sitio web y la app». Esta dirección es la app web / panel, no el sitio
+# de la escuela: salía en Google con el mismo nombre («Maestro HVACR - HVAC Training App») mezclada con maestrohvacr.com.
+# X-Robots-Tag le dice a los buscadores que no la muestren. NO se bloquea en robots.txt: Google tiene que poder leer esta cabecera.
 /*
   X-Email-Obfuscation: off
+  X-Robots-Tag: noindex, nofollow
   X-Frame-Options: SAMEORIGIN
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin
