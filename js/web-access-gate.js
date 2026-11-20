@@ -241,12 +241,40 @@
     } catch (_) { fail(t.err); }
   }
 
+  // 🔴 19-nov-2026 · RAÍZ de «pago la membresía y no veo mis grabaciones» (Francisco Díaz):
+  // esta revisión corría UNA vez al cargar (~1 s) y la conexión a la base llega ~3 s después
+  // (supabase-js va con `defer`, supabase-init.js reintenta a los 3 s). Como nadie la volvía a
+  // llamar, el muro y la pantalla de grabaciones NUNCA aparecían. Ahora: se espera a la
+  // conexión y se vuelve a revisar cuando alguien inicia o cierra sesión.
+  var _espera = null, _intentos = 0, _escuchando = false;
+  function _esperarCliente() {
+    if (_espera) return;
+    _espera = setInterval(function () {
+      var sb = global.supabaseClient;
+      var listo = !!(sb && sb.rpc && sb.auth && sb.auth.getSession);
+      if (listo || ++_intentos > 240) { clearInterval(_espera); _espera = null; }   // tope: 2 min
+      if (listo) check(true);
+    }, 500);
+  }
+  function _escucharSesion(sb) {
+    if (_escuchando || !sb.auth.onAuthStateChange) return;
+    _escuchando = true;
+    try {
+      sb.auth.onAuthStateChange(function (ev) {
+        // setTimeout: no llamar a la base DENTRO del aviso de sesión (supabase-js se traba).
+        if (ev === 'SIGNED_IN') setTimeout(function () { _checked = false; check(true); }, 0);
+        if (ev === 'SIGNED_OUT') { _checked = false; _removeWall(); _removeGrab(); }
+      });
+    } catch (_) {}
+  }
+
   function check(force) {
     try {
       if (_checked && !force) return;
       if (_isNativeShell()) { _checked = true; return; }
       var sb = global.supabaseClient;
-      if (!sb || !sb.rpc || !sb.auth || !sb.auth.getSession) return; // cliente aún no listo
+      if (!sb || !sb.rpc || !sb.auth || !sb.auth.getSession) { _esperarCliente(); return; } // cliente aún no listo
+      _escucharSesion(sb);
 
       // NOTA: el builder de Supabase NO es Promise real — nunca .catch(), 2º arg de then().
       sb.auth.getSession().then(function (s) {
