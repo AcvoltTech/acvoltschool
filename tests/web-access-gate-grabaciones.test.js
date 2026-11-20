@@ -1,5 +1,5 @@
 // 2-nov-2026 · Muro web: modo «solo grabaciones» (membresia_119 sin $149).
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { loadScript } from './setup.js';
 
 const tick = () => new Promise((r) => setTimeout(r, 0));
@@ -68,5 +68,18 @@ describe('web-access-gate · solo grabaciones', () => {
     await flush();
     expect(document.getElementById('webAccessGateModal')).not.toBeNull();
     expect(document.getElementById('webGrabacionesModal')).toBeNull();
+  });
+
+  it('si la conexión llega DESPUÉS de cargar, la pantalla aparece sola (19-nov: antes nunca corría)', async () => {
+    vi.useFakeTimers();
+    try {
+      delete window.supabaseClient;
+      loadScript('js/web-access-gate.js');               // carga sin conexión, como en el sitio real
+      expect(document.getElementById('webGrabacionesModal')).toBeNull();
+      mockSupabase({ access: true, reason: 'paid', modo: 'solo_grabaciones' }, ['membresia_119'], RECS);
+      await vi.advanceTimersByTimeAsync(600);
+      await vi.advanceTimersByTimeAsync(50);
+      expect(document.getElementById('webGrabacionesModal')).not.toBeNull();
+    } finally { vi.useRealTimers(); }
   });
 });
