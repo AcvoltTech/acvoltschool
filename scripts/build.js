@@ -37,6 +37,7 @@ const TIER1_SCRIPTS = [
   'js/profile.js',
   'js/video-lessons.js',
   'js/levels.js',
+  'js/cuenta-aviso-cobro.js',
   'js/auth.js',
   'js/navigation.js',
   'js/global-search.js',

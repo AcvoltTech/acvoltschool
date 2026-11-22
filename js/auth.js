@@ -1255,6 +1255,15 @@
           : confirm(subWarn);
         if (goManage) { openManageSubscription(); return; }
       }
+      // 22-nov-2026 · WEB: el borrado NO cancela la renovación en Stripe y después el alumno
+      // ya no puede entrar a «Mi cuenta». Antes de borrar se enseña cómo cancelar
+      // (js/cuenta-aviso-cobro.js; dentro de la app de tienda no hace nada: su aviso es el de arriba).
+      if (window.MaestroAvisoCobro && window.MaestroAvisoCobro.antesDeBorrar) {
+        var seguirBorrado = true;
+        try { seguirBorrado = await window.MaestroAvisoCobro.antesDeBorrar(); }
+        catch (e) { console.warn('[MaestroAC] aviso de cobro falló:', e); }
+        if (!seguirBorrado) return;
+      }
       var msg = typeof _t === 'function'
         ? _t('delete_account_confirm', '¿Estás seguro de que deseas eliminar tu cuenta? Esta acción es permanente y se borrarán todos tus datos.')
         : '¿Estás seguro de que deseas eliminar tu cuenta? Esta acción es permanente y se borrarán todos tus datos.';
