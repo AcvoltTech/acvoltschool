@@ -659,8 +659,23 @@ function removeZoomVerified(idx) {
 
 // --- Init on screen show ---
 var origShowScreen = showScreen;
+// 🩹 24-nov-2026: este archivo se carga PEREZOSO la primera vez que se abre «Clases por Zoom», DESPUÉS de mostrar
+// la pantalla → el envoltorio no corría y el alumno se quedaba en «Verificación de técnico» con 0 clases.
+function _zmArrancarPantallaZoom() {
+  // zoom-recordings.js (refreshZoomFromSupabase / autoVerifyZoomIfLoggedIn) se baja EN PARALELO: si este archivo
+  // llega primero, esas funciones aún no existen y se pintaba el formulario. Se espera hasta 15 s a que existan.
+  var t0 = Date.now();
+  (function intentar() {
+    if (typeof refreshZoomFromSupabase === 'function' && typeof autoVerifyZoomIfLoggedIn === 'function') { _zmShowScreenHook('zoomClassesScreen'); return; }
+    if (Date.now() - t0 < 15000) setTimeout(intentar, 150); else _zmShowScreenHook('zoomClassesScreen');
+  })();
+}
 showScreen = function(screenId) {
   origShowScreen(screenId);
+  if (screenId === 'zoomClassesScreen') { if (typeof _zmUltimo !== 'undefined' && Date.now() - _zmUltimo < 1500) return; try { _zmUltimo = Date.now(); } catch (_) {} }
+  _zmShowScreenHook(screenId);
+};
+function _zmShowScreenHook(screenId) {
   if (screenId === 'zoomClassesScreen') {
     // Refresh data from Supabase first (for mobile devices that don't have local data)
     if (typeof refreshZoomFromSupabase === 'function') {
@@ -711,7 +726,22 @@ showScreen = function(screenId) {
       });
     }
   }
-};
+}
+try {
+  // En el sitio la navegación NO siempre pasa por este showScreen global → se vigila la propia pantalla:
+  // cada vez que «Clases por Zoom» se vuelve .active, arranca (con freno de 1.5 s para no correr doble).
+  var _zmPant = document.getElementById('zoomClassesScreen');
+  var _zmUltimo = 0;
+  var _zmQuizas = function () {
+    if (!_zmPant || !_zmPant.classList.contains('active')) return;
+    if (Date.now() - _zmUltimo < 1500) return;
+    _zmUltimo = Date.now(); _zmArrancarPantallaZoom();
+  };
+  if (_zmPant) {
+    _zmQuizas();
+    new MutationObserver(_zmQuizas).observe(_zmPant, { attributes: true, attributeFilter: ['class', 'style'] });
+  }
+} catch (e) { console.warn('[ZmNavigation] arranque', e.message || e); }
 
 // Quick send email (for inline buttons that don't need the full modal)
 
