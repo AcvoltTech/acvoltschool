@@ -85,8 +85,35 @@ function saveStudentGroups(groups) {
   syncStudentGroupsToSupabase(groups);
 }
 
+// 🩹 24-nov-2026: un ALUMNO no puede leer la fila 'student_groups' (RLS zr_leer = solo personal), así que la
+// lista completa le llegaba vacía y el sitio escondía TODAS sus grabaciones (Bertin VIP veía 8). Sus grupos
+// vienen del servidor con crm_mis_grupos (solo los suyos) y se guardan por correo. Mismo arreglo que la app v8.98.895.
+function _zrMisGruposKey(email) { return 'maestroac_student_groups_' + String(email || '').toLowerCase().trim(); }
+async function _zrCargarMisGrupos() {
+  if (typeof supabaseClient === 'undefined' || !supabaseClient) return;
+  var email = '';
+  try { email = (typeof currentUser !== 'undefined' && currentUser && currentUser.email) || localStorage.getItem('tecnico_email') || ''; } catch (_) {}
+  email = String(email).toLowerCase().trim();
+  if (!email) {
+    try { var s = await supabaseClient.auth.getSession(); email = String((s && s.data && s.data.session && s.data.session.user && s.data.session.user.email) || '').toLowerCase().trim(); } catch (_) {}
+  }
+  if (!email) return;
+  try {
+    var res = await supabaseClient.rpc('crm_mis_grupos', { p_email: email });
+    if (res && !res.error && res.data != null) {
+      var g = res.data;
+      if (typeof g === 'string') { try { g = JSON.parse(g); } catch (_) { g = null; } }
+      if (Array.isArray(g)) localStorage.setItem(_zrMisGruposKey(email), JSON.stringify(g));
+    }
+  } catch (e) { console.warn('[ZoomRecordings] crm_mis_grupos:', e && e.message || e); }
+}
+
 function getStudentGroupsForEmail(email) {
   if (!email) return [];
+  try {
+    var mios = JSON.parse(localStorage.getItem(_zrMisGruposKey(email)) || 'null');
+    if (Array.isArray(mios)) return mios;
+  } catch (_) {}
   var allStudents = getStudentGroups();
   var lowerEmail = email.toLowerCase();
   var student = allStudents.find(function(s) { return s.email.toLowerCase() === lowerEmail; });
@@ -444,6 +471,7 @@ async function loadZoomRecsFromSupabase() {
     }
   } catch(e) { console.warn('Load zoom verified from Supabase failed:', e); }
 
+  await _zrCargarMisGrupos();
   // Also load student groups
   try {
     var { data: gData, error: gErr } = await supabaseClient.from('zoom_recordings').select('*').eq('id', 'student_groups').maybeSingle();
@@ -487,6 +515,7 @@ async function refreshZoomFromSupabase() {
         localStorage.setItem('maestroac_zoom_verified', JSON.stringify(verified));
       }
     }
+    await _zrCargarMisGrupos();
     // Also refresh student groups
     var { data: gData, error: gErr } = await supabaseClient.from('zoom_recordings').select('*').eq('id', 'student_groups').maybeSingle();
     if (!gErr && gData && gData.data) {
